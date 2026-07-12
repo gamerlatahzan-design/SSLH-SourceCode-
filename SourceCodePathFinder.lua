@@ -28,6 +28,16 @@ local function getAssetUrl(id)
     return "rbxthumb://type=Asset&id=" .. tostring(id) .. "&w=420&h=420"
 end
 
+-- Robust File Checker (Bypasses buggy isfile() implementations on mobile executors)
+local function fileExists(path)
+    if isfile then
+        local success, result = pcall(function() return isfile(path) end)
+        if success then return result end
+    end
+    local success, _ = pcall(function() return readfile(path) end)
+    return success
+end
+
 -- UI Setup Helper
 local function getGuiParent()
     local success, coreGui = pcall(function() return game:GetService("CoreGui") end)
@@ -189,7 +199,7 @@ end
 -- ==================== SYSTEM REGISTRY (FILE MANAGEMENT) ====================
 
 local function getRegistry()
-    if isfile and isfile(REGISTRY_FILE) then
+    if fileExists(REGISTRY_FILE) then
         local success, decoded = pcall(function()
             return HttpService:JSONDecode(readfile(REGISTRY_FILE))
         end)
@@ -211,41 +221,49 @@ end
 local function savePath(name)
     if #Waypoints == 0 then return false, "Route is empty! Please record first." end
     if name == "" or name == nil then return false, "Please enter a route name!" end
+    if not writefile or not readfile then return false, "Save failed: Executor lacks file support." end
     
     local fileName = "LouisPath_" .. name .. ".json"
-    if writefile then
-        local success = pcall(function()
-            writefile(fileName, HttpService:JSONEncode(Waypoints))
-        end)
-        if not success then return false, "Failed to write file." end
-        
-        local reg = getRegistry()
-        local exists = false
-        for _, existingName in ipairs(reg) do
-            if existingName == name then exists = true break end
-        end
-        if not exists then
-            table.insert(reg, name)
-            saveRegistry(reg)
-        end
-        return true, "Successfully saved!"
+    local success, err = pcall(function()
+        writefile(fileName, HttpService:JSONEncode(Waypoints))
+    end)
+    
+    if not success then 
+        return false, "Save failed: " .. tostring(err) 
     end
-    return false, "Executor does not support file saving."
+    
+    local reg = getRegistry()
+    local exists = false
+    for _, existingName in ipairs(reg) do
+        if existingName == name then exists = true break end
+    end
+    if not exists then
+        table.insert(reg, name)
+        saveRegistry(reg)
+    end
+    return true, "Successfully saved!"
 end
 
 local function loadPath(name)
     local fileName = "LouisPath_" .. name .. ".json"
-    if isfile and isfile(fileName) then
+    if not readfile then return false, "Load failed: Executor lacks file support." end
+    
+    if fileExists(fileName) then
         local success, decoded = pcall(function()
             return HttpService:JSONDecode(readfile(fileName))
         end)
         if success and type(decoded) == "table" then
+            -- SOLUSI RE-ASPARASI: Mengisi ulang tabel secara in-place agar referensi upvalue tetap terjaga
             table.clear(Waypoints)
-            Waypoints = decoded
+            for _, wp in ipairs(decoded) do
+                table.insert(Waypoints, wp)
+            end
             return true, "Route " .. name .. " (" .. #Waypoints .. " frames) loaded!"
+        else
+            return false, "Load failed: " .. tostring(decoded)
         end
     end
-    return false, "Failed to read route file."
+    return false, "File not found!"
 end
 
 local function deletePath(name)
@@ -259,7 +277,7 @@ local function deletePath(name)
     saveRegistry(newReg)
     
     local fileName = "LouisPath_" .. name .. ".json"
-    if isfile and isfile(fileName) and delfile then
+    if fileExists(fileName) and delfile then
         pcall(function() delfile(fileName) end)
     end
     return true
@@ -395,6 +413,8 @@ local function startPlayback()
                 
                 local myPos = RootPart.Position
                 local deltaPos = targetCF.Position - myPos
+                
+                local horizontalDist = Vector3.new(deltaPos.X, 0, deltaPos.Z).Magnitude
                 
                 -- SMOOTH PHYSICAL GLIDE: Moves position purely via velocity
                 -- Bypasses CFrame snapping conflicts, entirely eliminating screen/character shake
