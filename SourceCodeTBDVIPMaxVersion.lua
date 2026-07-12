@@ -75,7 +75,7 @@ local function playPath(pathId, pathData)
     if not hrp then return end
     
     for _, point in ipairs(pathData) do
-        -- Instant termination check if custom paths are toggled Off or if individual button is disabled
+        -- Instant termination check if custom paths are toggled Off or if individual button is disabled [1]
         if not _G.CustomPathsEnabled or not ExternalButtonStates[pathId] then 
             break 
         end
@@ -97,10 +97,10 @@ end
 local function triggerPath(pathInfo)
     local url = BaseUrl .. pathInfo.file
 
-    -- Trigger execution notification
+    -- Trigger execution notification [1]
     Library:Notify("Fling Active", "Executing: " .. pathInfo.display:upper(), 1.5)
 
-    -- Process download coordinates from GitHub raw and execute path once
+    -- Process download coordinates from GitHub raw and execute path once [1]
     task_spawn(function()
         local success, result = pcall(function()
             return game:HttpGet(url)
@@ -1447,6 +1447,26 @@ _G.ExtWHUltraBtn = Library:CreateExternalButton("WHUltra", "wh_ultra", UDim2.new
 end)
 RegisterExternalButton(_G.ExtWHUltraBtn)
 
+-- ========================================================
+-- [[ REGISTER CUSTOM PATH EXTERNAL BUTTONS (DEFERRED) ]]
+-- ========================================================
+local startX = -235
+local startY = 0.64
+local count = 0
+
+for _, pathInfo in ipairs(FlingPaths) do
+    local currentInfo = pathInfo
+    local xOffset = startX + ((count % 6) * 80)
+    local yOffset = startY - (math.floor(count / 6) * 0.08)
+
+    local btn = Library:CreateExternalButton(currentInfo.id, currentInfo.display:upper(), UDim2.new(0.5, xOffset, yOffset, 0), function()
+        triggerPath(currentInfo)
+    end)
+
+    RegisterExternalButton(btn) -- Adds to the scaling/draglock management list! [1]
+    PathButtons[currentInfo.id] = btn
+    count = count + 1
+end
 
 applyFreeze = function(state)
     local char = LocalPlayer.Character
@@ -1526,7 +1546,7 @@ local function performWallhop(visualStyle)
             local angle = math_rad(i * 45)
             local dir = (root.CFrame * CFrame_Angles(0, angle, 0)).LookVector
             local r = Workspace:Raycast(root.Position, dir * _G.WallHopDist, params)
-            if r and r.Instance.CanCollide then
+            if r wholesaler and r.Instance.CanCollide then
                 isNearWall = true
                 break
             end
@@ -2115,7 +2135,21 @@ for _, btn in ipairs(deferredButtons) do
     local realBtn = Library:CreateExternalButton(btn.name, btn.text, btn.pos, btn.cb)
     btn.proxy.Instance = realBtn
     
-    if btn.proxy._visible ~= nil then realBtn:SetVisible(btn.proxy._visible) end
+    -- Check if it's one of our custom path buttons [1]
+    local isCustomPath = false
+    for _, pathInfo in ipairs(FlingPaths) do
+        if pathInfo.id == btn.name then
+            isCustomPath = true
+            break
+        end
+    end
+
+    if isCustomPath then
+        realBtn:SetVisible(false) -- Custom path buttons start as hidden [1]
+    else
+        if btn.proxy._visible ~= nil then realBtn:SetVisible(btn.proxy._visible) end
+    end
+    
     if btn.proxy._text ~= nil then realBtn:SetText(btn.proxy._text) end
     if btn.proxy._size ~= nil then realBtn:SetSize(btn.proxy._size) end
     if btn.proxy._dragLocked ~= nil then realBtn:SetDragLock(btn.proxy._dragLocked) end
@@ -2609,7 +2643,11 @@ for _, pathInfo in ipairs(FlingPaths) do
         end
         
         if newState then
-            Library:Notify("Custom Paths", currentInfo.display .. " button is now VISIBLE on screen.", 1.5)
+            if _G.CustomPathsEnabled then
+                Library:Notify("Custom Paths", currentInfo.display .. " button is now VISIBLE on screen.", 1.5)
+            else
+                Library:Notify("Custom Paths", currentInfo.display .. " button is enabled, but turn on 'Enable Custom Paths' to show it on screen.", 2.5)
+            end
         else
             Library:Notify("Custom Paths", currentInfo.display .. " button is now HIDDEN.", 1.5)
         end
