@@ -63,12 +63,8 @@ local PathUrls = {
 }
 
 local PathButtons = {} -- Stores dynamically generated external floating button instances
-local PathToggles = {} -- Stores UI toggle instances for custom paths
-local PathToggleStates = {} -- Tracks active states of custom path toggles
-local PathCooldowns = {} -- Tracks active cooldown states of paths
-local ActivePathCoroutines = {} -- Stores running threads for playing paths
 _G.CustomPathsEnabled = false
-_G.FlingSpeedMultiplier = 1.0
+_G.FlingSpeedMultiplier = 5.0 -- Default speed configured to 5.0x [1]
 
 -- DYNAMIC CFRAME PATH PLAYER
 local function playPath(pathName, pathData)
@@ -77,8 +73,8 @@ local function playPath(pathName, pathData)
     if not hrp then return end
     
     for _, point in ipairs(pathData) do
-        -- Instant termination check if custom paths are toggled Off during execution [1]
-        if not _G.CustomPathsEnabled or not PathToggleStates[pathName] then 
+        -- Master toggle check [1]
+        if not _G.CustomPathsEnabled then 
             break 
         end
         
@@ -90,94 +86,81 @@ local function playPath(pathName, pathData)
         end
         
         -- Applies playback speed multiplier directly to the recorded delta time
-        local speedMult = _G.FlingSpeedMultiplier or 1.0
+        local speedMult = _G.FlingSpeedMultiplier or 5.0
         task_wait((point.dt or 0.016) / speedMult) 
     end
 end
 
--- PROCESS TOGGLE ACTIVATION (COOLDOWN & PLAYBACK CONTROL)
-local function triggerPathToggle(pathName, state)
-    local toggle = PathToggles[pathName]
-    local btnWrapper = PathButtons[pathName] -- The floating external button
+-- REAL-TIME DOWNLOADER & COOLDOWN CONTROLLER
+local function triggerPath(pathName)
+    local url = PathUrls[pathName]
+    if not url then return end
 
-    if state then
-        -- TURNING ON
-        -- Retrieve coordinates from raw GitHub file
+    -- Trigger execution notification [1]
+    Library:Notify("Fling Active", "Executing path: " .. pathName:upper(), 1.5)
+
+    -- Process download coordinates from GitHub raw and play once without cooldown [1]
+    task_spawn(function()
         local success, result = pcall(function()
-            local url = PathUrls[pathName]
             return game:HttpGet(url)
         end)
 
-        if not success or not result then
+        if success and result then
+            local successLoad, pathTable = pcall(function()
+                return loadstring(result)()
+            end)
+
+            if successLoad and type(pathTable) == "table" then
+                playPath(pathName, pathTable)
+            else
+                Library:Notify("Error", "Failed to process coordinate structure for: " .. pathName, 2.5)
+            end
+        else
             Library:Notify("Error", "Failed to download " .. pathName .. " from GitHub.", 2.5)
-            if toggle and toggle.Set then toggle:Set(false) end
-            return
         end
-
-        local successLoad, pathTable = pcall(function()
-            return loadstring(result)()
-        end)
-
-        if not successLoad or type(pathTable) ~= "table" then
-            Library:Notify("Error", "Failed to process coordinate structure for: " .. pathName, 2.5)
-            if toggle and toggle.Set then toggle:Set(false) end
-            return
-        end
-
-        -- Cooldown Guard (2 Seconds) [1]
-        local lastUsed = PathCooldowns[pathName] or 0
-        if tick() - lastUsed < 2 then
-            local rem = math.ceil(2 - (tick() - lastUsed))
-            Library:Notify("Cooldown", pathName .. " is on cooldown! Please wait " .. rem .. " seconds.", 1.5)
-            if toggle and toggle.Set then toggle:Set(false) end
-            return
-        end
-
-        PathCooldowns[pathName] = tick()
-
-        -- Trigger floating button cooldown visual effect
-        task_spawn(function()
-            for i = 2, 1, -1 do
-                if btnWrapper then
-                    pcall(function() btnWrapper:SetText("[" .. i .. "s] " .. pathName:upper()) end)
-                end
-                task_wait(1)
-            end
-            if btnWrapper then
-                pcall(function() btnWrapper:SetText(pathName:upper()) end)
-            end
-        end)
-
-        -- Stop any existing running routine for this path
-        if ActivePathCoroutines[pathName] then
-            pcall(function() task.cancel(ActivePathCoroutines[pathName]) end)
-            ActivePathCoroutines[pathName] = nil
-        end
-
-        -- Play path in a separate thread
-        ActivePathCoroutines[pathName] = task_spawn(function()
-            playPath(pathName, pathTable)
-            -- Once playPath is complete, automatically turn the toggle back to OFF
-            ActivePathCoroutines[pathName] = nil
-            if toggle and toggle.Set then
-                pcall(function() toggle:Set(false) end)
-            end
-        end)
-    else
-        -- TURNING OFF
-        -- Stop the execution thread immediately if it was running
-        if ActivePathCoroutines[pathName] then
-            pcall(function() task.cancel(ActivePathCoroutines[pathName]) end)
-            ActivePathCoroutines[pathName] = nil
-            Library:Notify("Fling Stopped", pathName .. " stopped immediately.", 1.5)
-        end
-    end
+    end)
 end
 
 -- ========================================================
 -- [[ DYNAMIC CUSTOM PATHS GENERATOR ]]
 -- ========================================================
+local PathButtonsInitialized = false
+
 local function setupPathButtons()
+    -- Lazy-initialize buttons on the very first activation to resolve duplication bugs [1]
+    if not PathButtonsInitialized then
+        PathButtonsInitialized = true
+        
+        local startX = -235
+        local startY = 0.64
+        local count = 0
+
+        -- Sort paths alphabetically to keep layout ordered
+        local keys = {}
+        for name, _ in pairs(PathUrls) do
+            table.insert(keys, name)
+        end
+        table.sort(keys)
+
+        for _, name in ipairs(keys) do
+            local currentName = name
+            local xOffset = startX + ((count % 6) * 80)
+            local yOffset = startY - (math.floor(count / 6) * 0.08)
+
+            -- Creates button wrapper once [1]
+            local btn = Library:CreateExternalButton(currentName, currentName:upper(), UDim2.new(0.5, xOffset, yOffset, 0), function()
+                triggerPath(currentName)
+            end)
+
+            RegisterExternalButton(btn)
+            SetButtonSize(btn, _G.ExtScaleValue / 100)
+            SafeSetVisible(btn, false) -- Hidden by default on startup
+
+            PathButtons[currentName] = btn
+            count = count + 1
+        end
+    end
+
     -- Dynamically toggle button visibility without rebuilding UI assets [1]
     for _, btn in pairs(PathButtons) do
         SafeSetVisible(btn, _G.CustomPathsEnabled)
@@ -2626,12 +2609,12 @@ TabPremium:CreateToggle("Enable Custom Paths", false, "CustomPathsEnabled", func
     Library:Notify("Custom Paths", "Custom paths feature: " .. (state and "ENABLED" or "DISABLED"), 2)
 end)
 
-_G.FlingSpeedMultiplier = 1.0
-TabPremium:CreateSlider("Fling Speed Multiplier", 1, 50, 10, "FlingSpeedMultiplier", function(val)
+_G.FlingSpeedMultiplier = 5.0
+TabPremium:CreateSlider("Fling Speed Multiplier", 1, 100, 50, "FlingSpeedMultiplier", function(val)
     _G.FlingSpeedMultiplier = val / 10
 end)
 
-TabPremium:CreateParagraph("Custom Fling Controls", "Toggle coordinate paths On/Off. Toggles will automatically turn Off when the fling path finishes.")
+TabPremium:CreateParagraph("Custom Fling Controls", "Trigger coordinate paths directly from the UI or use the external screen buttons.")
 
 local keys = {}
 for name, _ in pairs(PathUrls) do
@@ -2641,9 +2624,8 @@ table.sort(keys)
 
 for _, name in ipairs(keys) do
     local currentName = name
-    PathToggles[currentName] = TabPremium:CreateToggle(currentName:upper(), false, "PathToggle_" .. currentName:gsub(" ", ""), function(state)
-        PathToggleStates[currentName] = state
-        triggerPathToggle(currentName, state)
+    TabPremium:CreateButton(currentName:upper(), function()
+        triggerPath(currentName)
     end)
 end
 
