@@ -63,7 +63,10 @@ local PathUrls = {
 }
 
 local PathButtons = {} -- Stores dynamically generated external floating button instances
+local PathToggles = {} -- Stores UI toggle instances for custom paths
+local PathToggleStates = {} -- Tracks active states of custom path toggles
 local PathCooldowns = {} -- Tracks active cooldown states of paths
+local ActivePathCoroutines = {} -- Stores running threads for playing paths
 _G.CustomPathsEnabled = false
 _G.FlingSpeedMultiplier = 1.0
 
@@ -75,7 +78,7 @@ local function playPath(pathName, pathData)
     
     for _, point in ipairs(pathData) do
         -- Instant termination check if custom paths are toggled Off during execution [1]
-        if not _G.CustomPathsEnabled then 
+        if not _G.CustomPathsEnabled or not PathToggleStates[pathName] then 
             break 
         end
         
@@ -92,96 +95,89 @@ local function playPath(pathName, pathData)
     end
 end
 
--- REAL-TIME DOWNLOADER & COOLDOWN CONTROLLER
-local function triggerPath(pathName, btnWrapper)
-    local url = PathUrls[pathName]
-    if not url then return end
+-- PROCESS TOGGLE ACTIVATION (COOLDOWN & PLAYBACK CONTROL)
+local function triggerPathToggle(pathName, state)
+    local toggle = PathToggles[pathName]
+    local btnWrapper = PathButtons[pathName] -- The floating external button
 
-    -- Cooldown Guard (2 Seconds) [1]
-    local lastUsed = PathCooldowns[pathName] or 0
-    if tick() - lastUsed < 2 then
-        local rem = math.ceil(2 - (tick() - lastUsed))
-        Library:Notify("Cooldown", pathName .. " is on cooldown! Please wait " .. rem .. " seconds.", 1.5)
-        return
-    end
-
-    PathCooldowns[pathName] = tick()
-
-    -- Visual Cooldown Countdown on Floating Button [1]
-    task_spawn(function()
-        for i = 2, 1, -1 do
-            if btnWrapper then
-                pcall(function() btnWrapper:SetText("[" .. i .. "s] " .. pathName:upper()) end)
-            end
-            task_wait(1)
-        end
-        if btnWrapper then
-            pcall(function() btnWrapper:SetText(pathName:upper()) end)
-        end
-    end)
-
-    -- Dynamic Loadstring Execution of downloaded table structure [1]
-    task_spawn(function()
+    if state then
+        -- TURNING ON
+        -- Retrieve coordinates from raw GitHub file
         local success, result = pcall(function()
+            local url = PathUrls[pathName]
             return game:HttpGet(url)
         end)
 
-        if success and result then
-            local successLoad, pathTable = pcall(function()
-                return loadstring(result)()
-            end)
-
-            if successLoad and type(pathTable) == "table" then
-                playPath(pathName, pathTable)
-            else
-                Library:Notify("Error", "Failed to process coordinate structure for: " .. pathName, 2.5)
-            end
-        else
+        if not success or not result then
             Library:Notify("Error", "Failed to download " .. pathName .. " from GitHub.", 2.5)
+            if toggle and toggle.Set then toggle:Set(false) end
+            return
         end
-    end)
+
+        local successLoad, pathTable = pcall(function()
+            return loadstring(result)()
+        end)
+
+        if not successLoad or type(pathTable) ~= "table" then
+            Library:Notify("Error", "Failed to process coordinate structure for: " .. pathName, 2.5)
+            if toggle and toggle.Set then toggle:Set(false) end
+            return
+        end
+
+        -- Cooldown Guard (2 Seconds) [1]
+        local lastUsed = PathCooldowns[pathName] or 0
+        if tick() - lastUsed < 2 then
+            local rem = math.ceil(2 - (tick() - lastUsed))
+            Library:Notify("Cooldown", pathName .. " is on cooldown! Please wait " .. rem .. " seconds.", 1.5)
+            if toggle and toggle.Set then toggle:Set(false) end
+            return
+        end
+
+        PathCooldowns[pathName] = tick()
+
+        -- Trigger floating button cooldown visual effect
+        task_spawn(function()
+            for i = 2, 1, -1 do
+                if btnWrapper then
+                    pcall(function() btnWrapper:SetText("[" .. i .. "s] " .. pathName:upper()) end)
+                end
+                task_wait(1)
+            end
+            if btnWrapper then
+                pcall(function() btnWrapper:SetText(pathName:upper()) end)
+            end
+        end)
+
+        -- Stop any existing running routine for this path
+        if ActivePathCoroutines[pathName] then
+            pcall(function() task.cancel(ActivePathCoroutines[pathName]) end)
+            ActivePathCoroutines[pathName] = nil
+        end
+
+        -- Play path in a separate thread
+        ActivePathCoroutines[pathName] = task_spawn(function()
+            playPath(pathName, pathTable)
+            -- Once playPath is complete, automatically turn the toggle back to OFF
+            ActivePathCoroutines[pathName] = nil
+            if toggle and toggle.Set then
+                pcall(function() toggle:Set(false) end)
+            end
+        end)
+    else
+        -- TURNING OFF
+        -- Stop the execution thread immediately if it was running
+        if ActivePathCoroutines[pathName] then
+            pcall(function() task.cancel(ActivePathCoroutines[pathName]) end)
+            ActivePathCoroutines[pathName] = nil
+            Library:Notify("Fling Stopped", pathName .. " stopped immediately.", 1.5)
+        end
+    end
 end
 
 -- ========================================================
 -- [[ DYNAMIC CUSTOM PATHS GENERATOR ]]
 -- ========================================================
-local PathButtonsInitialized = false
-
 local function setupPathButtons()
-    -- Lazy-initialize buttons on the very first activation to resolve duplication bugs [1]
-    if not PathButtonsInitialized then
-        PathButtonsInitialized = true
-        
-        local startX = -235
-        local startY = 0.64
-        local count = 0
-
-        -- Sort paths alphabetically to keep layout ordered
-        local keys = {}
-        for name, _ in pairs(PathUrls) do
-            table.insert(keys, name)
-        end
-        table.sort(keys)
-
-        for _, name in ipairs(keys) do
-            local currentName = name
-            local xOffset = startX + ((count % 6) * 80)
-            local yOffset = startY - (math.floor(count / 6) * 0.08)
-
-            -- Creates button wrapper once [1]
-            local btn = Library:CreateExternalButton(currentName, currentName:upper(), UDim2.new(0.5, xOffset, yOffset, 0), function()
-                triggerPath(currentName, PathButtons[currentName])
-            end)
-
-            RegisterExternalButton(btn)
-            SetButtonSize(btn, _G.ExtScaleValue / 100)
-            SafeSetVisible(btn, false) -- Hidden by default on startup
-
-            PathButtons[currentName] = btn
-            count = count + 1
-        end
-    end
-
     -- Dynamically toggle button visibility without rebuilding UI assets [1]
     for _, btn in pairs(PathButtons) do
         SafeSetVisible(btn, _G.CustomPathsEnabled)
@@ -2635,7 +2631,7 @@ TabPremium:CreateSlider("Fling Speed Multiplier", 1, 50, 10, "FlingSpeedMultipli
     _G.FlingSpeedMultiplier = val / 10
 end)
 
-TabPremium:CreateParagraph("Custom Fling Controls", "Trigger coordinate paths directly from the UI or use the external screen buttons.")
+TabPremium:CreateParagraph("Custom Fling Controls", "Toggle coordinate paths On/Off. Toggles will automatically turn Off when the fling path finishes.")
 
 local keys = {}
 for name, _ in pairs(PathUrls) do
@@ -2645,8 +2641,9 @@ table.sort(keys)
 
 for _, name in ipairs(keys) do
     local currentName = name
-    TabPremium:CreateButton(currentName:upper(), function()
-        triggerPath(currentName, PathButtons[currentName])
+    PathToggles[currentName] = TabPremium:CreateToggle(currentName:upper(), false, "PathToggle_" .. currentName:gsub(" ", ""), function(state)
+        PathToggleStates[currentName] = state
+        triggerPathToggle(currentName, state)
     end)
 end
 
@@ -2776,7 +2773,7 @@ RegisterKeybindUI("Auto Pass Toggle Key", "AutoPassToggle", "None")
 RegisterKeybindUI("Range Chase Toggle Key", "RangeChaseToggle", "None")
 RegisterKeybindUI("Flick Toggle Key", "FlickToggle", "None")
 RegisterKeybindUI("Auto Hold Toggle Key", "AutoHoldToggle", "None")
-RegisterKeybindUI("Trip Fall Toggle Key", "TripToggle", "None")
+RegisterKeybindUI("Trip Toggle Key", "TripToggle", "None")
 RegisterKeybindUI("Freeze Toggle Key", "FreezeToggle", "None")
 RegisterKeybindUI("Infinite Jump Toggle Key", "InfJumpToggle", "None")
 RegisterKeybindUI("Wallhop Toggle Key", "WallhopToggle", "None")
