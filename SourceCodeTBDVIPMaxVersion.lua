@@ -44,7 +44,7 @@ local Mouse = LocalPlayer:GetMouse()
 -- ========================================================
 -- [[ GITHUB RAW COORDINATES CONFIGURATION ]]
 -- ========================================================
--- Ganti bagian "USERNAME/REPO/main/Paths" dengan jalur repositori GitHub Raw Anda sendiri.
+-- Base URL configured to point directly to your gamerlatahzan-design GitHub repository
 local BaseUrl = "https://raw.githubusercontent.com/gamerlatahzan-design/CFRAMELUAHUB/refs/heads/main/"
 
 local PathUrls = {
@@ -52,7 +52,7 @@ local PathUrls = {
     ["fling left 2"] = BaseUrl .. "LouisPath_fling%20left%202.lua",
     ["fling left 3"] = BaseUrl .. "LouisPath_fling%20left%203.lua",
     ["fling left 4"] = BaseUrl .. "LouisPath_fling%20left%204.lua",
-    ["fling left back"] = BaseUrl .. "LouisPath_fling%20left%20back%20.lua", -- Membaca spasi bawaan file
+    ["fling left back"] = BaseUrl .. "LouisPath_fling%20left%20back%20.lua", -- Handles trailing space URL encoding
     ["fling right"] = BaseUrl .. "LouisPath_fling%20right.lua",
     ["fling right 1"] = BaseUrl .. "LouisPath_fling%20right%201.lua",
     ["fling right 2"] = BaseUrl .. "LouisPath_fling%20right%202.lua",
@@ -62,18 +62,19 @@ local PathUrls = {
     ["fling right back 3"] = BaseUrl .. "LouisPath_fling%20right%20back%203.lua"
 }
 
-local PathButtons = {} -- Tempat menyimpan instance eksternal button secara dinamis
-local PathCooldowns = {} -- Melacak status cooldown setiap path
+local PathButtons = {} -- Stores dynamically generated external floating button instances
+local PathCooldowns = {} -- Tracks active cooldown states of paths
 _G.CustomPathsEnabled = false
+_G.FlingSpeedMultiplier = 1.0
 
--- FUNGSI UNTUK MENGEKSEKUSI CFRAME PATH
+-- DYNAMIC CFRAME PATH PLAYER
 local function playPath(pathName, pathData)
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
     
     for _, point in ipairs(pathData) do
-        -- Jika toggle utama dimatikan (Off), pergerakan langsung dihentikan seketika [1]
+        -- Instant termination check if custom paths are toggled Off during execution [1]
         if not _G.CustomPathsEnabled then 
             break 
         end
@@ -84,26 +85,29 @@ local function playPath(pathName, pathData)
                 hrp.CFrame = CFrame.new(table.unpack(point.cf))
             end)
         end
-        task_wait(point.dt or 0.016) 
+        
+        -- Applies playback speed multiplier directly to the recorded delta time
+        local speedMult = _G.FlingSpeedMultiplier or 1.0
+        task_wait((point.dt or 0.016) / speedMult) 
     end
 end
 
--- FUNGSI MEMPROSES KLIK DAN DOWNLOAD REAL-TIME
+-- REAL-TIME DOWNLOADER & COOLDOWN CONTROLLER
 local function triggerPath(pathName, btnWrapper)
     local url = PathUrls[pathName]
     if not url then return end
 
-    -- Pengecekan Cooldown (2 Detik) [1]
+    -- Cooldown Guard (2 Seconds) [1]
     local lastUsed = PathCooldowns[pathName] or 0
     if tick() - lastUsed < 2 then
         local rem = math.ceil(2 - (tick() - lastUsed))
-        Library:Notify("Cooldown", pathName .. " sedang cooldown! Tunggu " .. rem .. " detik.", 1.5)
+        Library:Notify("Cooldown", pathName .. " is on cooldown! Please wait " .. rem .. " seconds.", 1.5)
         return
     end
 
     PathCooldowns[pathName] = tick()
 
-    -- Efek Visual Cooldown pada Tombol Melayang [1]
+    -- Visual Cooldown Countdown on Floating Button [1]
     task_spawn(function()
         for i = 2, 1, -1 do
             if btnWrapper then
@@ -116,7 +120,7 @@ local function triggerPath(pathName, btnWrapper)
         end
     end)
 
-    -- Proses download koordinat dari GitHub raw secara real-time [1]
+    -- Dynamic Loadstring Execution of downloaded table structure [1]
     task_spawn(function()
         local success, result = pcall(function()
             return game:HttpGet(url)
@@ -130,10 +134,10 @@ local function triggerPath(pathName, btnWrapper)
             if successLoad and type(pathTable) == "table" then
                 playPath(pathName, pathTable)
             else
-                Library:Notify("Error", "Gagal memproses struktur koordinat " .. pathName, 2.5)
+                Library:Notify("Error", "Failed to process coordinate structure for: " .. pathName, 2.5)
             end
         else
-            Library:Notify("Error", "Gagal mengunduh file " .. pathName .. " dari GitHub.", 2.5)
+            Library:Notify("Error", "Failed to download " .. pathName .. " from GitHub.", 2.5)
         end
     end)
 end
@@ -141,44 +145,46 @@ end
 -- ========================================================
 -- [[ DYNAMIC CUSTOM PATHS GENERATOR ]]
 -- ========================================================
+local PathButtonsInitialized = false
+
 local function setupPathButtons()
-    -- Bersihkan tombol lama jika ada [1]
-    for _, btn in pairs(PathButtons) do
-        if type(btn) == "table" and btn.SetVisible then
-            pcall(function() btn:SetVisible(false) end)
+    -- Lazy-initialize buttons on the very first activation to resolve duplication bugs [1]
+    if not PathButtonsInitialized then
+        PathButtonsInitialized = true
+        
+        local startX = -235
+        local startY = 0.64
+        local count = 0
+
+        -- Sort paths alphabetically to keep layout ordered
+        local keys = {}
+        for name, _ in pairs(PathUrls) do
+            table.insert(keys, name)
+        end
+        table.sort(keys)
+
+        for _, name in ipairs(keys) do
+            local currentName = name
+            local xOffset = startX + ((count % 6) * 80)
+            local yOffset = startY - (math.floor(count / 6) * 0.08)
+
+            -- Creates button wrapper once [1]
+            local btn = Library:CreateExternalButton(currentName, currentName:upper(), UDim2.new(0.5, xOffset, yOffset, 0), function()
+                triggerPath(currentName, PathButtons[currentName])
+            end)
+
+            RegisterExternalButton(btn)
+            SetButtonSize(btn, _G.ExtScaleValue / 100)
+            SafeSetVisible(btn, false) -- Hidden by default on startup
+
+            PathButtons[currentName] = btn
+            count = count + 1
         end
     end
-    table.clear(PathButtons)
 
-    if not _G.CustomPathsEnabled then return end
-
-    -- Tata letak posisi awal tombol melayang di layar secara dinamis [1]
-    local startX = -235
-    local startY = 0.64
-    local count = 0
-
-    -- Ambil daftar nama secara urut untuk dibuatkan tombolnya
-    local keys = {}
-    for name, _ in pairs(PathUrls) do
-        table.insert(keys, name)
-    end
-    table.sort(keys) -- Urutkan tombol alfabetis agar rapi
-
-    for _, name in ipairs(keys) do
-        local currentName = name
-        local xOffset = startX + ((count % 6) * 80) -- Membuat baris tombol agar rapi [1]
-        local yOffset = startY - (math.floor(count / 6) * 0.08)
-
-        local btn = Library:CreateExternalButton(currentName, currentName:upper(), UDim2.new(0.5, xOffset, yOffset, 0), function()
-            triggerPath(currentName, PathButtons[currentName])
-        end)
-
-        RegisterExternalButton(btn)
-        SetButtonSize(btn, _G.ExtScaleValue / 100)
-        SafeSetVisible(btn, true)
-
-        PathButtons[currentName] = btn
-        count = count + 1
+    -- Dynamically toggle button visibility without rebuilding UI assets [1]
+    for _, btn in pairs(PathButtons) do
+        SafeSetVisible(btn, _G.CustomPathsEnabled)
     end
 end
 
@@ -370,7 +376,7 @@ _G.LocalHitboxSize = Config.LocalHitboxSize
 _G.HitboxTeleportDelay = Config.HitboxTeleportDelay / 1000 
 _G.HitboxShape = Config.HitboxShape
 
--- TPWALK STATE
+-- CORE WALK VALUES
 _G.TPWalkEnabled = Config.TPWalkEnabled
 _G.TPWalkSpeed = Config.TPWalkSpeed
 
@@ -2163,12 +2169,12 @@ for _, btn in ipairs(deferredButtons) do
     if btn.proxy._dragLocked ~= nil then realBtn:SetDragLock(btn.proxy._dragLocked) end
 end
 
-Library:Notify("LOUIS HUB PREMIUM EDITION INSTANTIATED", "Press UI Menu Key to hide/show Main UI.", 4)
+Library:Notify("LOUIS HUB PREMIUM EDITION INSTANTIATED", "Press UI Menu Key to show or hide Main UI.", 4)
 
 -- --- TAB 1: WELCOME (LUCIDE ICON: "home") ---
 local TabMain = Window:CreateTab("Welcome", "home")
 TabMain:CreateParagraph("Welcome!", "Hello " .. LocalPlayer.Name .. "!\nThank you for executing Louis TBD Premium Edition.")
-TabMain:CreateParagraph("UI Instructions", "Keybind to open/hide menu: UI Menu Toggle Key\nYou can toggle external buttons from the settings.")
+TabMain:CreateParagraph("UI Instructions", "Keybind to open/hide menu: UI Toggle Key\nYou can toggle external buttons from settings.")
 TabMain:CreateParagraph("Official Community", "Join our Discord server to get the latest update information!")
 
 TabMain:CreateButton("Copy Discord Server Link", function()
@@ -2616,13 +2622,33 @@ end)
 -- --- TAB 5: PREMIUM (LUCIDE ICON: "crown" - UNLOCKED FOR VIP) ---
 TabPremium = Window:CreateTab("Premium", "crown")
 
-TabPremium:CreateParagraph("Custom Fling Coordinates", "Aktifkan koordinat kustom sebagai tombol eksternal melayang.")
+TabPremium:CreateParagraph("Custom Fling Coordinates", "Enable custom coordinates as floating external screen buttons.")
 
 TabPremium:CreateToggle("Enable Custom Paths", false, "CustomPathsEnabled", function(state)
     _G.CustomPathsEnabled = state
     setupPathButtons()
-    Library:Notify("Custom Paths", "Fitur jalur kustom " .. (state and "AKTIF" or "NONAKTIF"), 2)
+    Library:Notify("Custom Paths", "Custom paths feature: " .. (state and "ENABLED" or "DISABLED"), 2)
 end)
+
+_G.FlingSpeedMultiplier = 1.0
+TabPremium:CreateSlider("Fling Speed Multiplier", 1, 50, 10, "FlingSpeedMultiplier", function(val)
+    _G.FlingSpeedMultiplier = val / 10
+end)
+
+TabPremium:CreateParagraph("Custom Fling Controls", "Trigger coordinate paths directly from the UI or use the external screen buttons.")
+
+local keys = {}
+for name, _ in pairs(PathUrls) do
+    table.insert(keys, name)
+end
+table.sort(keys)
+
+for _, name in ipairs(keys) do
+    local currentName = name
+    TabPremium:CreateButton(currentName:upper(), function()
+        triggerPath(currentName, PathButtons[currentName])
+    end)
+end
 
 TabPremium:CreateParagraph("Camlock Targeting Alignment", "Enforces directional locking relative to your current target.")
 
