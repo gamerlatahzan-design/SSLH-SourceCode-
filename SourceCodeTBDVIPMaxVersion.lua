@@ -63,8 +63,9 @@ local PathUrls = {
 }
 
 local PathButtons = {} -- Stores dynamically generated external floating button instances
+local ActivePathThread = nil -- Stores the active running thread to prevent CFrame conflicts
 _G.CustomPathsEnabled = false
-_G.FlingSpeedMultiplier = 5.0 -- Default speed configured to 5.0x [1]
+_G.FlingSpeedMultiplier = 5.0 -- Default playback speed set to 5.0x [1]
 
 -- DYNAMIC CFRAME PATH PLAYER
 local function playPath(pathName, pathData)
@@ -91,16 +92,22 @@ local function playPath(pathName, pathData)
     end
 end
 
--- REAL-TIME DOWNLOADER & COOLDOWN CONTROLLER
+-- REAL-TIME DOWNLOADER & FLING EXECUTOR
 local function triggerPath(pathName)
     local url = PathUrls[pathName]
     if not url then return end
 
+    -- Cancel any currently playing custom path to prevent coordinate/CFrame conflicts
+    if ActivePathThread then
+        pcall(function() task.cancel(ActivePathThread) end)
+        ActivePathThread = nil
+    end
+
     -- Trigger execution notification [1]
     Library:Notify("Fling Active", "Executing path: " .. pathName:upper(), 1.5)
 
-    -- Process download coordinates from GitHub raw and play once without cooldown [1]
-    task_spawn(function()
+    -- Play path immediately on click with no cooldown [1]
+    ActivePathThread = task_spawn(function()
         local success, result = pcall(function()
             return game:HttpGet(url)
         end)
@@ -118,49 +125,14 @@ local function triggerPath(pathName)
         else
             Library:Notify("Error", "Failed to download " .. pathName .. " from GitHub.", 2.5)
         end
+        ActivePathThread = nil
     end)
 end
 
 -- ========================================================
 -- [[ DYNAMIC CUSTOM PATHS GENERATOR ]]
 -- ========================================================
-local PathButtonsInitialized = false
-
 local function setupPathButtons()
-    -- Lazy-initialize buttons on the very first activation to resolve duplication bugs [1]
-    if not PathButtonsInitialized then
-        PathButtonsInitialized = true
-        
-        local startX = -235
-        local startY = 0.64
-        local count = 0
-
-        -- Sort paths alphabetically to keep layout ordered
-        local keys = {}
-        for name, _ in pairs(PathUrls) do
-            table.insert(keys, name)
-        end
-        table.sort(keys)
-
-        for _, name in ipairs(keys) do
-            local currentName = name
-            local xOffset = startX + ((count % 6) * 80)
-            local yOffset = startY - (math.floor(count / 6) * 0.08)
-
-            -- Creates button wrapper once [1]
-            local btn = Library:CreateExternalButton(currentName, currentName:upper(), UDim2.new(0.5, xOffset, yOffset, 0), function()
-                triggerPath(currentName)
-            end)
-
-            RegisterExternalButton(btn)
-            SetButtonSize(btn, _G.ExtScaleValue / 100)
-            SafeSetVisible(btn, false) -- Hidden by default on startup
-
-            PathButtons[currentName] = btn
-            count = count + 1
-        end
-    end
-
     -- Dynamically toggle button visibility without rebuilding UI assets [1]
     for _, btn in pairs(PathButtons) do
         SafeSetVisible(btn, _G.CustomPathsEnabled)
@@ -467,11 +439,11 @@ local PresetNames = {
     "Preset 25 (ID: 14196151488)", "Preset 26 (ID: 14175340156)", "Preset 27 (ID: 15064835974)",
     "Preset 28 (ID: 11717828334)", "Preset 29 (ID: 11770890261)", "Preset 30 (ID: 12436450999)",
     "Preset 31 (ID: 14828905230)", "Preset 32 (ID: 5112357171)", "Preset 33 (ID: 8351520948)",
-    "Preset 34 (ID: 12294092863)", "Preset 35 (ID: 11746881057)", "Preset 36 (ID: 11756692092)",
-    "Preset 37 (ID: 11763243469)", "Preset 38 (ID: 12077205402)", "Preset 39 (ID: 12146988029)",
-    "Preset 40 (ID: 2366671460)", "Preset 41 (ID: 11915618919)", "Preset 42 (ID: 10164277641)",
-    "Preset 43 (ID: 4818758746)", "Preset 44 (ID: 11720549778)", "Preset 45 (ID: 15963047794)",
-    "Preset 46 (ID: 13413667445)", "Preset 47 (ID: 12323570810)", "Preset 48 (6877713475)",
+    "Preset 34 (ID: 12294092863)", "Preset 35 (11746881057)", "Preset 36 (11756692092)",
+    "Preset 37 (11763243469)", "Preset 38 (12077205402)", "Preset 39 (12146988029)",
+    "Preset 40 (2366671460)", "Preset 41 (11915618919)", "Preset 42 (10164277641)",
+    "Preset 43 (4818758746)", "Preset 44 (11720549778)", "Preset 45 (15963047794)",
+    "Preset 46 (13413667445)", "Preset 47 (12323570810)", "Preset 48 (6877713475)",
     "Preset 49 (9126971642)", "Preset 50 (6848903054)"
 }
 
@@ -1474,6 +1446,29 @@ _G.ExtWHUltraBtn = Library:CreateExternalButton("WHUltra", "wh_ultra", UDim2.new
 end)
 RegisterExternalButton(_G.ExtWHUltraBtn)
 
+-- REGISTER CUSTOM FLING COORDINATES VIA DEFERRED PROXY AT STARTUP
+local startX = -235
+local startY = 0.64
+local count = 0
+
+local sortedPathNames = {}
+for name, _ in pairs(PathUrls) do
+    table.insert(sortedPathNames, name)
+end
+table.sort(sortedPathNames)
+
+for _, name in ipairs(sortedPathNames) do
+    local currentName = name
+    local xOffset = startX + ((count % 6) * 80)
+    local yOffset = startY - (math.floor(count / 6) * 0.08)
+
+    local btn = Library:CreateExternalButton(currentName, currentName:upper(), UDim2.new(0.5, xOffset, yOffset, 0), function()
+        triggerPath(currentName)
+    end)
+
+    PathButtons[currentName] = btn
+    count = count + 1
+end
 
 applyFreeze = function(state)
     local char = LocalPlayer.Character
@@ -2463,7 +2458,7 @@ TabVisuals:CreateParagraph("Network Latency Visualizer", "Visualize your server-
 
 TabVisuals:CreateToggle("Desync Ghost Visualizer", Config.DesyncVisualEnabled, "DesyncVisualEnabled", function(state)
     _G.DesyncVisualEnabled = state
-    Config.DesyncVisualEnabled = state
+    _G.DesyncVisualEnabled = state
     SaveConfig()
     if not state then
         if GhostModel then GhostModel:Destroy(); GhostModel = nil end
@@ -2613,21 +2608,6 @@ _G.FlingSpeedMultiplier = 5.0
 TabPremium:CreateSlider("Fling Speed Multiplier", 1, 100, 50, "FlingSpeedMultiplier", function(val)
     _G.FlingSpeedMultiplier = val / 10
 end)
-
-TabPremium:CreateParagraph("Custom Fling Controls", "Trigger coordinate paths directly from the UI or use the external screen buttons.")
-
-local keys = {}
-for name, _ in pairs(PathUrls) do
-    table.insert(keys, name)
-end
-table.sort(keys)
-
-for _, name in ipairs(keys) do
-    local currentName = name
-    TabPremium:CreateButton(currentName:upper(), function()
-        triggerPath(currentName)
-    end)
-end
 
 TabPremium:CreateParagraph("Camlock Targeting Alignment", "Enforces directional locking relative to your current target.")
 
