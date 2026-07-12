@@ -47,37 +47,36 @@ local Mouse = LocalPlayer:GetMouse()
 -- Base URL configured to point directly to your gamerlatahzan-design GitHub repository
 local BaseUrl = "https://raw.githubusercontent.com/gamerlatahzan-design/CFRAMELUAHUB/refs/heads/main/"
 
-local PathUrls = {
-    ["fling left"] = BaseUrl .. "LouisPath_fling%20left.lua",
-    ["fling left 2"] = BaseUrl .. "LouisPath_fling%20left%202.lua",
-    ["fling left 3"] = BaseUrl .. "LouisPath_fling%20left%203.lua",
-    ["fling left 4"] = BaseUrl .. "LouisPath_fling%20left%204.lua",
-    ["fling left back"] = BaseUrl .. "LouisPath_fling%20left%20back%20.lua", -- Handles trailing space URL encoding
-    ["fling right"] = BaseUrl .. "LouisPath_fling%20right.lua",
-    ["fling right 1"] = BaseUrl .. "LouisPath_fling%20right%201.lua",
-    ["fling right 2"] = BaseUrl .. "LouisPath_fling%20right%202.lua",
-    ["fling right 3"] = BaseUrl .. "LouisPath_fling%20right%203.lua",
-    ["fling right back 1"] = BaseUrl .. "LouisPath_fling%20right%20back%201.lua",
-    ["fling right back 2"] = BaseUrl .. "LouisPath_fling%20right%20back%202.lua",
-    ["fling right back 3"] = BaseUrl .. "LouisPath_fling%20right%20back%203.lua"
+-- Safe mapped database for path IDs, displays, and encoding to prevent space crashes in UI Library
+local FlingPaths = {
+    {id = "FlingLeft",     display = "Fling Left",      file = "LouisPath_fling%20left.lua"},
+    {id = "FlingLeft2",    display = "Fling Left 2",    file = "LouisPath_fling%20left%202.lua"},
+    {id = "FlingLeft3",    display = "Fling Left 3",    file = "LouisPath_fling%20left%203.lua"},
+    {id = "FlingLeft4",    display = "Fling Left 4",    file = "LouisPath_fling%20left%204.lua"},
+    {id = "FlingLeftBack", display = "Fling Left Back", file = "LouisPath_fling%20left%20back%20.lua"},
+    {id = "FlingRight",    display = "Fling Right",     file = "LouisPath_fling%20right.lua"},
+    {id = "FlingRight1",   display = "Fling Right 1",   file = "LouisPath_fling%20right%201.lua"},
+    {id = "FlingRight2",   display = "Fling Right 2",   file = "LouisPath_fling%20right%202.lua"},
+    {id = "FlingRight3",   display = "Fling Right 3",   file = "LouisPath_fling%20right%203.lua"},
+    {id = "FlingRightBack1", display = "Fling Right Back 1", file = "LouisPath_fling%20right%20back%201.lua"},
+    {id = "FlingRightBack2", display = "Fling Right Back 2", file = "LouisPath_fling%20right%20back%202.lua"},
+    {id = "FlingRightBack3", display = "Fling Right Back 3", file = "LouisPath_fling%20right%20back%203.lua"}
 }
 
-local PathButtons = {} -- Stores proxy external floating button references
-local PathButtonStates = {} -- Tracks if each individual button is toggled visible
-local PathCooldowns = {} -- Tracks cooldown timestamps of paths
-local ActiveFlingCoroutines = {} -- Stores running threads for executing paths
+local PathButtons = {} -- Stores dynamically generated external floating button instances
+local ExternalButtonStates = {} -- Tracks manual visibility selection states of each path button
 _G.CustomPathsEnabled = false
-_G.FlingSpeedMultiplier = 5.0 -- Default speed multiplier configured to 5.0x
+_G.FlingSpeedMultiplier = 5.0 -- Default speed configured to 5.0x
 
 -- DYNAMIC CFRAME PATH PLAYER
-local function playPath(pathName, pathData)
+local function playPath(pathId, pathData)
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
     
     for _, point in ipairs(pathData) do
-        -- Terminate immediately if master toggle is turned off OR if individual button is hidden
-        if not _G.CustomPathsEnabled or not PathButtonStates[pathName] then 
+        -- Instant termination check if custom paths are toggled Off or if individual button is disabled
+        if not _G.CustomPathsEnabled or not ExternalButtonStates[pathId] then 
             break 
         end
         
@@ -94,22 +93,15 @@ local function playPath(pathName, pathData)
     end
 end
 
--- REAL-TIME DOWNLOADER & COOLDOWN CONTROLLER
-local function triggerPath(pathName)
-    local url = PathUrls[pathName]
-    if not url then return end
+-- REAL-TIME DOWNLOADER & SCRIPT REPLICATION RUNNER
+local function triggerPath(pathInfo)
+    local url = BaseUrl .. pathInfo.file
 
     -- Trigger execution notification
-    Library:Notify("Fling Execution", "Executing " .. pathName:upper() .. "...", 1.5)
+    Library:Notify("Fling Active", "Executing: " .. pathInfo.display:upper(), 1.5)
 
-    -- Cancel existing thread if clicking again during playback
-    if ActiveFlingCoroutines[pathName] then
-        pcall(function() task.cancel(ActiveFlingCoroutines[pathName]) end)
-        ActiveFlingCoroutines[pathName] = nil
-    end
-
-    -- Run the path once with no cooldown
-    ActiveFlingCoroutines[pathName] = task_spawn(function()
+    -- Process download coordinates from GitHub raw and execute path once
+    task_spawn(function()
         local success, result = pcall(function()
             return game:HttpGet(url)
         end)
@@ -120,15 +112,13 @@ local function triggerPath(pathName)
             end)
 
             if successLoad and type(pathTable) == "table" then
-                playPath(pathName, pathTable)
+                playPath(pathInfo.id, pathTable)
             else
-                Library:Notify("Error", "Failed to process coordinate structure for: " .. pathName, 2.5)
+                Library:Notify("Error", "Failed to process coordinate structure for: " .. pathInfo.display, 2.5)
             end
         else
-            Library:Notify("Error", "Failed to download " .. pathName .. " from GitHub.", 2.5)
+            Library:Notify("Error", "Failed to download " .. pathInfo.display .. " from GitHub.", 2.5)
         end
-        
-        ActiveFlingCoroutines[pathName] = nil
     end)
 end
 
@@ -136,10 +126,17 @@ end
 -- [[ DYNAMIC CUSTOM PATHS GENERATOR ]]
 -- ========================================================
 local function setupPathButtons()
-    -- Dynamically toggle button visibility based on master state and individual layout preferences
-    for name, btn in pairs(PathButtons) do
-        local shouldBeVisible = _G.CustomPathsEnabled and (PathButtonStates[name] or false)
-        SafeSetVisible(btn, shouldBeVisible)
+    -- Dynamically toggle button visibility based on master toggle and individual selections [1]
+    for _, pathInfo in ipairs(FlingPaths) do
+        local extBtn = PathButtons[pathInfo.id]
+        if extBtn then
+            if _G.CustomPathsEnabled then
+                local isVisible = ExternalButtonStates[pathInfo.id] or false
+                SafeSetVisible(extBtn, isVisible)
+            else
+                SafeSetVisible(extBtn, false)
+            end
+        end
     end
 end
 
@@ -2495,15 +2492,15 @@ local TabCrosshair = Window:CreateTab("Custom Crosshairs", "crosshair")
 TabCrosshair:CreateToggle("Enable Custom Crosshair", false, "CustomCrosshairEnabled", function(state)
     _G.CrosshairSettings.Enabled = state
     
-    if state and not _G.CrosshairLoaded then
-        _G.CrosshairLoaded = true
+    if state and not _G.CrosshairLoaded_2 then
+        _G.CrosshairLoaded_2 = true
         task_spawn(function()
             local url = "https://raw.githubusercontent.com/nazumirui5-oss/Ui-Library/refs/heads/main/crosshair.lua"
             local success, err = pcall(function()
                 loadstring(game:HttpGet(url))()
             end)
             if not success then
-                _G.CrosshairLoaded = false
+                _G.CrosshairLoaded_2 = false
                 Library:Notify("Crosshair Error", "Failed to download crosshair module.", 3)
             end
         end)
@@ -2577,7 +2574,10 @@ end)
 -- --- TAB 5: PREMIUM (LUCIDE ICON: "crown" - UNLOCKED FOR VIP) ---
 TabPremium = Window:CreateTab("Premium", "crown")
 
-TabPremium:CreateParagraph("Custom Fling Coordinates", "Enable custom coordinates as floating external screen buttons.")
+-- ========================================================
+-- [[ DYNAMIC CUSTOM FLINGS LAYOUT & VISIBILITY CONTROLS ]]
+-- ========================================================
+TabPremium:CreateParagraph("Custom Fling Coordinates", "Configure custom coordinate flings. Clicking a button below toggles its external floating button on your screen.")
 
 TabPremium:CreateToggle("Enable Custom Paths", false, "CustomPathsEnabled", function(state)
     _G.CustomPathsEnabled = state
@@ -2590,19 +2590,29 @@ TabPremium:CreateSlider("Fling Speed Multiplier", 1, 100, 50, "FlingSpeedMultipl
     _G.FlingSpeedMultiplier = val / 10
 end)
 
-TabPremium:CreateParagraph("Custom Fling Controls", "Toggle coordinate paths On/Off. Toggles will automatically turn Off when the fling path finishes.")
+TabPremium:CreateParagraph("Fling Activation Panel", "Click a button below to show/hide its screen button. Once visible, click the screen button to trigger the fling.")
 
-local keys = {}
-for name, _ in pairs(PathUrls) do
-    table.insert(keys, name)
-end
-table.sort(keys)
-
-for _, name in ipairs(keys) do
-    local currentName = name
-    PathToggles[currentName] = TabPremium:CreateToggle(currentName:upper(), false, "PathToggle_" .. currentName:gsub(" ", ""), function(state)
-        PathToggleStates[currentName] = state
-        triggerPathToggle(currentName, state)
+for _, pathInfo in ipairs(FlingPaths) do
+    local currentInfo = pathInfo
+    TabPremium:CreateButton(currentInfo.display:upper(), function()
+        local currentState = ExternalButtonStates[currentInfo.id] or false
+        local newState = not currentState
+        ExternalButtonStates[currentInfo.id] = newState
+        
+        -- Update the external button visibility
+        local extBtn = PathButtons[currentInfo.id]
+        if extBtn then
+            -- Only show if the master toggle is also enabled [1]
+            if _G.CustomPathsEnabled then
+                SafeSetVisible(extBtn, newState)
+            end
+        end
+        
+        if newState then
+            Library:Notify("Custom Paths", currentInfo.display .. " button is now VISIBLE on screen.", 1.5)
+        else
+            Library:Notify("Custom Paths", currentInfo.display .. " button is now HIDDEN.", 1.5)
+        end
     end)
 end
 
@@ -2880,8 +2890,8 @@ ToggleFeature = function(name)
         Library:Notify("Hitbox Expander", "Status: " .. (_G.LocalHitboxEnabled and "ON" or "OFF"), 1.5)
     elseif name == "Crosshair" then
         _G.CrosshairSettings.Enabled = not _G.CrosshairSettings.Enabled
-        if _G.CrosshairSettings.Enabled and not _G.CrosshairLoaded then
-            _G.CrosshairLoaded = true
+        if _G.CrosshairSettings.Enabled and not _G.CrosshairLoaded_2 then
+            _G.CrosshairLoaded_2 = true
             task_spawn(function()
                 local url = "https://raw.githubusercontent.com/nazumirui5-oss/Ui-Library/refs/heads/main/crosshair.lua"
                 pcall(function() loadstring(game:HttpGet(url))() end)
