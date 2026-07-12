@@ -20,16 +20,30 @@ local ActiveTracks = {} -- Custom animation track list
 -- Global Speed Config (Playback Speed Multiplier)
 _G.PlaybackSpeedMultiplier = 1.0
 
--- Constant Files
-local REGISTRY_FILE = "LouisPathsRegistry.json"
+-- Constant Folder & Files Configuration
+local FOLDER_NAME = "LouisHub_Recording"
+local REGISTRY_FILE = FOLDER_NAME .. "/LouisPathsRegistry.json"
 
 -- Thumbnail Helper Function to prevent direct asset conversion issues on mobile/PC
 local function getAssetUrl(id)
     return "rbxthumb://type=Asset&id=" .. tostring(id) .. "&w=420&h=420"
 end
 
+-- Safely ensures the dedicated folder exists in the executor's workspace folder
+local function ensureFolderExists()
+    if makefolder then
+        pcall(function()
+            makefolder(FOLDER_NAME)
+        end)
+    end
+end
+
+-- Initialize the folder immediately on startup
+ensureFolderExists()
+
 -- Robust File Checker (Bypasses buggy isfile() implementations on mobile executors)
 local function fileExists(path)
+    ensureFolderExists()
     if isfile then
         local success, result = pcall(function() return isfile(path) end)
         if success then return result end
@@ -211,6 +225,7 @@ local function getRegistry()
 end
 
 local function saveRegistry(registry)
+    ensureFolderExists()
     if writefile then
         pcall(function()
             writefile(REGISTRY_FILE, HttpService:JSONEncode(registry))
@@ -223,7 +238,8 @@ local function savePath(name)
     if name == "" or name == nil then return false, "Please enter a route name!" end
     if not writefile or not readfile then return false, "Save failed: Executor lacks file support." end
     
-    local fileName = "LouisPath_" .. name .. ".json"
+    ensureFolderExists()
+    local fileName = FOLDER_NAME .. "/LouisPath_" .. name .. ".json"
     local success, err = pcall(function()
         writefile(fileName, HttpService:JSONEncode(Waypoints))
     end)
@@ -245,7 +261,7 @@ local function savePath(name)
 end
 
 local function loadPath(name)
-    local fileName = "LouisPath_" .. name .. ".json"
+    local fileName = FOLDER_NAME .. "/LouisPath_" .. name .. ".json"
     if not readfile then return false, "Load failed: Executor lacks file support." end
     
     if fileExists(fileName) then
@@ -253,7 +269,7 @@ local function loadPath(name)
             return HttpService:JSONDecode(readfile(fileName))
         end)
         if success and type(decoded) == "table" then
-            -- SOLUSI RE-ASPARASI: Mengisi ulang tabel secara in-place agar referensi upvalue tetap terjaga
+            -- Copy into existing Waypoints table to preserve reference integrity
             table.clear(Waypoints)
             for _, wp in ipairs(decoded) do
                 table.insert(Waypoints, wp)
@@ -276,7 +292,7 @@ local function deletePath(name)
     end
     saveRegistry(newReg)
     
-    local fileName = "LouisPath_" .. name .. ".json"
+    local fileName = FOLDER_NAME .. "/LouisPath_" .. name .. ".json"
     if fileExists(fileName) and delfile then
         pcall(function() delfile(fileName) end)
     end
@@ -414,8 +430,6 @@ local function startPlayback()
                 local myPos = RootPart.Position
                 local deltaPos = targetCF.Position - myPos
                 
-                local horizontalDist = Vector3.new(deltaPos.X, 0, deltaPos.Z).Magnitude
-                
                 -- SMOOTH PHYSICAL GLIDE: Moves position purely via velocity
                 -- Bypasses CFrame snapping conflicts, entirely eliminating screen/character shake
                 local targetVelocity = deltaPos / dt
@@ -433,12 +447,12 @@ local function startPlayback()
                     Humanoid:Move(Vector3.new(0, 0, 0))
                 end
                 
-                -- SINKRONISASI SHIFT-LOCK / ARAH HADAP KARAKTER ASLI:
+                -- SHIFT-LOCK / ORIGINAL ANGLE SYNCHRONIZATION:
                 if deltaPos.Magnitude > 3.0 then
                     -- Anti-Drift: Snaps whole CFrame if pushed too far away
                     RootPart.CFrame = targetCF
                 else
-                    -- Memisahkan bagian rotasi asli rekaman (targetCF) dan menggabungkannya dengan posisi fisik nyata (myPos)
+                    -- Separates the raw rotation matrix of the frame and binds it directly with the physical position
                     local rotationOnly = targetCF - targetCF.Position
                     RootPart.CFrame = CFrame.new(myPos) * rotationOnly
                 end
