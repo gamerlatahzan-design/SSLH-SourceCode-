@@ -1546,7 +1546,7 @@ local function performWallhop(visualStyle)
             local angle = math_rad(i * 45)
             local dir = (root.CFrame * CFrame_Angles(0, angle, 0)).LookVector
             local r = Workspace:Raycast(root.Position, dir * _G.WallHopDist, params)
-            if r wholesaler and r.Instance.CanCollide then
+            if r and r.Instance.CanCollide then
                 isNearWall = true
                 break
             end
@@ -2591,27 +2591,7 @@ TabCrosshair:CreateSlider("Crosshair Thickness", 1, 6, 2, "CrosshairThickness", 
     _G.CrosshairSettings.Thickness = val / 1.3
 end)
 
-TabCrosshair:CreateParagraph("Crosshair Rotation Controls", "Adjust manual rotation angle or enable Auto-Spin mode for all styles.")
-
-TabCrosshair:CreateSlider("Manual Rotation Angle", 0, 360, 0, "CrosshairRotation", function(val)
-    _G.CrosshairSettings.Rotation = val
-end)
-
-TabCrosshair:CreateToggle("Auto-Spin Crosshair", false, "CrosshairAutoSpin", function(state)
-    _G.CrosshairSettings.AutoSpin = state
-end)
-
-TabCrosshair:CreateSlider("Auto-Spin Speed", 10, 200, 50, "CrosshairSpinSpeed", function(val)
-    _G.CrosshairSettings.SpinSpeed = val
-end)
-
--- --- TAB 5: PREMIUM (LUCIDE ICON: "crown" - UNLOCKED FOR VIP) ---
-TabPremium = Window:CreateTab("Premium", "crown")
-
--- ========================================================
--- [[ DYNAMIC CUSTOM FLINGS LAYOUT & VISIBILITY CONTROLS ]]
--- ========================================================
-TabPremium:CreateParagraph("Custom Fling Coordinates", "Configure custom coordinate flings. Clicking a button below toggles its external floating button on your screen.")
+TabPremium:CreateParagraph("Custom Fling Controls", "Trigger coordinate paths directly from the UI or use the external screen buttons.")
 
 TabPremium:CreateToggle("Enable Custom Paths", false, "CustomPathsEnabled", function(state)
     _G.CustomPathsEnabled = state
@@ -3011,9 +2991,9 @@ SafeConnect(LocalPlayer.CharacterAdded, function(char)
     table.clear(CFrameHistory)
 end)
 
--- ========================================================================
+-- ========================================================
 -- [[ DYNAMIC VISIBILITY SYNCHRONIZATION CORE ]]
--- ========================================================================
+-- ========================================================
 SafeSetVisible(_G.ExtFollowBtn, _G.FollowEnabled)
 SafeSetVisible(_G.ExtFreezeBtn, _G.FreezeEnabled)
 SafeSetVisible(_G.ExtFlickBtn, _G.FlickEnabled)
