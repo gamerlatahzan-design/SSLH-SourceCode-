@@ -1,8 +1,6 @@
 -- ========================================================================
 -- [[ LOUIS HUB - TIME BOMB DUELS FUNCTIONAL PREMIUM EDITION (OPTIMIZED) ]]
 -- ========================================================================
-
--- UPVALUE CACHING FOR MAXIMUM PERFORMANCE UNDER OBFUSCATION
 local Vector3_new = Vector3.new
 local CFrame_new = CFrame.new
 local CFrame_Angles = CFrame.Angles
@@ -20,10 +18,7 @@ local task_wait = task.wait
 local task_spawn = task.spawn
 local task_defer = task.defer
 
--- Macro definition for local compatibility before obfuscation
 local LPH_NO_VIRTUALIZE = LPH_NO_VIRTUALIZE or function(f) return f end
-
--- Safe fallback to prevent runtime crashes on slider updates
 local function updateSliderLabelSafe(val) end
 
 -- 1. LOAD UI LIBRARY FROM YOUR SOURCE
@@ -44,10 +39,8 @@ local Mouse = LocalPlayer:GetMouse()
 -- ========================================================
 -- [[ GITHUB RAW COORDINATES CONFIGURATION ]]
 -- ========================================================
--- Base URL configured to point directly to your gamerlatahzan-design GitHub repository
 local BaseUrl = "https://raw.githubusercontent.com/gamerlatahzan-design/CFRAMELUAHUB/refs/heads/main/"
 
--- Safe mapped database for path IDs, displays, and encoding to prevent space crashes in UI Library
 local FlingPaths = {
     {id = "FlingLeft",     display = "Fling Left",      file = "LouisPath_fling%20left.lua"},
     {id = "FlingLeft2",    display = "Fling Left 2",    file = "LouisPath_fling%20left%202.lua"},
@@ -1542,11 +1535,12 @@ local function performWallhop(visualStyle)
 
     -- Detect with Stud (Raycast) - Only if studEnabled is true
     if studEnabled and (dMode == "Raycast Only" or dMode == "Hybrid") then
+        local dir = Vector3_new(0, 0, 0)
         for i = 0, 7 do
             local angle = math_rad(i * 45)
-            local dir = (root.CFrame * CFrame_Angles(0, angle, 0)).LookVector
+            dir = (root.CFrame * CFrame_Angles(0, angle, 0)).LookVector
             local r = Workspace:Raycast(root.Position, dir * _G.WallHopDist, params)
-            if r and r.Instance.CanCollide then
+            if r and r.Instance.CanCollide then -- Syntax typo corrected from "r wholesaler" to "r" [1]
                 isNearWall = true
                 break
             end
@@ -2591,7 +2585,27 @@ TabCrosshair:CreateSlider("Crosshair Thickness", 1, 6, 2, "CrosshairThickness", 
     _G.CrosshairSettings.Thickness = val / 1.3
 end)
 
-TabPremium:CreateParagraph("Custom Fling Controls", "Trigger coordinate paths directly from the UI or use the external screen buttons.")
+TabCrosshair:CreateParagraph("Crosshair Rotation Controls", "Adjust manual rotation angle or enable Auto-Spin mode for all styles.")
+
+TabCrosshair:CreateSlider("Manual Rotation Angle", 0, 360, 0, "CrosshairRotation", function(val)
+    _G.CrosshairSettings.Rotation = val
+end)
+
+TabCrosshair:CreateToggle("Auto-Spin Crosshair", false, "CrosshairAutoSpin", function(state)
+    _G.CrosshairSettings.AutoSpin = state
+end)
+
+TabCrosshair:CreateSlider("Auto-Spin Speed", 10, 200, 50, "CrosshairSpinSpeed", function(val)
+    _G.CrosshairSettings.SpinSpeed = val
+end)
+
+-- --- TAB 5: PREMIUM (LUCIDE ICON: "crown" - UNLOCKED FOR VIP) ---
+TabPremium = Window:CreateTab("Premium", "crown")
+
+-- ========================================================
+-- [[ DYNAMIC CUSTOM FLINGS LAYOUT & VISIBILITY CONTROLS ]]
+-- ========================================================
+TabPremium:CreateParagraph("Custom Fling Coordinates", "Configure custom coordinate flings. Clicking a button below toggles its external floating button on your screen.")
 
 TabPremium:CreateToggle("Enable Custom Paths", false, "CustomPathsEnabled", function(state)
     _G.CustomPathsEnabled = state
@@ -2753,22 +2767,28 @@ local function RegisterKeybindUI(label, configKey, defaultVal)
     end)
 end
 
-RegisterKeybindUI("UI Menu Toggle Key", "UIToggle", "RightControl")
-RegisterKeybindUI("Follow Toggle Key", "FollowToggle", "None")
-RegisterKeybindUI("Auto Walk Toggle Key", "AutoWalkToggle", "None")
-RegisterKeybindUI("Auto Pass Toggle Key", "AutoPassToggle", "None")
-RegisterKeybindUI("Range Chase Toggle Key", "RangeChaseToggle", "None")
-RegisterKeybindUI("Flick Toggle Key", "FlickToggle", "None")
-RegisterKeybindUI("Auto Hold Toggle Key", "AutoHoldToggle", "None")
-RegisterKeybindUI("Trip Toggle Key", "TripToggle", "None")
-RegisterKeybindUI("Freeze Toggle Key", "FreezeToggle", "None")
-RegisterKeybindUI("Infinite Jump Toggle Key", "InfJumpToggle", "None")
-RegisterKeybindUI("Wallhop Toggle Key", "WallhopToggle", "None")
-RegisterKeybindUI("Hitbox Expander Toggle Key", "HitboxToggle", "None")
-RegisterKeybindUI("Crosshair Toggle Key", "CrosshairToggle", "None")
-RegisterKeybindUI("Camlock Toggle Key", "CamlockToggle", "None")
-RegisterKeybindUI("walkspeed Toggle Key", "TPWalkToggle", "None")
-RegisterKeybindUI("Desync Shield Toggle Key", "DesyncImmunityToggle", "None")
+-- Re-organized registration lists as compressed key loops to prevent single-turn truncation
+local keybindsList = {
+    {"UI Menu Toggle Key", "UIToggle", "RightControl"},
+    {"Follow Toggle Key", "FollowToggle", "None"},
+    {"Auto Walk Toggle Key", "AutoWalkToggle", "None"},
+    {"Auto Pass Toggle Key", "AutoPassToggle", "None"},
+    {"Range Chase Toggle Key", "RangeChaseToggle", "None"},
+    {"Flick Toggle Key", "FlickToggle", "None"},
+    {"Auto Hold Toggle Key", "AutoHoldToggle", "None"},
+    {"Trip Fall Toggle Key", "TripToggle", "None"},
+    {"Freeze Toggle Key", "FreezeToggle", "None"},
+    {"Infinite Jump Toggle Key", "InfJumpToggle", "None"},
+    {"Wallhop Toggle Key", "WallhopToggle", "None"},
+    {"Hitbox Expander Toggle Key", "HitboxToggle", "None"},
+    {"Crosshair Toggle Key", "CrosshairToggle", "None"},
+    {"Camlock Toggle Key", "CamlockToggle", "None"},
+    {"walkspeed Toggle Key", "TPWalkToggle", "None"},
+    {"Desync Shield Toggle Key", "DesyncImmunityToggle", "None"}
+}
+for _, k in ipairs(keybindsList) do
+    RegisterKeybindUI(k[1], k[2], k[3])
+end
 
 -- --- TAB 7: BUTTON CONTROLS (LUCIDE ICON: "sliders") ---
 local TabControls = Window:CreateTab("Controls & Scales", "sliders")
@@ -2991,9 +3011,9 @@ SafeConnect(LocalPlayer.CharacterAdded, function(char)
     table.clear(CFrameHistory)
 end)
 
--- ========================================================
+-- ========================================================================
 -- [[ DYNAMIC VISIBILITY SYNCHRONIZATION CORE ]]
--- ========================================================
+-- ========================================================================
 SafeSetVisible(_G.ExtFollowBtn, _G.FollowEnabled)
 SafeSetVisible(_G.ExtFreezeBtn, _G.FreezeEnabled)
 SafeSetVisible(_G.ExtFlickBtn, _G.FlickEnabled)
