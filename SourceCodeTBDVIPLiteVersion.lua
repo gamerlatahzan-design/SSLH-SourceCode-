@@ -1,8 +1,6 @@
 -- ========================================================================
 -- [[ LOUIS HUB - TIME BOMB DUELS FUNCTIONAL PREMIUM EDITION (LITE VERSION) ]]
 -- ========================================================================
-
--- UPVALUE CACHING FOR MAXIMUM PERFORMANCE UNDER OBFUSCATION
 local Vector3_new = Vector3.new
 local CFrame_new = CFrame.new
 local CFrame_Angles = CFrame.Angles
@@ -20,10 +18,7 @@ local task_wait = task.wait
 local task_spawn = task.spawn
 local task_defer = task.defer
 
--- Macro definition for local compatibility before obfuscation
 local LPH_NO_VIRTUALIZE = LPH_NO_VIRTUALIZE or function(f) return f end
-
--- Safe fallback to prevent runtime crashes on slider updates
 local function updateSliderLabelSafe(val) end
 
 -- 1. LOAD UI LIBRARY FROM YOUR SOURCE
@@ -44,10 +39,8 @@ local Mouse = LocalPlayer:GetMouse()
 -- ========================================================
 -- [[ GITHUB RAW COORDINATES CONFIGURATION ]]
 -- ========================================================
--- Base URL configured to point directly to your gamerlatahzan-design GitHub repository
 local BaseUrl = "https://raw.githubusercontent.com/gamerlatahzan-design/CFRAMELUAHUB/refs/heads/main/"
 
--- Safe mapped database for path IDs, displays, and encoding to prevent space crashes in UI Library
 local FlingPaths = {
     {id = "FlingLeft",     display = "Fling Left",      file = "LouisPath_fling%20left.lua"},
     {id = "FlingLeft2",    display = "Fling Left 2",    file = "LouisPath_fling%20left%202.lua"},
@@ -93,7 +86,7 @@ local function playPath(pathId, pathData)
     end
 end
 
--- REAL-TIME DOWNLOADER & SCRIPT REPLICATION RUNNER
+-- REAL-TIME DOWNLOADER & FLING EXECUTOR
 local function triggerPath(pathInfo)
     local url = BaseUrl .. pathInfo.file
 
@@ -122,9 +115,7 @@ local function triggerPath(pathInfo)
     end)
 end
 
--- ========================================================
--- [[ DYNAMIC CUSTOM PATHS GENERATOR ]]
--- ========================================================
+-- DYNAMIC PATH BUTTON VISIBILITY CONTROLLER
 local function setupPathButtons()
     -- Dynamically toggle button visibility based on master toggle and individual selections [1]
     for _, pathInfo in ipairs(FlingPaths) do
@@ -162,8 +153,8 @@ local Defaults = {
     RangeChaseValue = 30,
     FlickEnabled = false,
     FlickStrength = 45,
-    FlickTargetMode = "Camera Only", -- Options: Camera Only, Character Only, Both
-    CharFlickStrength = 45,          -- Slider for Character Flick
+    FlickTargetMode = "Camera Only",
+    CharFlickStrength = 45,
     AutoHoldEnabled = false,
     LocalHitboxEnabled = true,
     LocalHitboxSize = 2.0,
@@ -182,9 +173,9 @@ local Defaults = {
     WallhopActive = false,
     WallhopMode = "Manual",
     WallhopType = "Normal",
-    WallhopDetectionMode = "Raycast Only", -- Options: Raycast Only, Bounding Box, Hybrid
-    WallhopFlickMode = "Default",          -- Options: Default, Front-to-Back Flick, Back-to-Front Flick
-    WallhopStudEnabled = true,             -- Stud / Raycast detection toggle
+    WallhopDetectionMode = "Raycast Only",
+    WallhopFlickMode = "Default",
+    WallhopStudEnabled = true,
     FOVEnabled = false,
     FOVValue = 70,
     
@@ -1381,7 +1372,6 @@ SafeConnect(RunService.Heartbeat, LPH_NO_VIRTUALIZE(function(dt)
         Camera.FieldOfView = fovValue
     end
 
-    -- TPWALK ENGINE (100% OBFUSCATION-SAFE DECONSTRUCTED MATRIX POSITION DISPLACEMENT)
     if _G.TPWalkEnabled and hum and hum.MoveDirection.Magnitude > 0 then
         local tpSpeed = _G.TPWalkSpeed or 16
         local cf = root.CFrame
@@ -1390,7 +1380,6 @@ SafeConnect(RunService.Heartbeat, LPH_NO_VIRTUALIZE(function(dt)
         root.CFrame = CFrame_new(cf.X + offset.X, cf.Y + offset.Y, cf.Z + offset.Z, r00, r01, r02, r10, r11, r12, r20, r21, r22)
     end
 
-    -- RECORD CFRAME POSITION FOR GHOST DESYNC TRACKING
     if _G.DesyncVisualEnabled then
         table.insert(CFrameHistory, {Time = tick(), CFrame = root.CFrame})
         while #CFrameHistory > 0 and tick() - CFrameHistory[1].Time > 2 do
@@ -1411,7 +1400,6 @@ SafeConnect(RunService.Heartbeat, LPH_NO_VIRTUALIZE(function(dt)
         if GhostModel then GhostModel:Destroy(); GhostModel = nil end
     end
 
-    -- VISUAL RANGE RING UPDATER
     if rangeChaseEnabled then
         if not RangeVisualPart or RangeVisualPart.Parent == nil then
             CreateRangeVisual()
@@ -1440,7 +1428,6 @@ SafeConnect(RunService.Heartbeat, LPH_NO_VIRTUALIZE(function(dt)
         lastRaycastCheck = tick()
     end
 
-    -- DETECT BOMB HOLD STATE CHANGE (JUST RECEIVED BOMB)
     if not lastHadBomb and amIHolder then
         retreatTimer = 0
         local minDist = math_huge
@@ -1460,12 +1447,10 @@ SafeConnect(RunService.Heartbeat, LPH_NO_VIRTUALIZE(function(dt)
         end 
     end
 
-    -- Clear lock if opponent gets a bomb, dies, or disconnects
     if lockedTarget and not isValidTarget(lockedTarget, amIHolder) then 
         lockedTarget = nil 
     end
     
-    -- RESTORED STANDARD LINE OF SIGHT TIMEOUT ENGINE
     if isVisibleCached then 
         targetMemory = 1.2 
     elseif targetMemory > 0 then 
@@ -1505,13 +1490,11 @@ SafeConnect(RunService.Heartbeat, LPH_NO_VIRTUALIZE(function(dt)
                 end
             end
             
-            -- STICKY TARGETING WITH HIJACK LOCK CONSTRAINTS
             if lockedTarget and isValidTarget(lockedTarget, amIHolder) and (targetMemory > 0 or isVisibleCached) then
                 if isVisibleCached then
                     targetMemory = 1.2
                 end
                 
-                -- Check if Target Hijacking forces an immediate lock transition
                 if hijackEnabled and closestPlayer and closestPlayer ~= lockedTarget then
                     if closestDist <= hijackDistance then
                         lockedTarget = closestPlayer
@@ -1519,7 +1502,6 @@ SafeConnect(RunService.Heartbeat, LPH_NO_VIRTUALIZE(function(dt)
                     end
                 end
             else
-                -- Find new target as lock was dropped or target became invalid
                 if hijackEnabled and closestPlayer and closestDist <= hijackDistance then
                     lockedTarget = closestPlayer
                     targetMemory = 1.2
@@ -2517,8 +2499,8 @@ ToggleFeature = function(name)
         Library:Notify("Hitbox Expander", "Status: " .. (_G.LocalHitboxEnabled and "ON" or "OFF"), 1.5)
     elseif name == "Crosshair" then
         _G.CrosshairSettings.Enabled = not _G.CrosshairSettings.Enabled
-        if _G.CrosshairSettings.Enabled and not _G.CrosshairLoaded then
-            _G.CrosshairLoaded = true
+        if _G.CrosshairSettings.Enabled and not _G.CrosshairLoaded_2 then
+            _G.CrosshairLoaded_2 = true
             task_spawn(function()
                 local url = "https://raw.githubusercontent.com/nazumirui5-oss/Ui-Library/refs/heads/main/crosshair.lua"
                 pcall(function() loadstring(game:HttpGet(url))() end)
@@ -2584,9 +2566,9 @@ SafeConnect(LocalPlayer.CharacterAdded, function(char)
     table.clear(CFrameHistory)
 end)
 
--- ========================================================================
+-- ========================================================
 -- [[ DYNAMIC VISIBILITY SYNCHRONIZATION CORE ]]
--- ========================================================================
+-- ========================================================
 SafeSetVisible(_G.ExtFollowBtn, _G.FollowEnabled)
 SafeSetVisible(_G.ExtFreezeBtn, _G.FreezeEnabled)
 SafeSetVisible(_G.ExtFlickBtn, _G.FlickEnabled)
