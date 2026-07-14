@@ -1,6 +1,8 @@
 -- ========================================================================
 -- [[ LOUIS HUB - TIME BOMB DUELS FUNCTIONAL PREMIUM EDITION (LITE VERSION) ]]
 -- ========================================================================
+
+-- UPVALUE CACHING FOR MAXIMUM PERFORMANCE UNDER OBFUSCATION
 local Vector3_new = Vector3.new
 local CFrame_new = CFrame.new
 local CFrame_Angles = CFrame.Angles
@@ -18,7 +20,10 @@ local task_wait = task.wait
 local task_spawn = task.spawn
 local task_defer = task.defer
 
+-- Macro definition for local compatibility before obfuscation
 local LPH_NO_VIRTUALIZE = LPH_NO_VIRTUALIZE or function(f) return f end
+
+-- Safe fallback to prevent runtime crashes on slider updates
 local function updateSliderLabelSafe(val) end
 
 -- 1. LOAD UI LIBRARY FROM YOUR SOURCE
@@ -39,8 +44,10 @@ local Mouse = LocalPlayer:GetMouse()
 -- ========================================================
 -- [[ GITHUB RAW COORDINATES CONFIGURATION ]]
 -- ========================================================
+-- Base URL configured to point directly to your gamerlatahzan-design GitHub repository
 local BaseUrl = "https://raw.githubusercontent.com/gamerlatahzan-design/CFRAMELUAHUB/refs/heads/main/"
 
+-- Safe mapped database for path IDs, displays, and encoding to prevent space crashes in UI Library
 local FlingPaths = {
     {id = "FlingLeft",     display = "Fling Left",      file = "LouisPath_fling%20left.lua"},
     {id = "FlingLeft2",    display = "Fling Left 2",    file = "LouisPath_fling%20left%202.lua"},
@@ -86,7 +93,7 @@ local function playPath(pathId, pathData)
     end
 end
 
--- REAL-TIME DOWNLOADER & FLING EXECUTOR
+-- REAL-TIME DOWNLOADER & SCRIPT REPLICATION RUNNER
 local function triggerPath(pathInfo)
     local url = BaseUrl .. pathInfo.file
 
@@ -115,7 +122,9 @@ local function triggerPath(pathInfo)
     end)
 end
 
--- DYNAMIC PATH BUTTON VISIBILITY CONTROLLER
+-- ========================================================
+-- [[ DYNAMIC CUSTOM PATHS GENERATOR ]]
+-- ========================================================
 local function setupPathButtons()
     -- Dynamically toggle button visibility based on master toggle and individual selections [1]
     for _, pathInfo in ipairs(FlingPaths) do
@@ -153,8 +162,8 @@ local Defaults = {
     RangeChaseValue = 30,
     FlickEnabled = false,
     FlickStrength = 45,
-    FlickTargetMode = "Camera Only",
-    CharFlickStrength = 45,
+    FlickTargetMode = "Camera Only", -- Options: Camera Only, Character Only, Both
+    CharFlickStrength = 45,          -- Slider for Character Flick
     AutoHoldEnabled = false,
     LocalHitboxEnabled = true,
     LocalHitboxSize = 2.0,
@@ -173,9 +182,9 @@ local Defaults = {
     WallhopActive = false,
     WallhopMode = "Manual",
     WallhopType = "Normal",
-    WallhopDetectionMode = "Raycast Only",
-    WallhopFlickMode = "Default",
-    WallhopStudEnabled = true,
+    WallhopDetectionMode = "Raycast Only", -- Options: Raycast Only, Bounding Box, Hybrid
+    WallhopFlickMode = "Default",          -- Options: Default, Front-to-Back Flick, Back-to-Front Flick
+    WallhopStudEnabled = true,             -- Stud / Raycast detection toggle
     FOVEnabled = false,
     FOVValue = 70,
     
@@ -425,8 +434,8 @@ local PresetNames = {
     "Preset 25 (ID: 14196151488)", "Preset 26 (ID: 14175340156)", "Preset 27 (ID: 15064835974)",
     "Preset 28 (ID: 11717828334)", "Preset 29 (ID: 11770890261)", "Preset 30 (ID: 12436450999)",
     "Preset 31 (ID: 14828905230)", "Preset 32 (ID: 5112357171)", "Preset 33 (ID: 8351520948)",
-    "Preset 34 (ID: 12294092863)", "Preset 35 (ID: 11746881057)", "Preset 36 (ID: 11756692092)",
-    "Preset 37 (ID: 11763243469)", "Preset 38 (ID: 12077205402)", "Preset 39 (ID: 12146988029)",
+    "Preset 34 (ID: 12294092863)", "Preset 35 (ID: 11746881057)", "Preset 36 (11756692092)",
+    "Preset 37 (11763243469)", "Preset 38 (12077205402)", "Preset 39 (12146988029)",
     "Preset 40 (ID: 2366671460)", "Preset 41 (ID: 11915618919)", "Preset 42 (ID: 10164277641)",
     "Preset 43 (ID: 4818758746)", "Preset 44 (ID: 11720549778)", "Preset 45 (ID: 15963047794)",
     "Preset 46 (ID: 13413667445)", "Preset 47 (ID: 12323570810)", "Preset 48 (6877713475)",
@@ -1155,6 +1164,7 @@ _G.ExtWHUltraBtn = Library:CreateExternalButton("WHUltra", "wh_ultra", UDim2.new
 end)
 RegisterExternalButton(_G.ExtWHUltraBtn)
 
+
 applyFreeze = function(state)
     local char = LocalPlayer.Character
     if not char then return end
@@ -1233,7 +1243,7 @@ local function performWallhop(visualStyle)
             local angle = math_rad(i * 45)
             local dir = (root.CFrame * CFrame_Angles(0, angle, 0)).LookVector
             local r = Workspace:Raycast(root.Position, dir * _G.WallHopDist, params)
-            if r and r.Instance.CanCollide then
+            if r wholesaler and r.Instance.CanCollide then
                 isNearWall = true
                 break
             end
@@ -2566,9 +2576,9 @@ SafeConnect(LocalPlayer.CharacterAdded, function(char)
     table.clear(CFrameHistory)
 end)
 
--- ========================================================
+-- ========================================================================
 -- [[ DYNAMIC VISIBILITY SYNCHRONIZATION CORE ]]
--- ========================================================
+-- ========================================================================
 SafeSetVisible(_G.ExtFollowBtn, _G.FollowEnabled)
 SafeSetVisible(_G.ExtFreezeBtn, _G.FreezeEnabled)
 SafeSetVisible(_G.ExtFlickBtn, _G.FlickEnabled)
