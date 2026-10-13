@@ -893,70 +893,13 @@ function Utils.Corner(parent, radius)
     return c
 end
 
--- 🌟 STROKE MODERN (Glow Border yang Terang & Menyala)
-function Utils.Stroke(parent, color, thickness, transparency, useGradient)
+function Utils.Stroke(parent, color, thickness, transparency)
     local s = Instance.new("UIStroke")
+    s.Color = color or Color3.fromRGB(48, 30, 72)
     s.Thickness = thickness or 1
     s.Transparency = transparency or 0
-    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     s.Parent = parent
-
-    if useGradient then
-        s.Color = Color3.fromRGB(255, 255, 255) -- Set putih agar warna gradient keluar 100%
-        local gStroke = Instance.new("UIGradient")
-        gStroke.Rotation = 45
-        local function updateStrokeSeq()
-            local c1 = color or Theme.Border
-            local c2 = c1:Lerp(Color3.new(1, 1, 1), 0.35)
-            return ColorSequence.new({
-                ColorSequenceKeypoint.new(0, c2),
-                ColorSequenceKeypoint.new(0.5, c1),
-                ColorSequenceKeypoint.new(1, c1:Lerp(Color3.new(0, 0, 0), 0.4))
-            })
-        end
-        gStroke.Color = updateStrokeSeq()
-        gStroke.Parent = s
-        LouisHub:Registrar(gStroke, "Color", updateStrokeSeq)
-    else
-        s.Color = color or Color3.fromRGB(55, 35, 85)
-    end
-
     return s
-end
-
--- 🌟 FRAME MODERN (Gradient Kilau Halus Tanpa Menghitamkan Warna)
-function Utils.Frame(cfg)
-    cfg = cfg or {}
-    local f = Instance.new("Frame")
-    countCreatedInstance(f)
-    f.Size = cfg.Size or UDim2.new(1, 0, 0, cfg.Alto or 26)
-    f.Position = cfg.Posicion or UDim2.new(0, 0, 0, 0)
-    if cfg.Ancla then f.AnchorPoint = cfg.Ancla end
-    f.BackgroundColor3 = cfg.Color or Color3.fromRGB(18, 12, 28)
-    f.BackgroundTransparency = cfg.Transparencia or 0
-    f.BorderSizePixel = 0
-    f.ClipsDescendants = cfg.Recortar or false
-    f.LayoutOrder = cfg.Orden or 0
-    if cfg.Visible ~= nil then f.Visible = cfg.Visible end
-    f.Parent = cfg.Padre
-    if cfg.Radio ~= false then Utils.Corner(f, cfg.Radio) end
-    if cfg.Borde then
-        local st = Utils.Stroke(f, cfg.ColorBorde, cfg.GrosorBorde, cfg.TransparenciaBorde, true)
-        if cfg.ClaveTemaBorde then LouisHub:Registrar(st, "Color", cfg.ClaveTemaBorde) end
-    end
-
-    -- Memberikan efek gradasi kilau atas-ke-bawah yang aman bagi warna apa pun
-    if cfg.Gradiente ~= false and (cfg.Transparencia or 0) < 0.8 then
-        local grad = Instance.new("UIGradient")
-        grad.Rotation = cfg.AnguloGradiente or 90
-        grad.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),     -- 100% warna tema di bagian atas
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(205, 205, 205))      -- Sedikit lebih gelap di bagian bawah
-        })
-        grad.Parent = f
-    end
-
-    return f
 end
 
 function Utils.ClickFeedback(visual)
@@ -1070,18 +1013,30 @@ function Utils.FlashFeedback(instance, success, normalColor)
     end)
 end
 
+function Utils.Frame(cfg)
+    cfg = cfg or {}
+    local f = Instance.new("Frame")
+    countCreatedInstance(f)
+    f.Size = cfg.Size or UDim2.new(1, 0, 0, cfg.Alto or 26)
+    f.Position = cfg.Posicion or UDim2.new(0, 0, 0, 0)
+    if cfg.Ancla then f.AnchorPoint = cfg.Ancla end
+    f.BackgroundColor3 = cfg.Color or Color3.fromRGB(18, 12, 28)
+    f.BackgroundTransparency = cfg.Transparencia or 0
+    f.BorderSizePixel = 0
+    f.ClipsDescendants = cfg.Recortar or false
+    f.LayoutOrder = cfg.Orden or 0
+    if cfg.Visible ~= nil then f.Visible = cfg.Visible end
+    f.Parent = cfg.Padre
+    if cfg.Radio ~= false then Utils.Corner(f, cfg.Radio) end
+    if cfg.Borde then
+        local st = Utils.Stroke(f, cfg.ColorBorde, cfg.GrosorBorde, cfg.TransparenciaBorde)
+        if cfg.ClaveTemaBorde then LouisHub:Registrar(st, "Color", cfg.ClaveTemaBorde) end
+    end
+    return f
+end
+
 function Utils.Fila(parent, height, order, color)
-    return Utils.Frame({
-        Padre = parent,
-        Size = UDim2.new(1, 0, 0, height),
-        Orden = order,
-        Color = color or Theme.Fila,
-        Radio = 8,
-        Borde = true,
-        ColorBorde = Theme.Border,
-        TransparenciaBorde = 0.5,
-        ClaveTemaBorde = "Border"
-    })
+    return Utils.Frame({Padre = parent, Size = UDim2.new(1, 0, 0, height), Orden = order, Color = color, Radio = 8})
 end
 
 function Utils.Texto(cfg)
@@ -1209,100 +1164,106 @@ function Utils.Arrastrable(trigger, target, eventMgr)
 end
 
 -- ===================================================================
---  THEMES SYSTEM & DUAL-TONE GRADIENT PALETTES
+--  THEMES SYSTEM & REACTIVE THEME MANAGER
 -- ===================================================================
 local Themes = {}
 Themes.Predeterminado = "NeonHalloween"
-
 Themes.Lista = {
-    -- 🎃 1. NEON HALLOWEEN (Gothic Dark Void + Jack-O'-Lantern Fire to Golden Ember)
     NeonHalloween = {
-        Background      = Color3.fromRGB(12, 7, 16),
-        BackgroundDark  = Color3.fromRGB(7, 4, 10),
-        BackgroundLight = Color3.fromRGB(22, 14, 30),
-        Accent          = Color3.fromRGB(255, 85, 0),     -- Vivid Flame Orange
-        AccentLight     = Color3.fromRGB(255, 175, 25),   -- Golden Ember
-        Highlight       = Color3.fromRGB(255, 215, 80),   -- Jack-o'-Lantern Glow
-        Text            = Color3.fromRGB(255, 246, 238),
-        TextDark        = Color3.fromRGB(175, 145, 165),
-        Border          = Color3.fromRGB(68, 30, 62),     -- Cursed Violet Border
-        Panel           = Color3.fromRGB(18, 11, 24),
-        PanelClaro      = Color3.fromRGB(26, 16, 34),
-        Fila            = Color3.fromRGB(23, 14, 30),
-        Entrada         = Color3.fromRGB(14, 8, 18),
-        Apagado         = Color3.fromRGB(50, 26, 45),
-    },
-
-    -- 🧪 2. TOXIC HALLOWEEN (Witch Graveyard: Ghost Obsidian + Violet to Toxic Slime Green)
-    ToxicHalloween = {
-        Background      = Color3.fromRGB(10, 10, 15),
-        BackgroundDark  = Color3.fromRGB(6, 6, 9),
-        BackgroundLight = Color3.fromRGB(18, 17, 26),
-        Accent          = Color3.fromRGB(168, 85, 247),   -- Witch Violet
-        AccentLight     = Color3.fromRGB(52, 211, 153),   -- Toxic Ectoplasm Green
-        Highlight       = Color3.fromRGB(110, 231, 183),
-        Text            = Color3.fromRGB(245, 255, 248),
-        TextDark        = Color3.fromRGB(140, 155, 150),
-        Border          = Color3.fromRGB(48, 32, 68),
-        Panel           = Color3.fromRGB(15, 14, 22),
-        PanelClaro      = Color3.fromRGB(22, 20, 32),
-        Fila            = Color3.fromRGB(19, 17, 28),
-        Entrada         = Color3.fromRGB(11, 10, 16),
-        Apagado         = Color3.fromRGB(40, 35, 55),
-    },
-
-    -- ⚡ 3. CYBER VIOLET (Futuristic Neon Violet to Electric Cyan)
-    CyberViolet = {
-        Background      = Color3.fromRGB(10, 8, 16),
-        BackgroundDark  = Color3.fromRGB(6, 5, 10),
-        BackgroundLight = Color3.fromRGB(18, 14, 28),
-        Accent          = Color3.fromRGB(138, 43, 226),
-        AccentLight     = Color3.fromRGB(0, 220, 255),
-        Highlight       = Color3.fromRGB(186, 104, 255),
+        Background      = Color3.fromRGB(11, 7, 18),
+        BackgroundDark  = Color3.fromRGB(7, 4, 12),
+        BackgroundLight = Color3.fromRGB(24, 15, 38),
+        Accent          = Color3.fromRGB(255, 130, 20),
+        AccentLight     = Color3.fromRGB(255, 160, 40),
+        Highlight       = Color3.fromRGB(255, 205, 75),
         Text            = Color3.fromRGB(245, 245, 255),
-        TextDark        = Color3.fromRGB(140, 135, 160),
-        Border          = Color3.fromRGB(55, 35, 85),
-        Panel           = Color3.fromRGB(15, 12, 24),
-        PanelClaro      = Color3.fromRGB(22, 17, 34),
-        Fila            = Color3.fromRGB(20, 15, 30),
-        Entrada         = Color3.fromRGB(12, 9, 18),
-        Apagado         = Color3.fromRGB(40, 30, 55),
+        TextDark        = Color3.fromRGB(160, 150, 180),
+        Border          = Color3.fromRGB(48, 30, 72),
+        Panel           = Color3.fromRGB(18, 12, 28),
+        PanelClaro      = Color3.fromRGB(26, 16, 42),
+        Fila            = Color3.fromRGB(22, 14, 34),
+        Entrada         = Color3.fromRGB(14, 9, 22),
+        Apagado         = Color3.fromRGB(44, 30, 60),
     },
-
-    -- 🌌 4. MIDNIGHT SLATE (Tech Minimalist Deep Blue Sapphire)
-    MidnightSlate = {
-        Background      = Color3.fromRGB(11, 14, 20),
-        BackgroundDark  = Color3.fromRGB(7, 9, 14),
-        BackgroundLight = Color3.fromRGB(18, 24, 34),
-        Accent          = Color3.fromRGB(59, 130, 246),
-        AccentLight     = Color3.fromRGB(96, 215, 250),
-        Highlight       = Color3.fromRGB(147, 197, 253),
-        Text            = Color3.fromRGB(240, 245, 255),
-        TextDark        = Color3.fromRGB(125, 140, 165),
-        Border          = Color3.fromRGB(30, 42, 62),
-        Panel           = Color3.fromRGB(14, 18, 26),
-        PanelClaro      = Color3.fromRGB(20, 26, 38),
-        Fila            = Color3.fromRGB(18, 23, 33),
-        Entrada         = Color3.fromRGB(10, 13, 19),
-        Apagado         = Color3.fromRGB(35, 45, 60),
+    Negro = {
+        Background      = Color3.fromRGB(45, 48, 53),
+        BackgroundDark  = Color3.fromRGB(32, 34, 38),
+        BackgroundLight = Color3.fromRGB(55, 58, 64),
+        Accent          = Color3.fromRGB(90, 140, 210),
+        AccentLight     = Color3.fromRGB(130, 175, 230),
+        Highlight       = Color3.fromRGB(180, 200, 230),
+        Text            = Color3.fromRGB(240, 240, 240),
+        TextDark        = Color3.fromRGB(230, 230, 230),
+        Border          = Color3.fromRGB(12, 13, 15),
+        Panel           = Color3.fromRGB(18, 19, 22),
+        PanelClaro      = Color3.fromRGB(26, 28, 32),
+        Fila            = Color3.fromRGB(32, 34, 38),
+        Entrada         = Color3.fromRGB(15, 16, 19),
+        Apagado         = Color3.fromRGB(60, 60, 60),
     },
-
-    -- 🩸 5. CRIMSON BLOOD (Deep Velvet Red to Neon Coral Fire)
-    CrimsonBlood = {
-        Background      = Color3.fromRGB(16, 8, 10),
-        BackgroundDark  = Color3.fromRGB(10, 4, 6),
-        BackgroundLight = Color3.fromRGB(26, 12, 16),
-        Accent          = Color3.fromRGB(225, 29, 72),
-        AccentLight     = Color3.fromRGB(255, 105, 130),
-        Highlight       = Color3.fromRGB(255, 160, 175),
-        Text            = Color3.fromRGB(255, 242, 245),
-        TextDark        = Color3.fromRGB(165, 130, 135),
-        Border          = Color3.fromRGB(60, 20, 28),
-        Panel           = Color3.fromRGB(22, 10, 14),
-        PanelClaro      = Color3.fromRGB(30, 15, 20),
-        Fila            = Color3.fromRGB(26, 12, 16),
-        Entrada         = Color3.fromRGB(14, 6, 8),
-        Apagado         = Color3.fromRGB(55, 22, 28),
+    Blanco = {
+        Background      = Color3.fromRGB(218, 218, 224),
+        BackgroundDark  = Color3.fromRGB(198, 198, 205),
+        BackgroundLight = Color3.fromRGB(240, 240, 245),
+        Accent          = Color3.fromRGB(60, 120, 210),
+        AccentLight     = Color3.fromRGB(100, 155, 230),
+        Highlight       = Color3.fromRGB(40, 70, 130),
+        Text            = Color3.fromRGB(25, 25, 30),
+        TextDark        = Color3.fromRGB(20, 20, 20),
+        Border          = Color3.fromRGB(195, 195, 200),
+        Panel           = Color3.fromRGB(252, 252, 254),
+        PanelClaro      = Color3.fromRGB(240, 240, 244),
+        Fila            = Color3.fromRGB(232, 232, 237),
+        Entrada         = Color3.fromRGB(220, 220, 226),
+        Apagado         = Color3.fromRGB(180, 180, 180),
+    },
+    Verde = {
+        Background      = Color3.fromRGB(58, 122, 68),
+        BackgroundDark  = Color3.fromRGB(42, 92, 50),
+        BackgroundLight = Color3.fromRGB(72, 145, 82),
+        Accent          = Color3.fromRGB(90, 190, 120),
+        AccentLight     = Color3.fromRGB(130, 215, 155),
+        Highlight       = Color3.fromRGB(170, 230, 185),
+        Text            = Color3.fromRGB(240, 240, 240),
+        TextDark        = Color3.fromRGB(230, 230, 230),
+        Border          = Color3.fromRGB(15, 30, 18),
+        Panel           = Color3.fromRGB(24, 40, 27),
+        PanelClaro      = Color3.fromRGB(32, 52, 36),
+        Fila            = Color3.fromRGB(28, 46, 31),
+        Entrada         = Color3.fromRGB(20, 34, 22),
+        Apagado         = Color3.fromRGB(60, 60, 60),
+    },
+    Morado = {
+        Background      = Color3.fromRGB(78, 55, 120),
+        BackgroundDark  = Color3.fromRGB(58, 40, 92),
+        BackgroundLight = Color3.fromRGB(98, 72, 145),
+        Accent          = Color3.fromRGB(175, 45, 255),
+        AccentLight     = Color3.fromRGB(195, 85, 255),
+        Highlight       = Color3.fromRGB(225, 185, 255),
+        Text            = Color3.fromRGB(240, 240, 240),
+        TextDark        = Color3.fromRGB(230, 230, 230),
+        Border          = Color3.fromRGB(28, 16, 44),
+        Panel           = Color3.fromRGB(26, 20, 36),
+        PanelClaro      = Color3.fromRGB(34, 27, 46),
+        Fila            = Color3.fromRGB(30, 24, 42),
+        Entrada         = Color3.fromRGB(22, 17, 32),
+        Apagado         = Color3.fromRGB(60, 60, 60),
+    },
+    Rojo = {
+        Background      = Color3.fromRGB(214, 70, 60),
+        BackgroundDark  = Color3.fromRGB(164, 45, 40),
+        BackgroundLight = Color3.fromRGB(230, 110, 100),
+        Accent          = Color3.fromRGB(163, 45, 60),
+        AccentLight     = Color3.fromRGB(204, 94, 100),
+        Highlight       = Color3.fromRGB(234, 160, 160),
+        Text            = Color3.fromRGB(255, 255, 255),
+        TextDark        = Color3.fromRGB(25, 20, 20),
+        Border          = Color3.fromRGB(35, 8, 8),
+        Panel           = Color3.fromRGB(34, 20, 20),
+        PanelClaro      = Color3.fromRGB(44, 27, 27),
+        Fila            = Color3.fromRGB(38, 24, 24),
+        Entrada         = Color3.fromRGB(28, 17, 17),
+        Apagado         = Color3.fromRGB(60, 60, 60),
     }
 }
 
@@ -1310,19 +1271,14 @@ local Theme = {}
 for k, v in pairs(Themes.Lista[Themes.Predeterminado]) do Theme[k] = v end
 LouisHub.Theme = Theme
 
--- 🌟 DUAL-TONE GRADIENT ACCENT ENGINE
-function Utils.GradienteAcento(inst, angle)
-    angle = angle or 45
+function Utils.GradienteAcento(inst, intensity)
+    intensity = intensity or 0.12
     local function getSeq()
         local base = Theme.Accent
-        local light = Theme.AccentLight or base:Lerp(Color3.new(1, 1, 1), 0.2)
-        return ColorSequence.new({
-            ColorSequenceKeypoint.new(0, base),
-            ColorSequenceKeypoint.new(1, light)
-        })
+        local light = base:Lerp(Color3.new(1, 1, 1), intensity)
+        return ColorSequence.new(base, light)
     end
-    local grad = inst:FindFirstChildOfClass("UIGradient") or Instance.new("UIGradient")
-    grad.Rotation = angle
+    local grad = Instance.new("UIGradient")
     grad.Color = getSeq()
     grad.Parent = inst
     LouisHub:Registrar(grad, "Color", getSeq)
@@ -1401,16 +1357,14 @@ end
 
 function LouisHub.ThemeManager:GuardarTemaActual()
     if not fsAvailable() then return false end
-    if type(LouisHub.SaveManager) == "table" and type(LouisHub.SaveManager.Carpeta) == "string" then
-        local ok, json = pcall(function()
-            local data = {}
-            for k, v in pairs(Theme) do data[k] = {v.R, v.G, v.B} end
-            return HttpService:JSONEncode(data)
-        end)
-        if not ok then return false end
-        return pcall(writefile, LouisHub.SaveManager.Carpeta .. "/tema.json", json)
-    end
-    return false
+    ensureFolder(LouisHub.SaveManager.Carpeta)
+    local ok, json = pcall(function()
+        local data = {}
+        for k, v in pairs(Theme) do data[k] = {v.R, v.G, v.B} end
+        return HttpService:JSONEncode(data)
+    end)
+    if not ok then return false end
+    return pcall(writefile, LouisHub.SaveManager.Carpeta .. "/tema.json", json)
 end
 
 -- ===================================================================
@@ -1439,7 +1393,7 @@ local function obtenerOverlayTooltip()
     panelAyuda.Parent = overlayGui
     LouisHub:Registrar(panelAyuda, "BackgroundColor3", "Panel")
     Utils.Corner(panelAyuda, 6)
-    local strokeTooltip = Utils.Stroke(panelAyuda, Theme.Accent, 1, 0.3, true)
+    local strokeTooltip = Utils.Stroke(panelAyuda, Theme.Accent, 1, 0.3)
     LouisHub:Registrar(strokeTooltip, "Color", "Accent")
 
     local pad = Instance.new("UIPadding")
@@ -1637,7 +1591,7 @@ local function crearContenedorNotif(padreGui)
         Padre = padreGui, Transparencia = 1,
         Size = UDim2.new(0, 260, 0, 0),
         Posicion = UDim2.new(1, -270, 0, 10),
-        Radio = false, Gradiente = false
+        Radio = false,
     })
     contenedorNotif.Name = "LouisHub_Notificaciones"
     contenedorNotif.AutomaticSize = Enum.AutomaticSize.Y
@@ -1666,7 +1620,6 @@ local function mostrarTarjetaNotif(cfg)
         Size = UDim2.new(1, 0, 0, 0), Radio = 8,
         Borde = true, ColorBorde = colorAcento, TransparenciaBorde = 0.3,
         ClaveTemaBorde = (not esTipoFijo) and "Accent" or nil,
-        Gradiente = false
     })
     tarjeta.AutomaticSize = Enum.AutomaticSize.Y
     tarjeta.ClipsDescendants = true
@@ -1675,12 +1628,12 @@ local function mostrarTarjetaNotif(cfg)
 
     local grad = Instance.new("UIGradient", tarjeta)
     grad.Rotation = 135
-    grad.Color = ColorSequence.new(Theme.Panel:Lerp(colorAcento, 0.12), Theme.Panel)
+    grad.Color = ColorSequence.new(Theme.Panel:Lerp(colorAcento, 0.08), Theme.Panel)
 
     local escalaTarjeta = Instance.new("UIScale", tarjeta)
     escalaTarjeta.Scale = 0.85
 
-    Utils.Frame({Padre = tarjeta, Size = UDim2.new(0, 3, 1, 0), Color = colorAcento, Radio = false, Gradiente = false})
+    Utils.Frame({Padre = tarjeta, Size = UDim2.new(0, 3, 1, 0), Color = colorAcento, Radio = false})
 
     local pad = Instance.new("UIPadding", tarjeta)
     pad.PaddingLeft, pad.PaddingRight = UDim.new(0, 12), UDim.new(0, 10)
@@ -2117,7 +2070,6 @@ function LouisHub:Confirmar(cfg)
     local backdrop = Utils.Frame({
         Padre = gui, Size = UDim2.new(1, 0, 1, 0),
         Color = Color3.new(0, 0, 0), Transparencia = 0.5, Radio = false,
-        Gradiente = false
     })
     backdrop.ZIndex = zBase
     backdrop.Active = true
@@ -2174,7 +2126,7 @@ function LouisHub:Confirmar(cfg)
     local vertical = totalB > 3
     local rowBtns = Utils.Frame({
         Padre = card, Size = UDim2.new(1, 0, 0, vertical and 0 or 34),
-        Transparencia = 1, Orden = order, Gradiente = false
+        Transparencia = 1, Orden = order,
     })
     rowBtns.ZIndex = zBase + 2
     if vertical then rowBtns.AutomaticSize = Enum.AutomaticSize.Y end
@@ -2207,7 +2159,7 @@ function LouisHub:Confirmar(cfg)
         btn.ZIndex = zBase + 3
         if themeKey then LouisHub:Registrar(btn, "BackgroundColor3", themeKey) end
         if conBorde then
-            local st = Utils.Stroke(btn, Theme.Border, 1, 0, true)
+            local st = Utils.Stroke(btn, Theme.Border, 1)
             LouisHub:Registrar(st, "Color", "Border")
         else
             Utils.Hover(btn, btn)
@@ -2226,6 +2178,12 @@ function LouisHub:Confirmar(cfg)
 end
 
 -- [END OF PART 2 - PROCEED TO PART 3]
+
+-- ===================================================================
+--  LOUIS HUB UI LIBRARY (V3.0 CORE ENGINE)
+--  Brand: Louis Hub
+--  [PART 3 OF 5] - Full SaveManager, External HUD & Mobile Action Button
+-- ===================================================================
 
 -- ===================================================================
 --  COMPLETE SAVE & CONFIG MANAGER
