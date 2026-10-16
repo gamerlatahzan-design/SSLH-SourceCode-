@@ -3349,7 +3349,7 @@ function LouisHub:CrearVentana(config)
 
     local logoImagen = Instance.new("ImageLabel")
     logoImagen.BackgroundTransparency = 1
-    logoImagen.Image = "rbxassetid://123994745552712"
+    logoImagen.Image = "rbxthumb://type=Asset&id=104436283956004&w=420&h=420"
     logoImagen.ScaleType = Enum.ScaleType.Fit
     logoImagen.Size = UDim2.new(0, 64, 0, 64)
     logoImagen.Position = UDim2.new(0.5, -32, 0.5, -90)
