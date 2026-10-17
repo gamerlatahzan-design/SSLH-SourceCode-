@@ -4778,8 +4778,6 @@ function AlanLuna:Popup(cfg)
     }
 end
 
-function AlanUI:Popup(cfg) return AlanLuna:Popup(cfg) end
-
 -- ══════════════════════════════════════════════════════════════
 --  SECCION 18: KOMPONEN BARU 2 — HUD STATS OVERLAY
 -- ══════════════════════════════════════════════════════════════
