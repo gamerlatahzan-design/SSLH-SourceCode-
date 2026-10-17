@@ -1,335 +1,616 @@
--- ===================================================================
---  LOUIS HUB UI LIBRARY (V3.0) — COMPLETE 100% COMPONENT SHOWCASE
---  Resource: https://raw.githubusercontent.com/gamerlatahzan-design/SSLH-SourceCode-/refs/heads/main/UI%20Library/LouisHub.lua
--- ===================================================================
+--[[
+╔══════════════════════════════════════════════════════════════════════╗
+                 ALANLUNA ULTIMATE MASTER DEMO HUB
+        Contoh Implementasi Komprehensif Seluruh Fitur AlanLuna
+╚══════════════════════════════════════════════════════════════════════╝
+]]
 
-local LouisHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/gamerlatahzan-design/SSLH-SourceCode-/refs/heads/main/UI%20Library/LouisHub.lua"))()
+local AlanLuna = loadstring(readfile("AlanLuna.lua"))()
 
--- 1. WINDOW INITIALIZATION
-local Ventana = LouisHub:CrearVentanaConSeguridad({
-    Titulo = "Louis Hub V3",
-    Subtitulo = "Official Complete Showcase",
-    TamanoX = 580,
-    TamanoY = 360,
-    TeclaToggle = Enum.KeyCode.RightControl,
-    Orientacion = "vertical",     -- "vertical" or "horizontal"
-    NombreConfig = "ShowcaseConfig",
-    AutoGuardar = true,
-    Buscador = true,
-    PestanaPreinstalada = true    -- Injects '🔧 Suite' Tab
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+-- ══════════════════════════════════════════════════════════════
+--  1. INISIALISASI VENTANA UTAMA
+-- ══════════════════════════════════════════════════════════════
+local Ventana = AlanLuna:CrearVentana({
+    Titulo        = "Project AlanLuna",
+    Subtitulo     = "Master Production Hub",
+    TamanoX       = 640,
+    TamanoY       = 410,
+    TeclaToggle   = Enum.KeyCode.RightControl,
+    Buscador      = true,
+    AutoGuardar   = true,
+    NombreConfig  = "AlanLuna_MasterConfig",
+    Orientacion   = "vertical", -- "vertical" (sidebar) atau "horizontal" (topbar)
 })
 
--- Header Badges & Sidebar Dividers
-Ventana:AgregarTag({ Texto = "VERIFIED", Color = "success" })
-Ventana:AgregarTag({ Texto = "v3.0.0", Color = "info" })
-Ventana:AgregarDivisorSidebar({ Texto = "MAIN MODULES" })
-Ventana:AgregarSelectorTemas()
+-- Terapkan tema Halloween
+AlanLuna.ThemeManager:AplicarTema("Halloween")
 
--- ===================================================================
---  TAB 1: CORE INPUTS & CONTROLS
--- ===================================================================
-local TabCore = Ventana:CrearTab("Controls", "⚡")
+-- ══════════════════════════════════════════════════════════════
+--  2. EVENT BUS LISTENER DEMO (LOGGING GLOBAL)
+-- ══════════════════════════════════════════════════════════════
+AlanLuna.Eventos.FlagCambiada:Connect(function(flag, valor)
+    print(string.format("[EventBus] Flag '%s' berubah menjadi: %s", tostring(flag), tostring(valor)))
+end)
 
-local Sec1 = TabCore:CrearSeccion("Standard Interactive Controls", { Colapsable = true })
+AlanLuna.Eventos.TabCambiada:Connect(function(cat, tab)
+    print(string.format("[EventBus] Navigasi Tab: %s › %s", tostring(cat), tostring(tab)))
+end)
 
--- 1. TOGGLE
-Sec1:Toggle({
-    Texto = "Auto Farming Mode",
-    Flag = "Demo_AutoFarm",
-    Defecto = false,
-    Tooltip = "Automated mob combat routine",
-    Tecla = Enum.KeyCode.H,
-    Callback = function(val) print("[Core] Toggle:", val) end
+AlanLuna.Eventos.SubTabCambiada:Connect(function(cat, tab, sub)
+    print(string.format("[EventBus] Navigasi Sub-Tab: %s › %s › %s", tostring(cat), tostring(tab), tostring(sub)))
+end)
+
+-- ══════════════════════════════════════════════════════════════
+--  3. LUNA HOME TAB DASHBOARD
+-- ══════════════════════════════════════════════════════════════
+Ventana:CreateHomeTab({
+    Icon = 1,
+    SupportedExecutors = {"Synapse X", "Krnl", "Fluxus", "Delta", "Vega X", "Nihon", "Xeno"},
+    DiscordInvite = "alanluna-hub"
 })
 
--- 2. CASILLA (CHECKBOX)
-Sec1:Casilla({
-    Texto = "Mute Sound Effects",
-    Flag = "Demo_Mute",
-    Defecto = false,
-    Callback = function(val) print("[Core] Checkbox:", val) end
-})
-
--- 3. BOTON (BUTTON: STANDARD & ASYNC)
-Sec1:Boton({
-    Texto = "Instant Heal",
-    Icono = "💖",
-    Callback = function()
-        LouisHub:Notificar({ Titulo = "Healed", Texto = "HP restored to 100%", Tipo = "Success" })
-    end
-})
-
-Sec1:Boton({
-    Texto = "Sync Server Data (Async Spinner)",
-    Icono = "🌐",
-    Async = true,
-    Callback = function()
-        task.wait(1.5)
-        LouisHub:Notificar({ Titulo = "Synced", Texto = "Data loaded successfully", Tipo = "Success" })
-    end
-})
-
--- 4. SLIDER
-Sec1:Slider({
-    Texto = "WalkSpeed",
-    Flag = "Demo_WalkSpeed",
-    Min = 16,
-    Max = 150,
-    Incremento = 1,
-    Sufijo = " studs/s",
-    Defecto = 16,
-    Callback = function(val)
-        local char = game.Players.LocalPlayer.Character
-        if char and char:FindFirstChildOfClass("Humanoid") then
-            char:FindFirstChildOfClass("Humanoid").WalkSpeed = val
-        end
-    end
-})
-
--- 5. RANGE SLIDER (DUAL THUMB)
-Sec1:RangeSlider({
-    Texto = "Mob Level Range",
-    Flag = "Demo_LevelRange",
-    Min = 1,
-    Max = 100,
-    Incremento = 1,
-    Defecto = { min = 15, max = 75 },
-    Callback = function(rng) print("[Core] Level Range:", rng.min, "-", rng.max) end
-})
-
--- 6. NUMBER STEPPER
-Sec1:NumberStepper({
-    Texto = "Damage Multiplier",
-    Flag = "Demo_Multiplier",
-    Min = 1,
-    Max = 20,
-    Incremento = 0.5,
-    Prefijo = "x",
-    Defecto = 2,
-    Callback = function(val) print("[Core] Multiplier:", val) end
-})
-
--- 7. INPUT (SINGLE LINE & TEXTAREA)
-Sec1:Input({
-    Texto = "Target Player Name",
-    Flag = "Demo_PlayerName",
-    Placeholder = "Enter username...",
-    MaxCaracteres = 20,
-    Tipo = "pattern",
-    Regex = "[%a%d_]+",
-    Callback = function(txt) print("[Core] Input Text:", txt) end
-})
-
-Sec1:Input({
-    Texto = "Custom Execution Notes",
-    Flag = "Demo_Notes",
-    Tipo = "textarea",
-    Alto = 75,
-    MaxCaracteres = 300,
-    Placeholder = "Type notes or script logs here...",
-    Callback = function(txt) print("[Core] TextArea Content:", txt) end
-})
-
--- ===================================================================
---  TAB 2: MENUS, PICKERS & KEYBINDS
--- ===================================================================
-local TabSelectors = Ventana:CrearTab("Selectors", "🎨")
-
-local Sec2 = TabSelectors:CrearSeccion("Menus & Bindings")
-
--- 8. RADIO GROUP
-Sec2:RadioGroup({
-    Texto = "Attack Priority",
-    Flag = "Demo_Priority",
-    Opciones = { "Distance", "Lowest HP", "High Level" },
-    Defecto = "Distance",
-    Callback = function(val) print("[Selectors] Radio:", val) end
-})
-
--- 9. DROPDOWN (SEARCHABLE, CATEGORIES, LOCKED)
-Sec2:Dropdown({
-    Texto = "Teleport Zone",
-    Flag = "Demo_Zone",
-    Multi = false,
-    Opciones = {
-        "Spawn City",
-        "Pirate Cove",
-        { Tipo = "Divider" },
-        { Titulo = "Demon Lair", Descripcion = "Level 80+", Icono = "💀" },
-        { Titulo = "Sky Sanctuary", Locked = true, LockedTitle = "VIP Gamepass Only" }
-    },
-    Defecto = "Spawn City",
-    Callback = function(val) print("[Selectors] Dropdown Teleport:", val) end
-})
-
--- 10. COLOR PICKER (RGB, HEX & QUICK PALETTES)
-Sec2:ColorPicker({
-    Texto = "Chams ESP Color",
-    Flag = "Demo_Color",
-    Defecto = Color3.fromRGB(0, 255, 170),
-    Callback = function(col) print("[Selectors] Color3:", col) end
-})
-
--- 11. KEYBIND (MODIFIERS & MOBILE COMPATIBLE)
-Sec2:Keybind({
-    Texto = "Flight Keybind",
-    Flag = "Demo_FlyBind",
-    ConModificadores = true,
-    Defecto = { KeyCode = Enum.KeyCode.F, Ctrl = true, Shift = false, Alt = false },
-    Callback = function()
-        LouisHub:Notificar({ Titulo = "Flight Activated", Texto = "Hotkey triggered", Duracion = 2 })
-    end
-})
-
--- 12. TAG INPUT (CHIPS)
-Sec2:TagInput({
-    Texto = "Target Whitelist",
-    Flag = "Demo_Whitelist",
-    Defecto = { "Admin", "Friend1" },
-    MaxTags = 8,
-    Callback = function(tags) print("[Selectors] Tags count:", #tags) end
-})
-
--- ===================================================================
---  TAB 3: MEDIA, LABELS, DIVIDERS & PROGRESS
--- ===================================================================
-local TabDisplay = Ventana:CrearTab("Display", "📊")
-
-local Sec3 = TabDisplay:CrearSeccion("Display Cards & Progress")
-
--- 13. LABEL (DYNAMIC REAL-TIME UPDATE)
-Sec3:Label({
-    Texto = "Network Latency",
-    Flag = "Demo_Ping",
-    Valor = "Querying...",
-    Cada = 1.0,
-    Actualizar = function()
-        local ping = math.floor(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue())
-        return ping .. " ms"
-    end
-})
-
--- 14. PROGRESO (ANIMATED PROGRESS BAR)
-local ProgBar = Sec3:Progreso({
-    Texto = "Raid Clear Progress",
-    Flag = "Demo_Progress",
-    Defecto = 20
-})
-
--- 15. DIVIDER (SECTION ACCENT LINE)
-Sec3:Divider({ Texto = "Visual Enhancements" })
-
--- 16. IMAGEN (ASPECT RATIO / BANNER)
-Sec3:Imagen({
-    Url = "rbxassetid://123994745552712",
-    Aspecto = "16:9",
-    Radio = 8
-})
-
--- 17. GRUPO (HORIZONTAL BUTTON GROUP)
-local BtnGrp = Sec3:Grupo({ Alto = 30 })
-BtnGrp:Boton({
-    Texto = "Progress +20%",
-    Callback = function()
-        ProgBar:Set(math.min(100, ProgBar:Get() + 20))
-    end
-})
-BtnGrp:Boton({
-    Texto = "Reset Progress",
-    Callback = function() ProgBar:Set(0) end
-})
-
--- 18. PARRAFO (RICH CARD WITH ACCORDION & ACTION BUTTONS)
-Sec3:Parrafo({
-    Titulo = "Anti-Detection Engine",
-    Contenido = "Active defensive wrappers prevent client memory scans.",
-    Descripcion = "Engine Details:\n• Ghost connections self-terminate\n• UI parented to gethui()",
-    MiniaturaUrl = "rbxassetid://123994745552712",
-    Botones = {
-        {
-            Texto = "Documentation",
-            Variante = "primary",
-            Callback = function() print("[Display] Docs clicked") end
-        }
+-- ══════════════════════════════════════════════════════════════
+--  4. KOMPONEN BARU: DUAL HUD OVERLAY (TOP & BOTTOM)
+-- ══════════════════════════════════════════════════════════════
+local TopHUD = AlanLuna:HUD({
+    Nombre = "DiagnosticHUD",
+    Posicion = "TopLeft",
+    Draggable = true,
+    Elementos = {
+        { Flag = "fps", Label = "FPS", Valor = "60", Icono = "speed" },
+        { Flag = "ping", Label = "Ping", Valor = "40", Sufijo = "ms", Icono = "wifi" },
+        { Flag = "mem", Label = "Mem", Valor = "150", Sufijo = "MB", Icono = "memory" },
     }
 })
 
--- TAB DIVISOR EXAMPLE
-TabDisplay:CrearDivisor({ Texto = "End of Display Modules" })
+TopHUD:Vincular("fps", function()
+    return math.floor(1 / math.max(RunService.RenderStepped:Wait(), 0.001))
+end, 0.5)
 
--- ===================================================================
---  TAB 4: FLOATING HUD, FAB & MODIFIERS (LOCK, MODALS)
--- ===================================================================
-local TabExtras = Ventana:CrearTab("Extras", "🧩")
+TopHUD:Vincular("ping", function()
+    local s = game:GetService("Stats")
+    local p = s and s:FindFirstChild("Network") and s.Network:FindFirstChild("ServerStatsItem") and s.Network.ServerStatsItem:FindFirstChild("Data Ping")
+    return p and math.floor(p:GetValue()) or 35
+end, 1)
 
-local Sec4 = TabExtras:CrearSeccion("Floating Utilities")
-
--- 19. CREAR HUD (FLOATING STATS WINDOW)
-local StatsHUD = LouisHub:CrearHUD({
-    Titulo = "Live Session HUD",
-    Ancho = 200,
-    Visible = false
-})
-StatsHUD:AgregarFila("status", "Status", "Idle")
-StatsHUD:AgregarFila("gold", "Coins Farmed", "0")
-
-Sec4:HUDToggle(StatsHUD, {
-    Texto = "Display Floating HUD",
-    Defecto = false
+local CombatHUD = AlanLuna:HUD({
+    Nombre = "CombatHUD",
+    Posicion = "BottomRight",
+    Draggable = true,
+    Elementos = {
+        { Flag = "hp", Label = "HP", Valor = 100, Max = 100, Tipo = "bar", Icono = "favorite" },
+        { Flag = "target", Label = "Target", Valor = "None", Icono = "gps_fixed" },
+        { Flag = "mode", Label = "Mode", Valor = "PVP", Icono = "gavel" },
+    }
 })
 
--- 20. CREAR BOTON FLOTANTE (MOBILE FAB)
-local MobileBtn = LouisHub:CrearBotonFlotante({
-    Texto = "⚡ Action",
-    Modo = "Click",
-    Visible = false,
-    Callback = function()
-        LouisHub:Notificar({ Titulo = "Mobile FAB", Texto = "Tapped Floating Button!", Duracion = 1.5 })
+-- Update Health HUD otomatis dari karakter
+AlanLuna:RegistrarHilo(task.spawn(function()
+    while task.wait(0.5) do
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            CombatHUD:Set("hp", math.floor(hum.Health))
+        end
+    end
+end))
+
+-- ══════════════════════════════════════════════════════════════
+--  5. KOMPONEN BARU: FLOATING ACTION BUTTONS (BOTON EXTERNO)
+-- ══════════════════════════════════════════════════════════════
+local ExtAim = AlanLuna:BotonExterno({
+    Nombre = "FloatingAimbot",
+    Icono = "crosshair",
+    Tecla = Enum.KeyCode.V,
+    Modo = "Toggle",
+    Posicion = "RightCenter",
+    Callback = function(estado)
+        CombatHUD:Set("mode", estado and "AIMBOT ON" or "IDLE")
+        AlanLuna:Notificar({
+            Title = "Aimbot Trigger",
+            Content = estado and "Aimbot Eksternal Aktif (Glow On)" or "Aimbot Eksternal Dinonaktifkan.",
+            Type = estado and "Success" or "Info",
+            Duration = 2,
+            Icon = "crosshair"
+        })
     end
 })
 
-Sec4:BotonFlotanteToggle(MobileBtn, {
-    Texto = "Display Mobile Action Button",
-    Defecto = false
-})
-
-local Sec5 = TabExtras:CrearSeccion("Locking & Modals")
-
--- LOCK & HIGHLIGHT MODIFIER DEMO
-local LockedBtn = Sec5:Boton({
-    Texto = "Restricted Armory Teleport",
-    Callback = function() print("Armory entered!") end
-})
-LockedBtn:Lock("Requires Level 50")
-
-Sec5:Boton({
-    Texto = "Toggle Armory Lock Status",
+local ExtBurst = AlanLuna:BotonExterno({
+    Nombre = "FloatingBurst",
+    Icono = "flash_on",
+    Modo = "Once",
+    Duracion = 2.5,
+    Cooldown = 4,
+    Posicion = "RightCenter", -- Collision handler otomatis menaruhnya di bawah tombol pertama
     Callback = function()
-        if LockedBtn:IsLocked() then
-            LockedBtn:Unlock()
-            LockedBtn:Highlight(2) -- Pulse highlight stroke for 2 seconds
+        AlanLuna:Notificar({
+            Title = "Burst Activated",
+            Content = "Overdrive aktif selama 2.5 detik! Cooldown 4 detik.",
+            Type = "Warning",
+            Duration = 3,
+            Icon = "flash_on"
+        })
+    end
+})
+
+local ExtPanic = AlanLuna:BotonExterno({
+    Nombre = "FloatingPanic",
+    Icono = "close",
+    Tecla = Enum.KeyCode.P,
+    Modo = "Once",
+    Duracion = 1,
+    Cooldown = 2,
+    Posicion = "LeftCenter",
+    Callback = function()
+        TopHUD:Alternar()
+        CombatHUD:Alternar()
+    end
+})
+
+-- ══════════════════════════════════════════════════════════════
+--  KATEGORI 1: COMBAT & TARGETING
+-- ══════════════════════════════════════════════════════════════
+local CatCombat = Ventana:CrearCategoria({
+    Nombre = "Combat",
+    Icono = "crosshair",
+    Colapsada = false,
+})
+
+local TabAimbot = CatCombat:CrearTab({
+    Nombre = "Aimbot",
+    Icono = "gps_fixed",
+    ShowTitle = true
+})
+
+-- Sub-Tab: Silent Aim (Layout 2 Kolom)
+local SubSilent = TabAimbot:CrearSubTab("Silent Aim")
+local SecSilent = SubSilent:CrearSeccion("Configuración Principal", { Columnas = 2 })
+
+SecSilent:Toggle({
+    Texto = "Activar Silent Aim",
+    Flag = "silent_aim_enabled",
+    Defecto = false,
+    Columna = 1,
+    Tooltip = "Mengarahkan peluru secara instan ke target tanpa menggerakkan kamera.",
+    Callback = function(v)
+        CombatHUD:Set("mode", v and "SILENT AIM" or "PVP")
+    end
+})
+
+SecSilent:Casilla({
+    Texto = "Team Check",
+    Flag = "silent_teamcheck",
+    Defecto = true,
+    Columna = 1,
+    Tooltip = "Abaikan rekan satu tim.",
+})
+
+SecSilent:Casilla({
+    Texto = "Wall Check",
+    Flag = "silent_wallcheck",
+    Defecto = true,
+    Columna = 1,
+    Tooltip = "Hanya target pemain yang terlihat (tidak terhalang dinding).",
+})
+
+SecSilent:Dropdown({
+    Texto = "Hitbox Target",
+    Flag = "silent_hitbox",
+    Opciones = {"Head", "HumanoidRootPart", "Torso", "Random"},
+    Defecto = "Head",
+    Columna = 2,
+    Tooltip = "Bagian tubuh musuh yang diprioritaskan.",
+    Callback = function(op)
+        CombatHUD:Set("target", op)
+    end
+})
+
+SecSilent:Keybind({
+    Texto = "Atajo Disparo",
+    Flag = "silent_keybind",
+    Defecto = Enum.KeyCode.E,
+    ConModificadores = true,
+    Columna = 2,
+    Tooltip = "Tekan kombinasi tombol untuk memicu tembakan instan.",
+    Callback = function(k)
+        print("Kombinasi Keybind Silent Aim dipicu:", k)
+    end
+})
+
+SecSilent:RadioGroup({
+    Texto = "Algoritmo de Predicción",
+    Flag = "silent_prediction",
+    Opciones = {"Linear", "Quadratic", "Simulation"},
+    Defecto = "Linear",
+    Columna = 2,
+    Tooltip = "Model kalkulasi gerak peluru.",
+})
+
+-- Kontrol Full-Width (Otomatis spanning 2 kolom)
+SecSilent:Slider({
+    Texto = "Radio del FOV (Grados)",
+    Flag = "silent_fov",
+    Range = {10, 360},
+    Increment = 5,
+    CurrentValue = 90,
+    Sufijo = "°",
+    Tooltip = "Lingkaran sudut pandang deteksi musuh.",
+    Callback = function(v)
+        print("FOV Diubah:", v)
+    end
+})
+
+SecSilent:RangeSlider({
+    Texto = "Rango de Distancia Operativa",
+    Flag = "silent_distance_range",
+    Min = 5,
+    Max = 600,
+    Incremento = 5,
+    Sufijo = " studs",
+    Defecto = { min = 25, max = 350 },
+    Tooltip = "Target hanya akan dikunci jika berada di dalam rentang jarak ini.",
+    Callback = function(rango)
+        print(string.format("Rentang deteksi: %d s/d %d studs", rango.min, rango.max))
+    end
+})
+
+SecSilent:NumberStepper({
+    Texto = "Escala de Hitbox (Multiplicador)",
+    Flag = "silent_hitbox_scale",
+    Min = 1.0,
+    Max = 10.0,
+    Incremento = 0.5,
+    Decimales = 1,
+    Defecto = 2.0,
+    Prefijo = "x",
+    Tooltip = "Memperbesar ukuran collision hitbox target.",
+})
+
+-- Demonstrasi Sistem Lock / VIP Exclusive
+local SecVIP = SubSilent:CrearSeccion("Funciones Experimentales", { Columnas = 1 })
+
+local vipAutoShoot = SecVIP:Toggle({
+    Texto = "Auto-Shoot Instantáneo",
+    Flag = "vip_autoshoot",
+    Defecto = false,
+    Locked = true,
+    LockedTitle = "VIP Premium",
+    Tooltip = "Menembak otomatis ketika crosshair mendeteksi target.",
+    Callback = function(v)
+        print("Auto-Shoot berjalan:", v)
+    end
+})
+
+SecVIP:Boton({
+    Texto = "Desbloquear Función VIP (Simulación)",
+    Icono = "lock_open",
+    Callback = function()
+        if vipAutoShoot:IsLocked() then
+            vipAutoShoot:Unlock()
+            vipAutoShoot:Highlight(3)
+            AlanLuna:Notificar({
+                Title = "VIP Unlocked",
+                Content = "Fitur Auto-Shoot telah dibuka!",
+                Type = "Success",
+                Duration = 3,
+                Icon = "sparkle"
+            })
         else
-            LockedBtn:Lock("Requires Level 50")
+            vipAutoShoot:Lock("VIP Re-Locked")
         end
     end
 })
 
--- MODAL CONFIRMATION DIALOG
-Sec5:Boton({
-    Texto = "Trigger Factory Reset Dialog",
+-- Sub-Tab: Smooth Aim
+local SubSmooth = TabAimbot:CrearSubTab("Smooth Aim")
+local SecSmooth = SubSmooth:CrearSeccion("Parámetros de Suavizado", { Columnas = 2 })
+
+SecSmooth:Toggle({
+    Texto = "Habilitar Camera Smoothing",
+    Flag = "smooth_aim_enabled",
+    Defecto = true,
+    Columna = 1,
+})
+
+SecSmooth:Slider({
+    Texto = "Velocidad de Interpolación (Lerp)",
+    Flag = "smooth_lerp",
+    Min = 1,
+    Max = 50,
+    Incremento = 1,
+    Defecto = 15,
+    Columna = 1,
+})
+
+SecSmooth:Dropdown({
+    Texto = "Modo de Puntería",
+    Flag = "smooth_curve",
+    Opciones = {"Exponential", "Linear", "Sine Wave", "Humanized Shake"},
+    Defecto = "Humanized Shake",
+    Columna = 2,
+})
+
+-- ══════════════════════════════════════════════════════════════
+--  KATEGORI 2: VISUALS (ESP & DRAWING)
+-- ══════════════════════════════════════════════════════════════
+local CatVisuals = Ventana:CrearCategoria({
+    Nombre = "Visuals",
+    Icono = "visibility",
+    Colapsada = false,
+})
+
+local TabESP = CatVisuals:CrearTab({
+    Nombre = "ESP Engine",
+    Icono = "view_in_ar",
+    ShowTitle = true
+})
+
+local SubPlayers = TabESP:CrearSubTab("Players ESP")
+local SecESPConfig = SubPlayers:CrearSeccion("Elementos Visuales", { Columnas = 2 })
+
+SecESPConfig:Toggle({
+    Texto = "ESP Box (2D)",
+    Flag = "esp_box_enabled",
+    Defecto = true,
+    Columna = 1,
+})
+
+SecESPConfig:Toggle({
+    Texto = "ESP Health Bar",
+    Flag = "esp_hp_enabled",
+    Defecto = true,
+    Columna = 1,
+})
+
+SecESPConfig:Toggle({
+    Texto = "ESP Name & Distance",
+    Flag = "esp_text_enabled",
+    Defecto = true,
+    Columna = 1,
+})
+
+-- Demonstrasi VISIBLE-SI (Kondisional)
+SecESPConfig:Toggle({
+    Texto = "Tracer Lines",
+    Flag = "esp_tracers_enabled",
+    Defecto = false,
+    Columna = 2,
+    Tooltip = "Garis pelacak dari layar ke musuh.",
+})
+
+SecESPConfig:Dropdown({
+    Texto = "Origen de Tracers",
+    Flag = "esp_tracer_origin",
+    Opciones = {"Bottom", "Center", "Mouse"},
+    Defecto = "Bottom",
+    Columna = 2,
+    VisibleSi = function()
+        return AlanLuna.Flags.esp_tracers_enabled == true
+    end,
+})
+
+SecESPConfig:Divider({ Texto = "Colores & Paletas", Columna = 1 })
+SecESPConfig:Divider({ Texto = "Lista de Exclusión", Columna = 2 })
+
+SecESPConfig:ColorPicker({
+    Texto = "Color Visible",
+    Flag = "esp_color_vis",
+    Color = Color3.fromRGB(180, 240, 120),
+    Columna = 1,
+})
+
+SecESPConfig:ColorPicker({
+    Texto = "Color Tras Pared (Occluded)",
+    Flag = "esp_color_occ",
+    Color = Color3.fromRGB(255, 122, 24),
+    Columna = 1,
+})
+
+SecESPConfig:TagInput({
+    Texto = "Whitelist de Jugadores (Ignorar)",
+    Flag = "esp_whitelist_tags",
+    Placeholder = "Escribe nombre y pulsa Enter...",
+    Defecto = {"Admin", "Moderator"},
+    Columna = 2,
+    Tooltip = "Pemain dalam daftar ini tidak akan dirender dalam ESP.",
+})
+
+-- Sub-Tab: World & Lighting
+local SubWorld = TabESP:CrearSubTab("World & Ambient")
+local SecWorld = SubWorld:CrearSeccion("Manipulación de Entorno", { Columnas = 2 })
+
+SecWorld:Toggle({
+    Texto = "Fullbright (Luz Máxima)",
+    Flag = "world_fullbright",
+    Defecto = false,
+    Columna = 1,
+    Callback = function(v)
+        game:GetService("Lighting").Brightness = v and 2 or 1
+        game:GetService("Lighting").ClockTime = v and 14 or 12
+    end
+})
+
+SecWorld:ColorPicker({
+    Texto = "Color de Cielo / Ambient",
+    Flag = "world_ambient_color",
+    Color = Color3.fromRGB(120, 80, 160),
+    Columna = 2,
+    Callback = function(c)
+        game:GetService("Lighting").OutdoorAmbient = c
+    end
+})
+
+-- ══════════════════════════════════════════════════════════════
+--  KATEGORI 3: MOVEMENT & LOCALPLAYER
+-- ══════════════════════════════════════════════════════════════
+local CatMovement = Ventana:CrearCategoria({
+    Nombre = "Movement",
+    Icono = "directions_run",
+})
+
+local TabPlayer = CatMovement:CrearTab({
+    Nombre = "Física Local",
+    Icono = "speed",
+})
+
+local SubSpeed = TabPlayer:CrearSubTab("Speed & Jump")
+local SecSpeed = SubSpeed:CrearSeccion("Modificadores de Movimiento", { Columnas = 2 })
+
+SecSpeed:Slider({
+    Texto = "Velocidad de Caminata (WalkSpeed)",
+    Flag = "player_walkspeed",
+    Min = 16,
+    Max = 250,
+    Incremento = 2,
+    Defecto = 16,
+    Columna = 1,
+    Callback = function(v)
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then hum.WalkSpeed = v end
+    end
+})
+
+SecSpeed:Slider({
+    Texto = "Poder de Salto (JumpPower)",
+    Flag = "player_jumppower",
+    Min = 50,
+    Max = 300,
+    Incremento = 5,
+    Defecto = 50,
+    Columna = 2,
+    Callback = function(v)
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then hum.JumpPower = v end
+    end
+})
+
+SecSpeed:Toggle({
+    Texto = "Salto Infinito (Infinite Jump)",
+    Flag = "player_inf_jump",
+    Defecto = false,
+    Columna = 1,
+})
+
+AlanLuna:RegistrarConexion(UserInputService.JumpRequest:Connect(function()
+    if AlanLuna.Flags.player_inf_jump then
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end
+end))
+
+SecSpeed:Keybind({
+    Texto = "Sprint Temporal (Mantener)",
+    Flag = "player_sprint_bind",
+    Defecto = Enum.KeyCode.LeftShift,
+    Columna = 2,
+    Callback = function(activo)
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.WalkSpeed = activo and (AlanLuna.Flags.player_walkspeed or 16) * 1.6 or (AlanLuna.Flags.player_walkspeed or 16)
+        end
+    end
+})
+
+local SecPhysics = SubSpeed:CrearSeccion("Gravedad & Resistencia", { Columnas = 1 })
+
+local staminaBar = SecPhysics:Progreso({
+    Texto = "Reserva de Stamina Simulación",
+    Flag = "stamina_reserva",
+    Defecto = 100,
+})
+
+-- Heartbeat loop konsumsi stamina saat lari
+AlanLuna:RegistrarHilo(task.spawn(function()
+    local val = 100
+    while task.wait(0.2) do
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum and hum.MoveDirection.Magnitude > 0 then
+            val = math.max(0, val - 3)
+        else
+            val = math.min(100, val + 5)
+        end
+        staminaBar:Set(val)
+    end
+end))
+
+-- ══════════════════════════════════════════════════════════════
+--  KATEGORI 4: INTERACTION, DIALOGS & SCHEMA BUILDER
+-- ══════════════════════════════════════════════════════════════
+local CatMisc = Ventana:CrearCategoria({
+    Nombre = "Misc & Dialogs",
+    Icono = "dashboard_customize",
+})
+
+local TabDialogs = CatMisc:CrearTab({
+    Nombre = "Popups & Modales",
+    Icono = "chat_bubble",
+})
+
+local SecModals = TabDialogs:CrearSeccion("Pruebas de Componentes", { Columnas = 2 })
+
+SecModals:Boton({
+    Texto = "Abrir Popup Stackeable (Nivel 1)",
+    Icono = "open_in_new",
+    Columna = 1,
     Callback = function()
-        LouisHub:Confirmar({
-            Titulo = "Factory Reset",
-            Contenido = "Do you want to reset all controls back to initial defaults?",
-            Icono = "⚠️",
+        local pop1
+        pop1 = AlanLuna:Popup({
+            Titulo = "Modal Principal (ZIndex 500)",
+            Contenido = "Este es un popup apilable con Glass Blur. Puedes abrir un segundo popup encima de este para probar la jerarquía de capas.",
+            Icono = "info",
             Botones = {
-                { Texto = "Cancel", Variante = "neutral" },
                 {
-                    Texto = "Reset",
+                    Texto = "Abrir Segundo Popup",
+                    Variante = "primary",
+                    Callback = function()
+                        AlanLuna:Popup({
+                            Titulo = "Modal Superpuesto (ZIndex 510)",
+                            Contenido = "¡Excelente! Este segundo popup tiene prioridad de enfoque y su propio backdrop oscurecido.",
+                            Icono = "sparkle",
+                            Botones = {
+                                { Texto = "Cerrar Todo", Variante = "danger", Callback = function() pop1:Cerrar() end },
+                                { Texto = "Aceptar", Variante = "primary" }
+                            }
+                        })
+                    end
+                },
+                { Texto = "Cerrar", Variante = "neutral" }
+            }
+        })
+    end
+})
+
+SecModals:Boton({
+    Texto = "Probar Diálogo Confirmar",
+    Icono = "report_problem",
+    Columna = 1,
+    Callback = function()
+        AlanLuna:Confirmar({
+            Titulo = "Confirmación Crítica",
+            Contenido = "¿Deseas restablecer todos los flags del script a sus valores predeterminados?",
+            Icono = "warning",
+            Botones = {
+                { Texto = "Cancelar", Variante = "neutral" },
+                {
+                    Texto = "Restablecer",
                     Variante = "danger",
                     Callback = function()
                         Ventana:Resetear()
-                        LouisHub:Notificar({ Titulo = "Reset Complete", Texto = "Controls restored.", Tipo = "Warning" })
+                        AlanLuna:Notificar({
+                            Title = "Reset Completado",
+                            Content = "Todos los controles han vuelto a su estado original.",
+                            Type = "Warning",
+                            Duration = 3,
+                            Icon = "restore"
+                        })
                     end
                 }
             }
@@ -337,12 +618,134 @@ Sec5:Boton({
     end
 })
 
--- ===================================================================
---  INITIALIZATION NOTIFICATION
--- ===================================================================
-LouisHub:Notificar({
-    Titulo = "Louis Hub Initialized",
-    Texto = "100% of all UI components successfully registered.",
-    Tipo = "Success",
-    Duracion = 4
+SecModals:Boton({
+    Texto = "Lanzar Notificaciones Cascada",
+    Icono = "notifications_active",
+    Columna = 2,
+    Callback = function()
+        AlanLuna:Notificar({ Title = "Success Test", Content = "Inyección de datos completada.", Type = "Success", Duration = 2.5, Icon = "check_circle" })
+        task.wait(0.2)
+        AlanLuna:Notificar({ Title = "Warning Test", Content = "El servidor tiene ping elevado (>120ms).", Type = "Warning", Duration = 3, Icon = "warning" })
+        task.wait(0.2)
+        AlanLuna:Notificar({ Title = "Error Test", Content = "No se pudo sincronizar el archivo remoto.", Type = "Error", Duration = 3.5, Icon = "cancel" })
+        task.wait(0.2)
+        AlanLuna:Notificar({ Title = "Info Test", Content = "AlanLuna v3.0 está en ejecución.", Type = "Info", Duration = 4, Icon = "info" })
+    end
+})
+
+SecModals:Boton({
+    Texto = "Ejecutar Profiler en Consola",
+    Icono = "assessment",
+    Columna = 2,
+    Callback = function()
+        local stats = AlanLuna:Profiler()
+        AlanLuna:Notificar({
+            Title = "Profiler Ejecutado",
+            Content = string.format("Flags: %d | Instancias: %d | Conexiones: %d", stats.Flags, stats.ObjetosGui, stats.Conexiones),
+            Type = "Info",
+            Duration = 4,
+            Icon = "timeline"
+        })
+    end
+})
+
+-- Schema Automation Builder
+local TabSchema = CatMisc:CrearTab({
+    Nombre = "Schema Builder",
+    Icono = "build",
+})
+
+local SecSchema = TabSchema:CrearSeccion("Generación Dinámica", { Columnas = 1 })
+
+local ControlesGenerados = SecSchema:Construir({
+    {
+        Control = "Toggle",
+        Texto = "Toggle Generado por Schema",
+        Flag = "schema_toggle_1",
+        Defecto = true,
+        Callback = function(v) print("Schema Toggle:", v) end
+    },
+    {
+        Control = "Slider",
+        Texto = "Slider Generado por Schema",
+        Flag = "schema_slider_1",
+        Min = 0,
+        Max = 100,
+        Incremento = 10,
+        Defecto = 50,
+        Callback = function(v) print("Schema Slider:", v) end
+    },
+    {
+        Control = "Dropdown",
+        Texto = "Dropdown por Schema",
+        Flag = "schema_drop_1",
+        Opciones = {"Opción Alpha", "Opción Beta", "Opción Gamma"},
+        Defecto = "Opción Alpha",
+    },
+    {
+        Control = "Parrafo",
+        Titulo = "Nota del Schema Builder",
+        Contenido = "Este bloque completo fue generado pasando un array JSON-like directamente a Seccion:Construir().",
+    }
+})
+
+-- ══════════════════════════════════════════════════════════════
+--  KATEGORI 5: LUNA LEGACY DROP-IN DEMO
+-- ══════════════════════════════════════════════════════════════
+-- Menunjukkan bahwa sintaks Luna asli (CreateButton, CreateSlider, CreateToggle, dll.)
+-- tetap berjalan 100% tanpa diubah di atas backend AlanLuna.
+local TabLegacyLuna = CatMisc:CrearTab({
+    Nombre = "Luna Drop-in API",
+    Icono = "sparkle",
+})
+
+TabLegacyLuna:CreateButton({
+    Name = "Luna Native Button",
+    Description = "Tombol ini dipanggil memakai sintaks asli Luna UI!",
+    Callback = function()
+        AlanLuna:Notificar({
+            Title = "Luna API",
+            Content = "Panggilan Tab:CreateButton() berhasil!",
+            Type = "Success",
+            Icon = "sparkle"
+        })
+    end
+})
+
+TabLegacyLuna:CreateToggle({
+    Name = "Luna Native Toggle",
+    Description = "Toggle dengan signature Luna UI asli.",
+    CurrentValue = true,
+    Callback = function(v)
+        print("Luna Native Toggle:", v)
+    end
+})
+
+TabLegacyLuna:CreateSlider({
+    Name = "Luna Native Slider",
+    Range = {0, 100},
+    Increment = 1,
+    CurrentValue = 75,
+    Callback = function(v)
+        print("Luna Native Slider:", v)
+    end
+})
+
+TabLegacyLuna:CreateInput({
+    Name = "Luna Native Input",
+    PlaceholderText = "Ketik teks di sini...",
+    Callback = function(t)
+        print("Luna Native Input:", t)
+    end
+})
+
+-- ══════════════════════════════════════════════════════════════
+--  NOTIFIKASI SELESAI INITIALIZE
+-- ══════════════════════════════════════════════════════════════
+AlanLuna:Notificar({
+    Title = "Master Demo Inicializado",
+    Content = "Presiona [RightControl] para alternar la visibilidad de la ventana.",
+    Type = "Success",
+    Duration = 5,
+    Icon = "stars"
 })
