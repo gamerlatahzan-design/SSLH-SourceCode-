@@ -105,7 +105,6 @@ local Lighting         = game:GetService("Lighting")
 local CoreGui          = game:GetService("CoreGui")
 local TextService      = game:GetService("TextService")
 local LocalPlayer      = Players.LocalPlayer
-local Camera           = Workspace.CurrentCamera
 
 local isStudio = RunService:IsStudio()
 local request = (syn and syn.request) or (http and http.request) or http_request or nil
@@ -138,6 +137,14 @@ AlanLuna.Version = "3.0.0"
 AlanLuna.DebugMode = false
 AlanLuna.MostrarErroresEnUI = true
 AlanLuna.Folder = "AlanUI/Config"
+
+-- FIX UTAMA: Deklarasikan alias AlanUI dan Luna sedini mungkin agar tidak nil!
+local AlanUI = AlanLuna
+local Luna = AlanLuna
+
+_G.AlanLuna = AlanLuna
+_G.AlanUI = AlanLuna
+_G.Luna = AlanLuna
 
 local function limpiarInstanciaPrevia()
     local previa = _G.AlanLuna_Instancia
