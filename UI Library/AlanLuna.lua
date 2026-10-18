@@ -1,14 +1,13 @@
 --[[
 ╔══════════════════════════════════════════════════════════════════════╗
-                              AlanLuna
-              Merged Suite: AlanUI v2.12.5 × Luna UI Beta 6.1
-                      by AlanbeikersFF & Nebula Softworks
-                         (Revision: V3.0.2 - Fixed)
+                              LouisHub
+                Master UI Suite: LouisHub Engine V4.0
+                             by LouisHub
 ╚══════════════════════════════════════════════════════════════════════╝
 ]]
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 1: POLYFILLS & LOW-LEVEL RUNTIME COMPATIBILITY
+--  SECTION 1: POLYFILLS & LOW-LEVEL RUNTIME COMPATIBILITY
 -- ══════════════════════════════════════════════════════════════
 if type(task) ~= "table" then task = {} end
 if type(task.wait) ~= "function" then
@@ -24,7 +23,7 @@ if type(task.spawn) ~= "function" then
         end
         local co = coroutine.create(f)
         local ok, err = coroutine.resume(co, ...)
-        if not ok then warn("[AlanLuna] Polyfill task.spawn error:", err) end
+        if not ok then warn("[LouisHub] Polyfill task.spawn error:", err) end
         return co
     end
 end
@@ -43,36 +42,39 @@ if type(task.delay) ~= "function" then
 end
 if type(task.defer) ~= "function" then task.defer = task.spawn end
 if type(task.cancel) ~= "function" then
-    task.cancel = function(hilo)
-        if type(hilo) == "thread" then
+    task.cancel = function(thread)
+        if type(thread) == "thread" then
             pcall(function()
-                if coroutine.status(hilo) ~= "dead" and coroutine.close then
-                    coroutine.close(hilo)
+                if coroutine.status(thread) ~= "dead" and coroutine.close then
+                    coroutine.close(thread)
                 end
             end)
         end
     end
 end
 
-local function clonarTabla(t)
+local function cloneTable(t)
     if type(t) ~= "table" then return {} end
     if type(table.clone) == "function" then return table.clone(t) end
-    local copia = {}
-    for clave, valor in pairs(t) do copia[clave] = valor end
-    return copia
+    local copy = {}
+    for key, value in pairs(t) do copy[key] = value end
+    return copy
 end
+local clonarTabla = cloneTable
 
-local function copiarDefecto(v)
-    if type(v) == "table" then return clonarTabla(v) end
+local function copyDefault(v)
+    if type(v) == "table" then return cloneTable(v) end
     return v
 end
+local copiarDefecto = copyDefault
 
-local function normalizarArgSet(...)
+local function normalizeArgSet(...)
     if select('#', ...) >= 2 then
         return (select(2, ...))
     end
     return (select(1, ...))
 end
+local normalizarArgSet = normalizeArgSet
 
 local function Kwargify(defaults, passed)
     passed = passed or {}
@@ -93,7 +95,7 @@ local function UnpackColor(Color)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 2: SERVICES & ENVIRONMENT INITIALIZATION
+--  SECTION 2: SERVICES & ENVIRONMENT INITIALIZATION
 -- ══════════════════════════════════════════════════════════════
 local UserInputService = game:GetService("UserInputService")
 local TweenService     = game:GetService("TweenService")
@@ -115,11 +117,12 @@ end
 local isStudio = RunService:IsStudio()
 local request = (syn and syn.request) or (http and http.request) or http_request or nil
 
-local function fsDisponible()
+local function isFilesystemAvailable()
     return type(writefile) == "function" and type(readfile) == "function"
 end
+local fsDisponible = isFilesystemAvailable
 
-local function obtenerPadreGui()
+local function getGuiParent()
     local ok, hui = pcall(function() return gethui() end)
     if ok and hui then return hui end
     if LocalPlayer then
@@ -130,8 +133,9 @@ local function obtenerPadreGui()
     if okCore and cgui then return cgui end
     return nil
 end
+local obtenerPadreGui = getGuiParent
 
-local function protegerGui(gui)
+local function protectGui(gui)
     pcall(function()
         if syn and syn.protect_gui then
             syn.protect_gui(gui)
@@ -140,109 +144,123 @@ local function protegerGui(gui)
         end
     end)
 end
+local protegerGui = protectGui
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 3: ALANLUNA NAMESPACE & REGISTRO DE AUTO-LIMPIEZA
+--  SECTION 3: LOUISHUB NAMESPACE & AUTO-CLEANUP REGISTRY
 -- ══════════════════════════════════════════════════════════════
-local AlanLuna = {}
-AlanLuna.Version = "3.0.2"
-AlanLuna.DebugMode = false
-AlanLuna.MostrarErroresEnUI = true
-AlanLuna.Folder = "AlanUI/Config"
+local LouisHub = {}
+LouisHub.Version = "4.0.0"
+LouisHub.DebugMode = false
+LouisHub.ShowUIErrors = true
+LouisHub.MostrarErroresEnUI = true
+LouisHub.Folder = "LouisHub/Config"
 
-local AlanUI = AlanLuna
-local Luna = AlanLuna
+-- Global Compatibility Aliases
+local AlanLuna = LouisHub
+local AlanUI   = LouisHub
+local Luna     = LouisHub
 
-_G.AlanLuna = AlanLuna
-_G.AlanUI = AlanLuna
-_G.Luna = AlanLuna
+_G.LouisHub  = LouisHub
+_G.AlanLuna  = LouisHub
+_G.AlanUI    = LouisHub
+_G.Luna      = LouisHub
 
-local function limpiarInstanciaPrevia()
-    local previa = _G.AlanLuna_Instancia
-    if type(previa) ~= "table" then return end
+local function cleanupPreviousInstance()
+    local previous = _G.LouisHub_Instance or _G.AlanLuna_Instancia
+    if type(previous) ~= "table" then return end
 
-    for _, conexion in ipairs(previa.Conexiones or {}) do
+    for _, connection in ipairs(previous.Connections or previous.Conexiones or {}) do
         pcall(function()
-            if conexion and conexion.Connected then conexion:Disconnect() end
+            if connection and connection.Connected then connection:Disconnect() end
         end)
     end
 
-    for _, hilo in ipairs(previa.Hilos or {}) do
+    for _, thread in ipairs(previous.Threads or previous.Hilos or {}) do
         pcall(function()
-            if hilo and coroutine.status(hilo) ~= "dead" then task.cancel(hilo) end
+            if thread and coroutine.status(thread) ~= "dead" then task.cancel(thread) end
         end)
     end
 
-    for _, objeto in ipairs(previa.Dibujos or {}) do
-        pcall(function() if objeto then objeto:Remove() end end)
+    for _, drawingObj in ipairs(previous.Drawings or previous.Dibujos or {}) do
+        pcall(function() if drawingObj then drawingObj:Remove() end end)
     end
 
-    for _, inst in ipairs(previa.Instancias or {}) do
+    for _, inst in ipairs(previous.Instances or previous.Instancias or {}) do
         pcall(function() if inst and inst.Parent then inst:Destroy() end end)
     end
 
     pcall(function()
-        local padre = obtenerPadreGui()
-        if padre then
-            for _, nombreGui in ipairs({"AlanLuna_ScreenGui", "AlanLuna_NotifGui", "AlanLuna_TooltipOverlay", "AlanLuna_PopupGui"}) do
-                local viejo = padre:FindFirstChild(nombreGui)
-                if viejo then viejo:Destroy() end
+        local parent = getGuiParent()
+        if parent then
+            for _, guiName in ipairs({
+                "LouisHub_ScreenGui", "LouisHub_NotifGui", "LouisHub_TooltipOverlay", "LouisHub_PopupGui",
+                "AlanLuna_ScreenGui", "AlanLuna_NotifGui", "AlanLuna_TooltipOverlay", "AlanLuna_PopupGui"
+            }) do
+                local old = parent:FindFirstChild(guiName)
+                if old then old:Destroy() end
             end
         end
     end)
 end
 
-limpiarInstanciaPrevia()
+cleanupPreviousInstance()
 
-_G.AlanLuna_Instancia = {
-    Conexiones = {},
-    Hilos = {},
-    Dibujos = {},
-    Instancias = {},
-    Ventana = nil,
-    Titulo = "AlanLuna",
+_G.LouisHub_Instance = {
+    Connections = {},
+    Threads     = {},
+    Drawings    = {},
+    Instances   = {},
+    Window      = nil,
+    Title       = "LouisHub",
 }
+_G.AlanLuna_Instancia = _G.LouisHub_Instance
 
-function AlanLuna:RegistrarConexion(conexion)
-    if _G.AlanLuna_Instancia and conexion then
-        table.insert(_G.AlanLuna_Instancia.Conexiones, conexion)
+function LouisHub:RegisterConnection(connection)
+    if _G.LouisHub_Instance and connection then
+        table.insert(_G.LouisHub_Instance.Connections, connection)
     end
-    return conexion
+    return connection
 end
+LouisHub.RegistrarConexion = LouisHub.RegisterConnection
 
-function AlanLuna:DesconectarYLimpiar(conexion)
-    if not conexion then return end
-    pcall(function() conexion:Disconnect() end)
-    if _G.AlanLuna_Instancia then
-        local lista = _G.AlanLuna_Instancia.Conexiones
-        local idx = table.find(lista, conexion)
-        if idx then table.remove(lista, idx) end
+function LouisHub:DisconnectAndClean(connection)
+    if not connection then return end
+    pcall(function() connection:Disconnect() end)
+    if _G.LouisHub_Instance then
+        local list = _G.LouisHub_Instance.Connections
+        local idx = table.find(list, connection)
+        if idx then table.remove(list, idx) end
     end
 end
+LouisHub.DesconectarYLimpiar = LouisHub.DisconnectAndClean
 
-function AlanLuna:RegistrarHilo(hilo)
-    if _G.AlanLuna_Instancia and hilo then
-        table.insert(_G.AlanLuna_Instancia.Hilos, hilo)
+function LouisHub:RegisterThread(thread)
+    if _G.LouisHub_Instance and thread then
+        table.insert(_G.LouisHub_Instance.Threads, thread)
     end
-    return hilo
+    return thread
 end
+LouisHub.RegistrarHilo = LouisHub.RegisterThread
 
-function AlanLuna:RegistrarDibujo(objetoDrawing)
-    if _G.AlanLuna_Instancia and objetoDrawing then
-        table.insert(_G.AlanLuna_Instancia.Dibujos, objetoDrawing)
+function LouisHub:RegisterDrawing(drawingObj)
+    if _G.LouisHub_Instance and drawingObj then
+        table.insert(_G.LouisHub_Instance.Drawings, drawingObj)
     end
-    return objetoDrawing
+    return drawingObj
 end
+LouisHub.RegistrarDibujo = LouisHub.RegisterDrawing
 
-function AlanLuna:RegistrarInstancia(instancia)
-    if _G.AlanLuna_Instancia and instancia then
-        table.insert(_G.AlanLuna_Instancia.Instancias, instancia)
+function LouisHub:RegisterInstance(instance)
+    if _G.LouisHub_Instance and instance then
+        table.insert(_G.LouisHub_Instance.Instances, instance)
     end
-    return instancia
+    return instance
 end
+LouisHub.RegistrarInstancia = LouisHub.RegisterInstance
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 4: ICON MODULE (COMPLETO DE LUNA UI)
+--  SECTION 4: COMPLETE ICON MODULE (MATERIAL & LUCIDE MAPPINGS)
 -- ══════════════════════════════════════════════════════════════
 local IconModule = {
     Lucide = nil,
@@ -1201,7 +1219,7 @@ local IconModule = {
         ["blur_off"] = "http://www.roblox.com/asset/?id=6031371055",
         ["crop_16_9"] = "http://www.roblox.com/asset/?id=6031630205",
         ["blur_on"] = "http://www.roblox.com/asset/?id=6031371068",
-        ["brightness_4"] = "http://www.roblox.com/asset/?id=6031488938",
+        ["brightness_4"] = "http://www.roblox.com/asset/?id=6031471483",
         ["details"] = "http://www.roblox.com/asset/?id=6034328968",
         ["panorama_horizontal"] = "http://www.roblox.com/asset/?id=6034315966",
         ["camera_rear"] = "http://www.roblox.com/asset/?id=6031572316",
@@ -1734,11 +1752,11 @@ local IconModule = {
 }
 
 local IconAliases = {
-    ["warning"] = "_warning",
-    ["error"] = "_error",
-    ["alert"] = "report_problem",
-    ["help"] = "info",
-    ["success"] = "check_circle",
+    ["warning"]   = "_warning",
+    ["error"]     = "_error",
+    ["alert"]     = "report_problem",
+    ["help"]      = "info",
+    ["success"]   = "check_circle",
     ["crosshair"] = "my_location"
 }
 
@@ -1783,13 +1801,14 @@ local function GetIcon(icon, source)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 5: SISTEMA DE TEMAS, GRADIENTES & PALETAS
+--  SECTION 5: THEMES, GRADIENTS & PALETTES SYSTEM
 -- ══════════════════════════════════════════════════════════════
 local Themes = {}
-Themes.Predeterminado = "Negro"
+Themes.Default = "Dark"
+Themes.Predeterminado = "Dark"
 
-Themes.Lista = {
-    Negro = {
+Themes.List = {
+    Dark = {
         Background      = Color3.fromRGB(45, 48, 53),
         BackgroundDark  = Color3.fromRGB(32, 34, 38),
         BackgroundLight = Color3.fromRGB(55, 58, 64),
@@ -1800,12 +1819,16 @@ Themes.Lista = {
         TextDark        = Color3.fromRGB(230, 230, 230),
         Border          = Color3.fromRGB(12, 13, 15),
         Panel           = Color3.fromRGB(18, 19, 22),
+        PanelLight      = Color3.fromRGB(26, 28, 32),
         PanelClaro      = Color3.fromRGB(26, 28, 32),
+        Row             = Color3.fromRGB(32, 34, 38),
         Fila            = Color3.fromRGB(32, 34, 38),
+        Input           = Color3.fromRGB(15, 16, 19),
         Entrada         = Color3.fromRGB(15, 16, 19),
+        Muted           = Color3.fromRGB(60, 60, 60),
         Apagado         = Color3.fromRGB(60, 60, 60),
     },
-    Blanco = {
+    White = {
         Background      = Color3.fromRGB(218, 218, 224),
         BackgroundDark  = Color3.fromRGB(198, 198, 205),
         BackgroundLight = Color3.fromRGB(240, 240, 245),
@@ -1816,12 +1839,16 @@ Themes.Lista = {
         TextDark        = Color3.fromRGB(20, 20, 20),
         Border          = Color3.fromRGB(195, 195, 200),
         Panel           = Color3.fromRGB(252, 252, 254),
+        PanelLight      = Color3.fromRGB(240, 240, 244),
         PanelClaro      = Color3.fromRGB(240, 240, 244),
+        Row             = Color3.fromRGB(232, 232, 237),
         Fila            = Color3.fromRGB(232, 232, 237),
+        Input           = Color3.fromRGB(220, 220, 226),
         Entrada         = Color3.fromRGB(220, 220, 226),
+        Muted           = Color3.fromRGB(180, 180, 180),
         Apagado         = Color3.fromRGB(180, 180, 180),
     },
-    Verde = {
+    Green = {
         Background      = Color3.fromRGB(58, 122, 68),
         BackgroundDark  = Color3.fromRGB(42, 92, 50),
         BackgroundLight = Color3.fromRGB(72, 145, 82),
@@ -1832,12 +1859,16 @@ Themes.Lista = {
         TextDark        = Color3.fromRGB(230, 230, 230),
         Border          = Color3.fromRGB(15, 30, 18),
         Panel           = Color3.fromRGB(24, 40, 27),
+        PanelLight      = Color3.fromRGB(32, 52, 36),
         PanelClaro      = Color3.fromRGB(32, 52, 36),
+        Row             = Color3.fromRGB(28, 46, 31),
         Fila            = Color3.fromRGB(28, 46, 31),
+        Input           = Color3.fromRGB(20, 34, 22),
         Entrada         = Color3.fromRGB(20, 34, 22),
+        Muted           = Color3.fromRGB(60, 60, 60),
         Apagado         = Color3.fromRGB(60, 60, 60),
     },
-    Morado = {
+    Purple = {
         Background      = Color3.fromRGB(78, 55, 120),
         BackgroundDark  = Color3.fromRGB(58, 40, 92),
         BackgroundLight = Color3.fromRGB(98, 72, 145),
@@ -1848,12 +1879,16 @@ Themes.Lista = {
         TextDark        = Color3.fromRGB(230, 230, 230),
         Border          = Color3.fromRGB(18, 12, 28),
         Panel           = Color3.fromRGB(26, 20, 36),
+        PanelLight      = Color3.fromRGB(34, 27, 46),
         PanelClaro      = Color3.fromRGB(34, 27, 46),
+        Row             = Color3.fromRGB(30, 24, 42),
         Fila            = Color3.fromRGB(30, 24, 42),
+        Input           = Color3.fromRGB(22, 17, 32),
         Entrada         = Color3.fromRGB(22, 17, 32),
+        Muted           = Color3.fromRGB(60, 60, 60),
         Apagado         = Color3.fromRGB(60, 60, 60),
     },
-    Rojo = {
+    Red = {
         Background      = Color3.fromRGB(214, 70, 60),
         BackgroundDark  = Color3.fromRGB(164, 45, 40),
         BackgroundLight = Color3.fromRGB(230, 110, 100),
@@ -1864,9 +1899,13 @@ Themes.Lista = {
         TextDark        = Color3.fromRGB(25, 20, 20),
         Border          = Color3.fromRGB(35, 8, 8),
         Panel           = Color3.fromRGB(34, 20, 20),
+        PanelLight      = Color3.fromRGB(44, 27, 27),
         PanelClaro      = Color3.fromRGB(44, 27, 27),
+        Row             = Color3.fromRGB(38, 24, 24),
         Fila            = Color3.fromRGB(38, 24, 24),
+        Input           = Color3.fromRGB(28, 17, 17),
         Entrada         = Color3.fromRGB(28, 17, 17),
+        Muted           = Color3.fromRGB(60, 60, 60),
         Apagado         = Color3.fromRGB(60, 60, 60),
     },
     Halloween = {
@@ -1880,12 +1919,24 @@ Themes.Lista = {
         TextDark        = Color3.fromRGB(230, 220, 245),
         Border          = Color3.fromRGB(12, 8, 20),
         Panel           = Color3.fromRGB(38, 26, 52),
+        PanelLight      = Color3.fromRGB(50, 35, 68),
         PanelClaro      = Color3.fromRGB(50, 35, 68),
+        Row             = Color3.fromRGB(42, 30, 58),
         Fila            = Color3.fromRGB(42, 30, 58),
+        Input           = Color3.fromRGB(26, 17, 38),
         Entrada         = Color3.fromRGB(26, 17, 38),
+        Muted           = Color3.fromRGB(70, 60, 80),
         Apagado         = Color3.fromRGB(70, 60, 80),
     }
 }
+
+-- Backward Compatibility Key Aliases
+Themes.List.Negro  = Themes.List.Dark
+Themes.List.Blanco = Themes.List.White
+Themes.List.Verde  = Themes.List.Green
+Themes.List.Morado = Themes.List.Purple
+Themes.List.Rojo   = Themes.List.Red
+Themes.Lista       = Themes.List
 
 local PresetGradients = {
     ["Nightlight (Classic)"] = {Color3.fromRGB(147, 255, 239), Color3.fromRGB(201, 211, 233), Color3.fromRGB(255, 167, 227)},
@@ -1901,52 +1952,56 @@ local PresetGradients = {
 }
 
 local Theme = {}
-for k, v in pairs(Themes.Lista[Themes.Predeterminado]) do Theme[k] = v end
-AlanLuna.Theme = Theme
+for k, v in pairs(Themes.List[Themes.Default]) do Theme[k] = v end
+LouisHub.Theme = Theme
 
-AlanLuna.ThemeGradient = ColorSequence.new{
+LouisHub.ThemeGradient = ColorSequence.new{
     ColorSequenceKeypoint.new(0.00, Theme.Accent),
     ColorSequenceKeypoint.new(0.50, Theme.AccentLight),
     ColorSequenceKeypoint.new(1.00, Theme.Highlight)
 }
 
-local registroTema = {}
-local muertosTema = 0
+local themeRegistry = {}
+local deadThemeEntries = 0
 
-local function compactarRegistro(registro)
+local function compactRegistry(registry)
     local j = 0
-    for i = 1, #registro do
-        local e = registro[i]
-        if not e.muerta then
+    for i = 1, #registry do
+        local e = registry[i]
+        if not e.dead then
             j = j + 1
-            registro[j] = e
+            registry[j] = e
         end
     end
-    for i = #registro, j + 1, -1 do registro[i] = nil end
+    for i = #registry, j + 1, -1 do registry[i] = nil end
 end
+local compactarRegistro = compactRegistry
 
-function AlanLuna:Registrar(instancia, propiedad, claveTema)
-    local entrada = {instancia = instancia, propiedad = propiedad, claveTema = claveTema}
-    table.insert(registroTema, entrada)
-    if typeof(instancia) == "Instance" then
-        instancia.Destroying:Connect(function()
-            entrada.muerta = true
-            muertosTema = muertosTema + 1
-            if muertosTema >= 64 and muertosTema * 4 >= #registroTema then
-                muertosTema = 0
-                compactarRegistro(registroTema)
+function LouisHub:Register(instance, property, themeKey)
+    local entry = {instance = instance, property = property, themeKey = themeKey}
+    table.insert(themeRegistry, entry)
+    if typeof(instance) == "Instance" then
+        instance.Destroying:Connect(function()
+            entry.dead = true
+            deadThemeEntries = deadThemeEntries + 1
+            if deadThemeEntries >= 64 and deadThemeEntries * 4 >= #themeRegistry then
+                deadThemeEntries = 0
+                compactRegistry(themeRegistry)
             end
         end)
     end
 end
+LouisHub.Registrar = LouisHub.Register
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 6: MOTION, TWEENING & SINGLETON GLASS BLUR MODULE
+--  SECTION 6: MOTION, TWEENING & SINGLETON GLASS BLUR MODULE
 -- ══════════════════════════════════════════════════════════════
-AlanLuna.Motion = {
+LouisHub.Motion = {
+    Instant         = 0,
     Directo         = 0,
     Press           = 0.14,
     Hover           = 0.25,
+    HoverIntensity  = 0.20,
     HoverIntensidad = 0.20,
     FlashIn         = 0.08,
     FlashOut        = 0.35,
@@ -1954,35 +2009,39 @@ AlanLuna.Motion = {
     Modal           = 0.35,
     Page            = 0.30,
     Spin            = 0.60,
+    EaseEnter       = Enum.EasingStyle.Exponential,
     EaseEntrar      = Enum.EasingStyle.Exponential,
+    EaseExit        = Enum.EasingStyle.Exponential,
     EaseSalir       = Enum.EasingStyle.Exponential,
     EasePop         = Enum.EasingStyle.Back,
+    EaseSmooth      = Enum.EasingStyle.Exponential,
     EaseSuave       = Enum.EasingStyle.Exponential,
+    EaseLinear      = Enum.EasingStyle.Linear,
     EaseLineal      = Enum.EasingStyle.Linear,
 }
 
-local COLOR_FLASH_EXITO = Color3.fromRGB(46, 204, 113)
-local COLOR_FLASH_ERROR = Color3.fromRGB(231, 76, 60)
+local COLOR_FLASH_SUCCESS = Color3.fromRGB(46, 204, 113)
+local COLOR_FLASH_ERROR   = Color3.fromRGB(231, 76, 60)
 
-local tweensActivos = setmetatable({}, {__mode = "k"})
+local activeTweens = setmetatable({}, {__mode = "k"})
 
-local function clavePropiedades(props)
-    local nombres = {}
-    for nombre in pairs(props) do table.insert(nombres, nombre) end
-    table.sort(nombres)
-    return table.concat(nombres, ",")
+local function getPropertyKey(props)
+    local names = {}
+    for name in pairs(props) do table.insert(names, name) end
+    table.sort(names)
+    return table.concat(names, ",")
 end
 
 local Utils = {}
 
-function Utils.Tween(obj, props, tiempo, estilo, direccion, callback)
+function Utils.Tween(obj, props, duration, style, direction, callback)
     if not obj or not obj.Parent then return nil end
-    local clave = clavePropiedades(props)
-    local porObjeto = tweensActivos[obj]
-    local anterior = porObjeto and porObjeto[clave]
-    if anterior then pcall(function() anterior:Cancel() end) end
+    local key = getPropertyKey(props)
+    local perObject = activeTweens[obj]
+    local previous = perObject and perObject[key]
+    if previous then pcall(function() previous:Cancel() end) end
 
-    if tiempo == 0 then
+    if duration == 0 then
         pcall(function()
             for prop, val in pairs(props) do obj[prop] = val end
         end)
@@ -1991,9 +2050,9 @@ function Utils.Tween(obj, props, tiempo, estilo, direccion, callback)
     end
 
     local info = TweenInfo.new(
-        tiempo or AlanLuna.Motion.Expand,
-        estilo or AlanLuna.Motion.EaseEntrar,
-        direccion or Enum.EasingDirection.Out
+        duration or LouisHub.Motion.Expand,
+        style or LouisHub.Motion.EaseEnter,
+        direction or Enum.EasingDirection.Out
     )
     local ok, tw = pcall(function()
         local t = TweenService:Create(obj, info, props)
@@ -2002,8 +2061,8 @@ function Utils.Tween(obj, props, tiempo, estilo, direccion, callback)
         return t
     end)
     if ok then
-        tweensActivos[obj] = tweensActivos[obj] or {}
-        tweensActivos[obj][clave] = tw
+        activeTweens[obj] = activeTweens[obj] or {}
+        activeTweens[obj][key] = tw
     end
     return ok and tw or nil
 end
@@ -2022,16 +2081,16 @@ end
 local SingletonDOF = nil
 local activeBlurCount = 0
 
-local function asegurarDOF()
+local function ensureDOF()
     if SingletonDOF and SingletonDOF.Parent then return SingletonDOF end
     SingletonDOF = Instance.new('DepthOfFieldEffect')
-    SingletonDOF.Name = "AlanLunaGlobalDOF"
+    SingletonDOF.Name = "LouisHubGlobalDOF"
     SingletonDOF.FarIntensity = 0
     SingletonDOF.FocusDistance = 51.6
     SingletonDOF.InFocusRadius = 50
     SingletonDOF.NearIntensity = 4
     SingletonDOF.Parent = Lighting
-    AlanLuna:RegistrarInstancia(SingletonDOF)
+    LouisHub:RegisterInstance(SingletonDOF)
     return SingletonDOF
 end
 
@@ -2039,10 +2098,10 @@ local function BlurModule(Frame)
     local camera = Workspace.CurrentCamera
     local MTREL = "Glass"
     local root = Instance.new('Folder', camera)
-    root.Name = 'AlanLunaBlur'
-    AlanLuna:RegistrarInstancia(root)
+    root.Name = 'LouisHubBlur'
+    LouisHub:RegisterInstance(root)
 
-    asegurarDOF()
+    ensureDOF()
     activeBlurCount = activeBlurCount + 1
 
     local frame = Instance.new('Frame')
@@ -2056,7 +2115,7 @@ local function BlurModule(Frame)
         local id = 0
         function GenUid()
             id = id + 1
-            return 'alanluna::' .. tostring(id)
+            return 'louishub::' .. tostring(id)
         end
     end
 
@@ -2214,139 +2273,143 @@ local function BlurModule(Frame)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 7: BASE UTILITIES (COMPACT & RESTYLED LUNA VISUAL)
+--  SECTION 7: BASE UTILITIES (COMPACT & RESTYLED VISUALS)
 -- ══════════════════════════════════════════════════════════════
-local _contadorInstanciasUI = 0
-local function contarInstanciaCreada(inst)
-    _contadorInstanciasUI = _contadorInstanciasUI + 1
+local _uiInstanceCounter = 0
+local function trackInstanceCreated(inst)
+    _uiInstanceCounter = _uiInstanceCounter + 1
     inst.Destroying:Connect(function()
-        _contadorInstanciasUI = _contadorInstanciasUI - 1
+        _uiInstanceCounter = _uiInstanceCounter - 1
     end)
     return inst
 end
 
-function Utils.Corner(padre, radio)
+function Utils.Corner(parent, radius)
     local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, radio or 6)
-    c.Parent = padre
+    c.CornerRadius = UDim.new(0, radius or 6)
+    c.Parent = parent
     return c
 end
 
-function Utils.Stroke(padre, color, grosor, transparencia)
+function Utils.Stroke(parent, color, thickness, transparency)
     local s = Instance.new("UIStroke")
     s.Color = color or Color3.fromRGB(64, 61, 76)
-    s.Thickness = grosor or 1
-    s.Transparency = transparencia or 0.5
-    s.Parent = padre
+    s.Thickness = thickness or 1
+    s.Transparency = transparency or 0.5
+    s.Parent = parent
     return s
 end
 
-function Utils.GradienteAcento(instancia, rotacion)
-    local gradiente = Instance.new("UIGradient")
-    gradiente.Color = AlanLuna.ThemeGradient
-    gradiente.Rotation = rotacion or 0
-    gradiente.Parent = instancia
-    AlanLuna:Registrar(gradiente, "Color", function()
-        return AlanLuna.ThemeGradient
+function Utils.AccentGradient(instance, rotation)
+    local gradient = Instance.new("UIGradient")
+    gradient.Color = LouisHub.ThemeGradient
+    gradient.Rotation = rotation or 0
+    gradient.Parent = instance
+    LouisHub:Register(gradient, "Color", function()
+        return LouisHub.ThemeGradient
     end)
-    return gradiente
+    return gradient
 end
+Utils.GradienteAcento = Utils.AccentGradient
 
-function Utils.Hover(objetoEventos, objetoColor, intensidad, duracion, obtenerColorBase)
-    if not objetoEventos or not objetoColor then return end
-    objetoColor = objetoColor or objetoEventos
-    intensidad = intensidad or AlanLuna.Motion.HoverIntensidad
-    duracion = duracion or AlanLuna.Motion.Hover
+function Utils.Hover(eventObj, colorObj, intensity, duration, getBaseColor)
+    if not eventObj or not colorObj then return end
+    colorObj = colorObj or eventObj
+    intensity = intensity or LouisHub.Motion.HoverIntensity
+    duration = duration or LouisHub.Motion.Hover
 
-    local enHover = false
-    local colorReposo = nil
-    local reposoVigenteHasta = 0
+    local isHovered = false
+    local restColor = nil
+    local stroke = colorObj:FindFirstChildOfClass("UIStroke")
 
-    local stroke = objetoColor:FindFirstChildOfClass("UIStroke")
-
-    AlanLuna:RegistrarConexion(objetoEventos.MouseEnter:Connect(function()
-        if enHover then return end
-        enHover = true
+    LouisHub:RegisterConnection(eventObj.MouseEnter:Connect(function()
+        if isHovered then return end
+        isHovered = true
         pcall(function()
-            local base = (obtenerColorBase and obtenerColorBase()) or objetoColor.BackgroundColor3
-            colorReposo = base
-            Utils.Tween(objetoColor, {
-                BackgroundColor3 = base:Lerp(Color3.new(1, 1, 1), intensidad)
-            }, duracion, AlanLuna.Motion.EaseEntrar)
+            local base = (getBaseColor and getBaseColor()) or colorObj.BackgroundColor3
+            restColor = base
+            Utils.Tween(colorObj, {
+                BackgroundColor3 = base:Lerp(Color3.new(1, 1, 1), intensity)
+            }, duration, LouisHub.Motion.EaseEnter)
             if stroke then
-                Utils.Tween(stroke, {Color = Color3.fromRGB(87, 84, 104), Transparency = 0.3}, duracion, AlanLuna.Motion.EaseEntrar)
+                Utils.Tween(stroke, {Color = Color3.fromRGB(87, 84, 104), Transparency = 0.3}, duration, LouisHub.Motion.EaseEnter)
             end
         end)
     end))
 
-    AlanLuna:RegistrarConexion(objetoEventos.MouseLeave:Connect(function()
-        if not enHover then return end
-        enHover = false
+    LouisHub:RegisterConnection(eventObj.MouseLeave:Connect(function()
+        if not isHovered then return end
+        isHovered = false
         pcall(function()
-            local destino = (obtenerColorBase and obtenerColorBase()) or colorReposo
-            if destino then
-                colorReposo = destino
-                reposoVigenteHasta = os.clock() + duracion + 0.08
-                Utils.Tween(objetoColor, {BackgroundColor3 = destino}, duracion, AlanLuna.Motion.EaseEntrar)
+            local target = (getBaseColor and getBaseColor()) or restColor
+            if target then
+                restColor = target
+                Utils.Tween(colorObj, {BackgroundColor3 = target}, duration, LouisHub.Motion.EaseEnter)
             end
             if stroke then
-                Utils.Tween(stroke, {Color = Color3.fromRGB(64, 61, 76), Transparency = 0.5}, duracion, AlanLuna.Motion.EaseEntrar)
+                Utils.Tween(stroke, {Color = Color3.fromRGB(64, 61, 76), Transparency = 0.5}, duration, LouisHub.Motion.EaseEnter)
             end
         end)
     end))
 end
 
-function Utils.ClickFeedback(objetoVisual)
-    if not objetoVisual or not objetoVisual.Parent then return end
-    local escala = objetoVisual:FindFirstChild("__AlanLuna_ClickScale")
-    if not escala then
-        escala = Instance.new("UIScale")
-        escala.Name = "__AlanLuna_ClickScale"
-        escala.Scale = 1
-        escala.Parent = objetoVisual
+function Utils.ClickFeedback(visualObj)
+    if not visualObj or not visualObj.Parent then return end
+    local scale = visualObj:FindFirstChild("__LouisHub_ClickScale")
+    if not scale then
+        scale = Instance.new("UIScale")
+        scale.Name = "__LouisHub_ClickScale"
+        scale.Scale = 1
+        scale.Parent = visualObj
     end
-    escala.Scale = 0.97
-    Utils.Tween(escala, {Scale = 1}, AlanLuna.Motion.Press, AlanLuna.Motion.EasePop)
+    scale.Scale = 0.97
+    Utils.Tween(scale, {Scale = 1}, LouisHub.Motion.Press, LouisHub.Motion.EasePop)
 end
 
-function Utils.ClickConfiable(objeto, callback, objetoVisual)
-    local UMBRAL_MOVIMIENTO_CLICK = 15
+function Utils.ReliableClick(object, callback, visualObj)
+    local CLICK_MOVE_THRESHOLD = 15
     local posDown = nil
-    AlanLuna:RegistrarConexion(objeto.MouseButton1Down:Connect(function(x, y)
+    LouisHub:RegisterConnection(object.MouseButton1Down:Connect(function(x, y)
         posDown = Vector2.new(x, y)
-        Utils.ClickFeedback(objetoVisual or objeto)
+        Utils.ClickFeedback(visualObj or object)
     end))
-    AlanLuna:RegistrarConexion(objeto.MouseButton1Up:Connect(function(x, y)
+    LouisHub:RegisterConnection(object.MouseButton1Up:Connect(function(x, y)
         if not posDown then return end
-        local movio = (Vector2.new(x, y) - posDown).Magnitude > UMBRAL_MOVIMIENTO_CLICK
+        local moved = (Vector2.new(x, y) - posDown).Magnitude > CLICK_MOVE_THRESHOLD
         posDown = nil
-        if movio then return end
+        if moved then return end
         callback()
     end))
 end
+Utils.ClickConfiable = Utils.ReliableClick
 
-function Utils.HitboxAmpliado(boton, padding)
+function Utils.ExpandedHitbox(button, padding)
     padding = padding or 0
-    if padding <= 0 or not boton then return boton end
-    local hitbox = Utils.BotonBase({
-        Padre = boton,
+    if padding <= 0 or not button then return button end
+    local hitbox = Utils.BaseButton({
+        Parent = button,
+        Padre = button,
         Size = UDim2.new(1, padding * 2, 1, padding * 2),
+        Position = UDim2.new(0, -padding, 0, -padding),
         Posicion = UDim2.new(0, -padding, 0, -padding),
+        Transparency = 1,
         Transparencia = 1,
+        Radius = false,
         Radio = false,
     })
-    hitbox.ZIndex = boton.ZIndex + 1
+    hitbox.ZIndex = button.ZIndex + 1
     return hitbox
 end
+Utils.HitboxAmpliado = Utils.ExpandedHitbox
 
-function Utils.FlashFeedback(instancia, exito, colorNormal)
-    if not instancia or not instancia.Parent then return end
-    local colorFlash = exito and COLOR_FLASH_EXITO or COLOR_FLASH_ERROR
+function Utils.FlashFeedback(instance, isSuccess, normalColor)
+    if not instance or not instance.Parent then return end
+    local flashColor = isSuccess and COLOR_FLASH_SUCCESS or COLOR_FLASH_ERROR
     pcall(function()
-        Utils.Tween(instancia, {BackgroundColor3 = colorFlash}, AlanLuna.Motion.FlashIn)
-        task.delay(AlanLuna.Motion.FlashIn, function()
+        Utils.Tween(instance, {BackgroundColor3 = flashColor}, LouisHub.Motion.FlashIn)
+        task.delay(LouisHub.Motion.FlashIn, function()
             pcall(function()
-                Utils.Tween(instancia, {BackgroundColor3 = colorNormal}, AlanLuna.Motion.FlashOut)
+                Utils.Tween(instance, {BackgroundColor3 = normalColor}, LouisHub.Motion.FlashOut)
             end)
         end)
     end)
@@ -2355,196 +2418,192 @@ end
 function Utils.Frame(cfg)
     cfg = cfg or {}
     local f = Instance.new("Frame")
-    contarInstanciaCreada(f)
-    f.Size = cfg.Size or UDim2.new(1, 0, 0, cfg.Alto or 26)
-    f.Position = cfg.Posicion or UDim2.new(0, 0, 0, 0)
-    if cfg.Ancla then f.AnchorPoint = cfg.Ancla end
-    f.BackgroundColor3 = cfg.Color or Theme.Fila
-    f.BackgroundTransparency = cfg.Transparencia or 0.5
+    trackInstanceCreated(f)
+    f.Size = cfg.Size or UDim2.new(1, 0, 0, cfg.Height or cfg.Alto or 26)
+    f.Position = cfg.Position or cfg.Posicion or UDim2.new(0, 0, 0, 0)
+    if cfg.Anchor or cfg.Ancla then f.AnchorPoint = cfg.Anchor or cfg.Ancla end
+    f.BackgroundColor3 = cfg.Color or Theme.Row or Theme.Fila
+    f.BackgroundTransparency = cfg.Transparency or cfg.Transparencia or 0.5
     f.BorderSizePixel = 0
-    f.ClipsDescendants = cfg.Recortar or false
-    f.LayoutOrder = cfg.Orden or 0
+    f.ClipsDescendants = cfg.Clips or cfg.Recortar or false
+    f.LayoutOrder = cfg.Order or cfg.Orden or 0
     if cfg.Visible ~= nil then f.Visible = cfg.Visible end
-    f.Parent = cfg.Padre
-    if cfg.Radio ~= false then Utils.Corner(f, cfg.Radio or 6) end
-    if cfg.Borde ~= false then
-        local stroke = Utils.Stroke(f, cfg.ColorBorde or Color3.fromRGB(64, 61, 76), cfg.GrosorBorde or 1, cfg.TransparenciaBorde or 0.5)
-        if cfg.ClaveTemaBorde then
-            AlanLuna:Registrar(stroke, "Color", cfg.ClaveTemaBorde)
+    f.Parent = cfg.Parent or cfg.Padre
+    if cfg.Radius ~= false and cfg.Radio ~= false then Utils.Corner(f, cfg.Radius or cfg.Radio or 6) end
+    if cfg.Border ~= false and cfg.Borde ~= false then
+        local stroke = Utils.Stroke(f, cfg.BorderColor or cfg.ColorBorde or Color3.fromRGB(64, 61, 76), cfg.BorderThickness or cfg.GrosorBorde or 1, cfg.BorderTransparency or cfg.TransparenciaBorde or 0.5)
+        if cfg.BorderThemeKey or cfg.ClaveTemaBorde then
+            LouisHub:Register(stroke, "Color", cfg.BorderThemeKey or cfg.ClaveTemaBorde)
         end
     end
     return f
 end
 
-function Utils.Fila(padre, alto, orden, color)
+function Utils.Row(parent, height, order, color)
     return Utils.Frame({
-        Padre = padre,
-        Size = UDim2.new(1, 0, 0, alto or 26),
-        Orden = orden,
-        Color = color or Theme.Fila,
-        Radio = 6,
-        Transparencia = 0.5,
-        Borde = true
+        Parent = parent,
+        Size = UDim2.new(1, 0, 0, height or 26),
+        Order = order,
+        Color = color or Theme.Row or Theme.Fila,
+        Radius = 6,
+        Transparency = 0.5,
+        Border = true
     })
 end
+Utils.Fila = Utils.Row
 
-local registroEscalaTexto = {}
-local muertosEscalaTexto = 0
-local escalasTexto = { tabs = 1, general = 1, titulo = 1 }
+local textScaleRegistry = {}
+local deadTextScaleEntries = 0
+local textScales = { tabs = 1, general = 1, title = 1, titulo = 1 }
 
-local function hayAncestroOculto(inst)
-    local actual = inst
-    while actual do
-        if actual:IsA("GuiObject") and not actual.Visible then return true end
-        actual = actual.Parent
+local function hasHiddenAncestor(inst)
+    local current = inst
+    while current do
+        if current:IsA("GuiObject") and not current.Visible then return true end
+        current = current.Parent
     end
     return false
 end
 
-function Utils.FactorEscalaUI(inst)
+function Utils.UIScaleFactor(inst)
     local f = 1
-    local actual = inst
-    while actual do
-        local ok, sc = pcall(function() return actual:FindFirstChildOfClass("UIScale") end)
+    local current = inst
+    while current do
+        local ok, sc = pcall(function() return current:FindFirstChildOfClass("UIScale") end)
         if ok and sc then f = f * sc.Scale end
-        actual = actual.Parent
+        current = current.Parent
     end
     return (f > 0) and f or 1
 end
+Utils.FactorEscalaUI = Utils.UIScaleFactor
 
-local function calcularYAplicarTamano(entrada)
-    local inst = entrada.instancia
+local function calculateAndApplyTextSize(entry)
+    local inst = entry.instance
     if not (inst and inst.Parent) then return end
-    local factor = escalasTexto[entrada.categoria] or 1
-    local piso = 6
-    local objetivo = math.max(piso, math.floor(entrada.base * factor + 0.5))
+    local factor = textScales[entry.category] or 1
+    local floorVal = 6
+    local target = math.max(floorVal, math.floor(entry.base * factor + 0.5))
 
-    if not entrada.truncable then
-        pcall(function() inst.TextSize = objetivo end)
+    if not entry.truncatable then
+        pcall(function() inst.TextSize = target end)
         return
     end
 
-    local factorEscalaGlobal = Utils.FactorEscalaUI(inst)
-    local anchoDisponible = inst.AbsoluteSize.X / factorEscalaGlobal
-    if anchoDisponible <= 0 then
-        if hayAncestroOculto(inst) then return end
-        entrada.reintentos = (entrada.reintentos or 0) + 1
-        if entrada.reintentos > 10 then return end
-        task.defer(calcularYAplicarTamano, entrada)
+    local globalScaleFactor = Utils.UIScaleFactor(inst)
+    local availableWidth = inst.AbsoluteSize.X / globalScaleFactor
+    if availableWidth <= 0 then
+        if hasHiddenAncestor(inst) then return end
+        entry.retries = (entry.retries or 0) + 1
+        if entry.retries > 10 then return end
+        task.defer(calculateAndApplyTextSize, entry)
         return
     end
-    entrada.reintentos = 0
+    entry.retries = 0
 
-    local altoDisponible = (inst.AbsoluteSize.Y > 0 and (inst.AbsoluteSize.Y / factorEscalaGlobal)) or 100
-    local tamano = objetivo
-    while tamano > piso do
-        local okMedida, ancho = pcall(function()
-            return TextService:GetTextSize(inst.Text, tamano, inst.Font, Vector2.new(10000, altoDisponible)).X
+    local availableHeight = (inst.AbsoluteSize.Y > 0 and (inst.AbsoluteSize.Y / globalScaleFactor)) or 100
+    local size = target
+    while size > floorVal do
+        local okMeasure, width = pcall(function()
+            return TextService:GetTextSize(inst.Text, size, inst.Font, Vector2.new(10000, availableHeight)).X
         end)
-        if not okMedida or ancho <= anchoDisponible then break end
-        tamano = tamano - 1
+        if not okMeasure or width <= availableWidth then break end
+        size = size - 1
     end
-    pcall(function() inst.TextSize = tamano end)
+    pcall(function() inst.TextSize = size end)
 end
 
-local function registrarEscalaTexto(instancia, tamanoBase, categoria, truncable)
-    categoria = categoria or "general"
-    local entrada = {
-        instancia = instancia,
-        base = tamanoBase,
-        categoria = categoria,
-        truncable = truncable or false,
-        reintentos = 0,
+local function registerTextScale(instance, baseSize, category, truncatable)
+    category = category or "general"
+    local entry = {
+        instance    = instance,
+        base        = baseSize,
+        category    = category,
+        truncatable = truncatable or false,
+        retries     = 0,
     }
-    table.insert(registroEscalaTexto, entrada)
-    instancia.Destroying:Connect(function()
-        entrada.muerta = true
-        muertosEscalaTexto = muertosEscalaTexto + 1
-        if muertosEscalaTexto >= 64 and muertosEscalaTexto * 4 >= #registroEscalaTexto then
-            muertosEscalaTexto = 0
-            compactarRegistro(registroEscalaTexto)
+    table.insert(textScaleRegistry, entry)
+    instance.Destroying:Connect(function()
+        entry.dead = true
+        deadTextScaleEntries = deadTextScaleEntries + 1
+        if deadTextScaleEntries >= 64 and deadTextScaleEntries * 4 >= #textScaleRegistry then
+            deadTextScaleEntries = 0
+            compactRegistry(textScaleRegistry)
         end
     end)
-    if truncable then
-        AlanLuna:RegistrarConexion(instancia:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-            calcularYAplicarTamano(entrada)
+    if truncatable then
+        LouisHub:RegisterConnection(instance:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+            calculateAndApplyTextSize(entry)
         end))
-        task.defer(calcularYAplicarTamano, entrada)
-    elseif escalasTexto[categoria] ~= 1 then
-        calcularYAplicarTamano(entrada)
+        task.defer(calculateAndApplyTextSize, entry)
+    elseif (textScales[category] or 1) ~= 1 then
+        calculateAndApplyTextSize(entry)
     end
 end
 
-local function aplicarEscalaTexto(categoria, factor)
-    escalasTexto[categoria] = factor
-    for _, entrada in ipairs(registroEscalaTexto) do
-        if entrada.categoria == categoria then
-            calcularYAplicarTamano(entrada)
-        end
-    end
-end
-
-function Utils.Texto(cfg)
+function Utils.Text(cfg)
     cfg = cfg or {}
     local l = Instance.new("TextLabel")
-    contarInstanciaCreada(l)
+    trackInstanceCreated(l)
     l.BackgroundTransparency = 1
     l.Size = cfg.Size or UDim2.new(1, -6, 1, 0)
-    l.Position = cfg.Posicion or UDim2.new(0, 6, 0, 0)
-    l.Font = cfg.Fuente or cfg.Font or Enum.Font.GothamMedium
-    local tamanoBase = cfg.Tamano or cfg.TextSize or 11
-    l.TextSize = tamanoBase
+    l.Position = cfg.Position or cfg.Posicion or UDim2.new(0, 6, 0, 0)
+    l.Font = cfg.Font or cfg.Fuente or Enum.Font.GothamMedium
+    local baseSize = cfg.TextSize or cfg.SizeValue or cfg.Tamano or 11
+    l.TextSize = baseSize
     l.TextColor3 = cfg.Color or Theme.Text
-    l.TextXAlignment = cfg.Alineacion or Enum.TextXAlignment.Left
-    l.TextTruncate = cfg.Truncar and Enum.TextTruncate.AtEnd or Enum.TextTruncate.None
-    l.TextWrapped = cfg.Ajustar or false
-    l.TextTransparency = cfg.TextoTransparencia or 0
+    l.TextXAlignment = cfg.Alignment or cfg.Alineacion or Enum.TextXAlignment.Left
+    l.TextTruncate = (cfg.Truncate or cfg.Truncar) and Enum.TextTruncate.AtEnd or Enum.TextTruncate.None
+    l.TextWrapped = cfg.Wrapped or cfg.Ajustar or false
+    l.TextTransparency = cfg.TextTransparency or cfg.TextoTransparencia or 0
     l.RichText = cfg.RichText or false
-    l.Text = cfg.Texto or cfg.Text or ""
-    l.LayoutOrder = cfg.Orden or 0
-    l.Parent = cfg.Padre
+    l.Text = cfg.Text or cfg.Texto or ""
+    l.LayoutOrder = cfg.Order or cfg.Orden or 0
+    l.Parent = cfg.Parent or cfg.Padre
 
-    if cfg.ColorTema then
-        AlanLuna:Registrar(l, "TextColor3", cfg.ColorTema)
+    if cfg.ThemeColor or cfg.ColorTema then
+        LouisHub:Register(l, "TextColor3", cfg.ThemeColor or cfg.ColorTema)
     elseif not cfg.Color then
-        AlanLuna:Registrar(l, "TextColor3", "Text")
+        LouisHub:Register(l, "TextColor3", "Text")
     end
 
-    registrarEscalaTexto(l, tamanoBase, cfg.Categoria, cfg.Truncar)
+    registerTextScale(l, baseSize, cfg.Category or cfg.Categoria, cfg.Truncate or cfg.Truncar)
     return l
 end
+Utils.Texto = Utils.Text
 
-function Utils.BotonBase(cfg)
+function Utils.BaseButton(cfg)
     cfg = cfg or {}
     local b = Instance.new("TextButton")
-    contarInstanciaCreada(b)
-    b.Size = cfg.Size or UDim2.new(1, 0, 0, cfg.Alto or 26)
-    b.Position = cfg.Posicion or UDim2.new(0, 0, 0, 0)
-    if cfg.Ancla then b.AnchorPoint = cfg.Ancla end
-    b.BackgroundTransparency = cfg.Transparencia == nil and 1 or cfg.Transparencia
-    b.BackgroundColor3 = cfg.Color or Theme.Fila
+    trackInstanceCreated(b)
+    b.Size = cfg.Size or UDim2.new(1, 0, 0, cfg.Height or cfg.Alto or 26)
+    b.Position = cfg.Position or cfg.Posicion or UDim2.new(0, 0, 0, 0)
+    if cfg.Anchor or cfg.Ancla then b.AnchorPoint = cfg.Anchor or cfg.Ancla end
+    b.BackgroundTransparency = (cfg.Transparency == nil and cfg.Transparencia == nil) and 1 or (cfg.Transparency or cfg.Transparencia)
+    b.BackgroundColor3 = cfg.Color or Theme.Row or Theme.Fila
     b.AutoButtonColor = false
     b.Text = ""
     b.BorderSizePixel = 0
-    b.LayoutOrder = cfg.Orden or 0
-    b.Parent = cfg.Padre
-    if cfg.Radio ~= false then Utils.Corner(b, cfg.Radio or 6) end
+    b.LayoutOrder = cfg.Order or cfg.Orden or 0
+    b.Parent = cfg.Parent or cfg.Padre
+    if cfg.Radius ~= false and cfg.Radio ~= false then Utils.Corner(b, cfg.Radius or cfg.Radio or 6) end
     return b
 end
+Utils.BotonBase = Utils.BaseButton
 
-function Utils.Diferir(fn)
-    local pendiente = false
+function Utils.Defer(fn)
+    local pending = false
     return function()
-        if pendiente then return end
-        pendiente = true
+        if pending then return end
+        pending = true
         task.delay(0.03, function()
-            pendiente = false
+            pending = false
             fn()
         end)
     end
 end
+Utils.Diferir = Utils.Defer
 
-function Utils.HacerFilaDinamica(fila, lbl, altoMin, padY)
+function Utils.MakeDynamicRow(row, lbl, minHeight, padY)
     padY = padY or 5
     lbl.TextWrapped   = true
     lbl.TextTruncate  = Enum.TextTruncate.None
@@ -2552,197 +2611,206 @@ function Utils.HacerFilaDinamica(fila, lbl, altoMin, padY)
     lbl.AnchorPoint   = Vector2.new(0, 0.5)
     lbl.Position      = UDim2.new(lbl.Position.X.Scale, lbl.Position.X.Offset, 0.5, 0)
     lbl.Size          = UDim2.new(lbl.Size.X.Scale, lbl.Size.X.Offset, 0, 0)
-    local function recalcular()
-        if not (fila.Parent and lbl.Parent) then return end
+    local function recalculate()
+        if not (row.Parent and lbl.Parent) then return end
         local h = lbl.AbsoluteSize.Y
         if h <= 0 then return end
-        local alto = math.max(altoMin, math.ceil(h / Utils.FactorEscalaUI(lbl)) + padY * 2)
-        if fila.Size.Y.Offset ~= alto then
-            fila.Size = UDim2.new(fila.Size.X.Scale, fila.Size.X.Offset, 0, alto)
+        local newH = math.max(minHeight, math.ceil(h / Utils.UIScaleFactor(lbl)) + padY * 2)
+        if row.Size.Y.Offset ~= newH then
+            row.Size = UDim2.new(row.Size.X.Scale, row.Size.X.Offset, 0, newH)
         end
     end
-    AlanLuna:RegistrarConexion(lbl:GetPropertyChangedSignal("AbsoluteSize"):Connect(Utils.Diferir(recalcular)))
-    task.defer(recalcular)
+    LouisHub:RegisterConnection(lbl:GetPropertyChangedSignal("AbsoluteSize"):Connect(Utils.Defer(recalculate)))
+    task.defer(recalculate)
 end
+Utils.HacerFilaDinamica = Utils.MakeDynamicRow
 
 local EventManager = {}
-EventManager._activo = nil
-EventManager._alFinalizar = nil
+EventManager._active = nil
+EventManager._onFinished = nil
 
-function EventManager:Arrastrar(callback, alFinalizar)
-    self._activo = callback
-    self._alFinalizar = alFinalizar
+function EventManager:StartDrag(callback, onFinished)
+    self._active = callback
+    self._onFinished = onFinished
 end
+EventManager.Arrastrar = EventManager.StartDrag
 
-function EventManager:DetenerArrastre()
-    self._activo = nil
-    if self._alFinalizar then
-        local cb = self._alFinalizar
-        self._alFinalizar = nil
+function EventManager:StopDrag()
+    self._active = nil
+    if self._onFinished then
+        local cb = self._onFinished
+        self._onFinished = nil
         pcall(cb)
     end
 end
+EventManager.DetenerArrastre = EventManager.StopDrag
 
-function EventManager:HayArrastreActivo()
-    return self._activo ~= nil
+function EventManager:IsDragging()
+    return self._active ~= nil
 end
+EventManager.HayArrastreActivo = EventManager.IsDragging
 
-if type(_G.AlanLuna_ConexionesEventManager) == "table" then
-    for _, c in ipairs(_G.AlanLuna_ConexionesEventManager) do
+if type(_G.LouisHub_EventManagerConnections) == "table" then
+    for _, c in ipairs(_G.LouisHub_EventManagerConnections) do
         pcall(function() if c and c.Connected then c:Disconnect() end end)
     end
 end
-_G.AlanLuna_ConexionesEventManager = {}
+_G.LouisHub_EventManagerConnections = {}
 
-local conexionInputChanged = UserInputService.InputChanged:Connect(function(input)
-    if EventManager._activo and (
+local connInputChanged = UserInputService.InputChanged:Connect(function(input)
+    if EventManager._active and (
         input.UserInputType == Enum.UserInputType.MouseMovement or
         input.UserInputType == Enum.UserInputType.Touch
     ) then
-        pcall(EventManager._activo, input)
+        pcall(EventManager._active, input)
     end
 end)
 
-local conexionInputEnded = UserInputService.InputEnded:Connect(function(input)
+local connInputEnded = UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or
        input.UserInputType == Enum.UserInputType.Touch then
-        EventManager:DetenerArrastre()
+        EventManager:StopDrag()
     end
 end)
 
-table.insert(_G.AlanLuna_ConexionesEventManager, conexionInputChanged)
-table.insert(_G.AlanLuna_ConexionesEventManager, conexionInputEnded)
-AlanLuna.EventManager = EventManager
+table.insert(_G.LouisHub_EventManagerConnections, connInputChanged)
+table.insert(_G.LouisHub_EventManagerConnections, connInputEnded)
+LouisHub.EventManager = EventManager
 
-function Utils.Arrastrable(disparador, objetivo, eventMgr)
-    local arrastrando = false
-    local inicioArrastre, inicioObjetivo
+function Utils.Draggable(trigger, target, eventMgr)
+    local isDragging = false
+    local dragStart, targetStart
 
-    disparador.InputBegan:Connect(function(input)
+    trigger.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            arrastrando     = true
-            inicioArrastre  = Vector2.new(input.Position.X, input.Position.Y)
-            inicioObjetivo  = objetivo.Position
+            isDragging   = true
+            dragStart    = Vector2.new(input.Position.X, input.Position.Y)
+            targetStart  = target.Position
 
-            local conexionInputChanged
-            conexionInputChanged = input.Changed:Connect(function()
+            local connInputChanged
+            connInputChanged = input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
-                    arrastrando = false
-                    if eventMgr then eventMgr:DetenerArrastre() end
-                    if conexionInputChanged then
-                        conexionInputChanged:Disconnect()
-                        conexionInputChanged = nil
+                    isDragging = false
+                    if eventMgr then eventMgr:StopDrag() end
+                    if connInputChanged then
+                        connInputChanged:Disconnect()
+                        connInputChanged = nil
                     end
                 end
             end)
-            AlanLuna:RegistrarConexion(conexionInputChanged)
+            LouisHub:RegisterConnection(connInputChanged)
 
             if eventMgr then
-                eventMgr:Arrastrar(function(inp)
-                    if not arrastrando then return end
-                    local delta = Vector2.new(inp.Position.X, inp.Position.Y) - inicioArrastre
-                    objetivo.Position = UDim2.new(
-                        inicioObjetivo.X.Scale,  inicioObjetivo.X.Offset + delta.X,
-                        inicioObjetivo.Y.Scale,  inicioObjetivo.Y.Offset + delta.Y
+                eventMgr:StartDrag(function(inp)
+                    if not isDragging then return end
+                    local delta = Vector2.new(inp.Position.X, inp.Position.Y) - dragStart
+                    target.Position = UDim2.new(
+                        targetStart.X.Scale,  targetStart.X.Offset + delta.X,
+                        targetStart.Y.Scale,  targetStart.Y.Offset + delta.Y
                     )
                 end, function()
-                    arrastrando = false
-                    if conexionInputChanged then
-                        conexionInputChanged:Disconnect()
-                        conexionInputChanged = nil
+                    isDragging = false
+                    if connInputChanged then
+                        connInputChanged:Disconnect()
+                        connInputChanged = nil
                     end
                 end)
             end
         end
     end)
 end
+Utils.Arrastrable = Utils.Draggable
 
-local numeroTweensActivos = setmetatable({}, {__mode = "k"})
+local activeNumberTweens = setmetatable({}, {__mode = "k"})
 
-function Utils.TweenNumero(desde, hasta, duracion, callback, estilo, direccion, clave)
+function Utils.TweenNumber(from, to, duration, callback, style, direction, key)
     if type(callback) ~= "function" then return end
-    if desde == hasta then
-        callback(hasta)
+    if from == to then
+        callback(to)
         return
     end
 
-    local llave = clave or callback
-    local anterior = numeroTweensActivos[llave]
-    if anterior then
-        pcall(function() anterior.tween:Cancel() end)
-        pcall(function() anterior.valor:Destroy() end)
+    local lookupKey = key or callback
+    local previous = activeNumberTweens[lookupKey]
+    if previous then
+        pcall(function() previous.tween:Cancel() end)
+        pcall(function() previous.valObj:Destroy() end)
     end
 
-    local valor = Instance.new("NumberValue")
-    valor.Value = desde
-    local conexion = valor:GetPropertyChangedSignal("Value"):Connect(function()
-        pcall(callback, valor.Value)
+    local valObj = Instance.new("NumberValue")
+    valObj.Value = from
+    local conn = valObj:GetPropertyChangedSignal("Value"):Connect(function()
+        pcall(callback, valObj.Value)
     end)
 
     local info = TweenInfo.new(
-        duracion or 0.22,
-        estilo or AlanLuna.Motion.EaseEntrar,
-        direccion or Enum.EasingDirection.Out
+        duration or 0.22,
+        style or LouisHub.Motion.EaseEnter,
+        direction or Enum.EasingDirection.Out
     )
     local ok, tw = pcall(function()
-        return TweenService:Create(valor, info, {Value = hasta})
+        return TweenService:Create(valObj, info, {Value = to})
     end)
     if not ok then
-        conexion:Disconnect()
-        valor:Destroy()
-        callback(hasta)
+        conn:Disconnect()
+        valObj:Destroy()
+        callback(to)
         return
     end
 
-    local registro = {tween = tw, valor = valor}
-    numeroTweensActivos[llave] = registro
+    local record = {tween = tw, valObj = valObj}
+    activeNumberTweens[lookupKey] = record
     tw:Play()
     tw.Completed:Connect(function()
-        conexion:Disconnect()
-        valor:Destroy()
-        if numeroTweensActivos[llave] == registro then numeroTweensActivos[llave] = nil end
+        conn:Disconnect()
+        valObj:Destroy()
+        if activeNumberTweens[lookupKey] == record then activeNumberTweens[lookupKey] = nil end
     end)
 end
+Utils.TweenNumero = Utils.TweenNumber
 
-function Utils.EnvolverInstancia(inst)
+function Utils.WrapInstance(inst)
     local proxy = setmetatable({}, {
-        __index = function(_, clave)
-            local ok, valor = pcall(function() return inst[clave] end)
+        __index = function(_, k)
+            local ok, val = pcall(function() return inst[k] end)
             if not ok then return nil end
-            if type(valor) == "function" then
-                return function(_, ...) return valor(inst, ...) end
+            if type(val) == "function" then
+                return function(_, ...) return val(inst, ...) end
             end
-            return valor
+            return val
         end,
-        __newindex = function(_, clave, valor) inst[clave] = valor end,
+        __newindex = function(_, k, val) inst[k] = val end,
     })
+    rawset(proxy, "Instance", inst)
     rawset(proxy, "Instancia", inst)
     return proxy
 end
+Utils.EnvolverInstancia = Utils.WrapInstance
 
-function Utils.AnexarBloqueo(elem, fila)
-    local overlay, lblMotivo, insignia
-    local bloqueado, motivo = false, nil
-    local POS_INSIGNIA = UDim2.new(1, -6, 0.5, 0)
-    local tokenSacudida = 0
-    rawset(elem, "Fila", fila)
-    local trazo, tokenResaltado = nil, 0
+function Utils.AttachLock(elem, row)
+    local overlay, lblReason, badge
+    local isLocked, lockReason = false, nil
+    local BADGE_POS = UDim2.new(1, -6, 0.5, 0)
+    local shakeToken = 0
+    rawset(elem, "Row", row)
+    rawset(elem, "Fila", row)
+    local stroke, highlightToken = nil, 0
 
-    local function sinSelf(a, b)
+    local function withoutSelf(a, b)
         if a == elem then return b end
         return a
     end
 
-    local function refrescarTexto()
-        if lblMotivo then
-            lblMotivo.Text = "🔒 " .. (motivo and motivo ~= "" and motivo or "Bloqueado")
+    local function refreshText()
+        if lblReason then
+            lblReason.Text = "🔒 " .. (lockReason and lockReason ~= "" and lockReason or "Locked")
         end
     end
 
-    local function asegurarOverlay()
+    local function ensureOverlay()
         if overlay and overlay.Parent then return end
         overlay = Instance.new("TextButton")
-        overlay.Name = "AlanLuna_Locked"
+        overlay.Name = "LouisHub_Locked"
         overlay.Size = UDim2.new(1, 0, 1, 0)
         overlay.BackgroundColor3 = Theme.BackgroundDark
         overlay.BackgroundTransparency = 0.35
@@ -2751,378 +2819,386 @@ function Utils.AnexarBloqueo(elem, fila)
         overlay.Text = ""
         overlay.ZIndex = 100
         overlay.Visible = false
-        overlay.Parent = fila
-        local esquina = fila:FindFirstChildOfClass("UICorner")
-        if esquina then Utils.Corner(overlay, esquina.CornerRadius.Offset) end
-        AlanLuna:Registrar(overlay, "BackgroundColor3", "BackgroundDark")
+        overlay.Parent = row
+        local corner = row:FindFirstChildOfClass("UICorner")
+        if corner then Utils.Corner(overlay, corner.CornerRadius.Offset) end
+        LouisHub:Register(overlay, "BackgroundColor3", "BackgroundDark")
 
-        insignia = Utils.Frame({
-            Padre = overlay, Size = UDim2.new(0.55, -6, 0, 22),
-            Posicion = POS_INSIGNIA, Ancla = Vector2.new(1, 0.5),
-            Color = Theme.Panel, Radio = 5,
+        badge = Utils.Frame({
+            Parent = overlay, Size = UDim2.new(0.55, -6, 0, 22),
+            Position = BADGE_POS, Anchor = Vector2.new(1, 0.5),
+            Color = Theme.Panel, Radius = 5,
         })
-        insignia.ZIndex = 101
-        AlanLuna:Registrar(insignia, "BackgroundColor3", "Panel")
+        badge.ZIndex = 101
+        LouisHub:Register(badge, "BackgroundColor3", "Panel")
 
-        lblMotivo = Utils.Texto({
-            Padre = insignia, Texto = "",
-            Size = UDim2.new(1, -10, 1, 0), Posicion = UDim2.new(0, 5, 0, 0),
-            Alineacion = Enum.TextXAlignment.Center, Tamano = 11, Truncar = true,
+        lblReason = Utils.Text({
+            Parent = badge, Text = "",
+            Size = UDim2.new(1, -10, 1, 0), Position = UDim2.new(0, 5, 0, 0),
+            Alignment = Enum.TextXAlignment.Center, TextSize = 11, Truncate = true,
         })
-        lblMotivo.ZIndex = 102
+        lblReason.ZIndex = 102
 
-        Utils.ClickConfiable(overlay, function()
-            if not (insignia and insignia.Parent) then return end
-            tokenSacudida = tokenSacudida + 1
-            local mio = tokenSacudida
-            Utils.FlashFeedback(insignia, false, Theme.Panel)
+        Utils.ReliableClick(overlay, function()
+            if not (badge and badge.Parent) then return end
+            shakeToken = shakeToken + 1
+            local myToken = shakeToken
+            Utils.FlashFeedback(badge, false, Theme.Panel)
             task.spawn(function()
                 for _, dx in ipairs({-3, 3, -3, 3, 0}) do
-                    if tokenSacudida ~= mio or not (insignia and insignia.Parent) then return end
-                    Utils.Tween(insignia, {
-                        Position = UDim2.new(POS_INSIGNIA.X.Scale, POS_INSIGNIA.X.Offset + dx, POS_INSIGNIA.Y.Scale, POS_INSIGNIA.Y.Offset),
-                    }, 0.05, AlanLuna.Motion.EaseSuave)
+                    if shakeToken ~= myToken or not (badge and badge.Parent) then return end
+                    Utils.Tween(badge, {
+                        Position = UDim2.new(BADGE_POS.X.Scale, BADGE_POS.X.Offset + dx, BADGE_POS.Y.Scale, BADGE_POS.Y.Offset),
+                    }, 0.05, LouisHub.Motion.EaseSmooth)
                     task.wait(0.05)
                 end
             end)
-        end, insignia)
+        end, badge)
     end
 
-    local function animarEntradaBloqueo()
-        local transparenciaVelo = overlay.BackgroundTransparency
-        local transparenciaInsignia = insignia.BackgroundTransparency
-        local transparenciaTexto = lblMotivo.TextTransparency
+    local function animateLockEntry()
+        local transOverlay = overlay.BackgroundTransparency
+        local transBadge   = badge.BackgroundTransparency
+        local transText    = lblReason.TextTransparency
         overlay.BackgroundTransparency = 1
-        insignia.BackgroundTransparency = 1
-        lblMotivo.TextTransparency = 1
-        insignia.Position = UDim2.new(POS_INSIGNIA.X.Scale, POS_INSIGNIA.X.Offset + 20, POS_INSIGNIA.Y.Scale, POS_INSIGNIA.Y.Offset)
-        Utils.Tween(overlay, {BackgroundTransparency = transparenciaVelo}, AlanLuna.Motion.Expand)
-        Utils.Tween(insignia, {BackgroundTransparency = transparenciaInsignia, Position = POS_INSIGNIA}, AlanLuna.Motion.Expand, AlanLuna.Motion.EasePop)
-        Utils.Tween(lblMotivo, {TextTransparency = transparenciaTexto}, AlanLuna.Motion.Expand)
+        badge.BackgroundTransparency   = 1
+        lblReason.TextTransparency     = 1
+        badge.Position = UDim2.new(BADGE_POS.X.Scale, BADGE_POS.X.Offset + 20, BADGE_POS.Y.Scale, BADGE_POS.Y.Offset)
+        Utils.Tween(overlay, {BackgroundTransparency = transOverlay}, LouisHub.Motion.Expand)
+        Utils.Tween(badge, {BackgroundTransparency = transBadge, Position = BADGE_POS}, LouisHub.Motion.Expand, LouisHub.Motion.EasePop)
+        Utils.Tween(lblReason, {TextTransparency = transText}, LouisHub.Motion.Expand)
     end
 
-    local function bloquear(nuevoMotivo, animar)
-        local yaBloqueado = bloqueado
-        motivo = nuevoMotivo
-        asegurarOverlay()
-        refrescarTexto()
+    local function lock(newReason, animate)
+        local wasLocked = isLocked
+        lockReason = newReason
+        ensureOverlay()
+        refreshText()
         overlay.Visible = true
-        bloqueado = true
-        if animar and not yaBloqueado and fila.AbsoluteSize.X > 0 then
-            animarEntradaBloqueo()
+        isLocked = true
+        if animate and not wasLocked and row.AbsoluteSize.X > 0 then
+            animateLockEntry()
         end
     end
 
     rawset(elem, "Lock", function(a, b)
-        bloquear(sinSelf(a, b), true)
+        lock(withoutSelf(a, b), true)
     end)
 
     rawset(elem, "Unlock", function()
-        local estabaBloqueado = bloqueado
-        bloqueado = false
+        local wasLocked = isLocked
+        isLocked = false
         if overlay then overlay.Visible = false end
-        if estabaBloqueado and overlay and fila.Parent and fila.AbsoluteSize.X > 0 then
-            local fantasma = Instance.new("Frame")
-            fantasma.Name = "__AlanLuna_LockFade"
-            fantasma.Size = UDim2.new(1, 0, 1, 0)
-            fantasma.BackgroundColor3 = overlay.BackgroundColor3
-            fantasma.BackgroundTransparency = overlay.BackgroundTransparency
-            fantasma.BorderSizePixel = 0
-            fantasma.Active = false
-            fantasma.ZIndex = overlay.ZIndex
-            local esquinaOverlay = overlay:FindFirstChildOfClass("UICorner")
-            if esquinaOverlay then Utils.Corner(fantasma, esquinaOverlay.CornerRadius.Offset) end
-            fantasma.Parent = fila
-            Utils.Tween(fantasma, {BackgroundTransparency = 1}, AlanLuna.Motion.Expand, AlanLuna.Motion.EaseSalir)
-            task.delay(AlanLuna.Motion.Expand + 0.05, function()
-                if fantasma.Parent then fantasma:Destroy() end
+        if wasLocked and overlay and row.Parent and row.AbsoluteSize.X > 0 then
+            local ghost = Instance.new("Frame")
+            ghost.Name = "__LouisHub_LockFade"
+            ghost.Size = UDim2.new(1, 0, 1, 0)
+            ghost.BackgroundColor3 = overlay.BackgroundColor3
+            ghost.BackgroundTransparency = overlay.BackgroundTransparency
+            ghost.BorderSizePixel = 0
+            ghost.Active = false
+            ghost.ZIndex = overlay.ZIndex
+            local cornerOverlay = overlay:FindFirstChildOfClass("UICorner")
+            if cornerOverlay then Utils.Corner(ghost, cornerOverlay.CornerRadius.Offset) end
+            ghost.Parent = row
+            Utils.Tween(ghost, {BackgroundTransparency = 1}, LouisHub.Motion.Expand, LouisHub.Motion.EaseExit)
+            task.delay(LouisHub.Motion.Expand + 0.05, function()
+                if ghost.Parent then ghost:Destroy() end
             end)
         end
     end)
 
-    rawset(elem, "IsLocked", function() return bloqueado end)
+    rawset(elem, "IsLocked", function() return isLocked end)
 
     rawset(elem, "SetLockedTitle", function(a, b)
-        motivo = sinSelf(a, b)
-        refrescarTexto()
+        lockReason = withoutSelf(a, b)
+        refreshText()
     end)
 
     rawset(elem, "Highlight", function(a, b)
-        local opciones = sinSelf(a, b)
-        local duracion = 2
-        if type(opciones) == "number" then
-            duracion = opciones
-        elseif type(opciones) == "table" and type(opciones.Duracion) == "number" then
-            duracion = opciones.Duracion
+        local opts = withoutSelf(a, b)
+        local duration = 2
+        if type(opts) == "number" then
+            duration = opts
+        elseif type(opts) == "table" and type(opts.Duration or opts.Duracion) == "number" then
+            duration = opts.Duration or opts.Duracion
         end
-        duracion = math.clamp(duracion, 0.5, 10)
+        duration = math.clamp(duration, 0.5, 10)
 
-        tokenResaltado = tokenResaltado + 1
-        local mio = tokenResaltado
-        if trazo then trazo:Destroy() end
-        trazo = Instance.new("UIStroke")
-        trazo.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-        trazo.Thickness = 1.5
-        trazo.Color = Theme.AccentLight
-        trazo.Transparency = 1
-        trazo.Parent = fila
+        highlightToken = highlightToken + 1
+        local myToken = highlightToken
+        if stroke then stroke:Destroy() end
+        stroke = Instance.new("UIStroke")
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        stroke.Thickness = 1.5
+        stroke.Color = Theme.AccentLight
+        stroke.Transparency = 1
+        stroke.Parent = row
 
-        local pulsos = math.max(1, math.floor(duracion / 0.8))
-        local propio = trazo
-        local tw = TweenService:Create(propio,
-            TweenInfo.new(0.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, pulsos - 1, true),
+        local pulses = math.max(1, math.floor(duration / 0.8))
+        local targetStroke = stroke
+        local tw = TweenService:Create(targetStroke,
+            TweenInfo.new(0.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, pulses - 1, true),
             {Transparency = 0})
         tw:Play()
-        task.delay(duracion + 0.2, function()
-            if propio.Parent then propio:Destroy() end
-            if tokenResaltado == mio then trazo = nil end
+        task.delay(duration + 0.2, function()
+            if targetStroke.Parent then targetStroke:Destroy() end
+            if highlightToken == myToken then stroke = nil end
         end)
     end)
 
-    return function(nuevoMotivo) bloquear(nuevoMotivo, false) end
+    return function(newReason) lock(newReason, false) end
 end
+Utils.AnexarBloqueo = Utils.AttachLock
 
-function Utils.EnvolverControlBloqueable(Seccion, contenedor, nombre)
-    local original = Seccion[nombre]
+function Utils.WrapLockableControl(Section, container, name)
+    local original = Section[name]
     if type(original) ~= "function" then return end
-    Seccion[nombre] = function(self, cfg)
-        local previos = {}
-        for _, hijo in ipairs(contenedor:GetDescendants()) do previos[hijo] = true end
-        if self._col1 then for _, hijo in ipairs(self._col1:GetDescendants()) do previos[hijo] = true end end
-        if self._col2 then for _, hijo in ipairs(self._col2:GetDescendants()) do previos[hijo] = true end end
+    Section[name] = function(self, cfg)
+        local previous = {}
+        for _, child in ipairs(container:GetDescendants()) do previous[child] = true end
+        if self._col1 then for _, child in ipairs(self._col1:GetDescendants()) do previous[child] = true end end
+        if self._col2 then for _, child in ipairs(self._col2:GetDescendants()) do previous[child] = true end end
 
-        local resultado = original(self, cfg)
-        local fila = nil
+        local result = original(self, cfg)
+        local row = nil
 
-        local function buscarNuevoEn(padre)
-            if not padre then return end
-            for _, hijo in ipairs(padre:GetChildren()) do
-                if not previos[hijo] and hijo:IsA("GuiObject") then
-                    if not fila or hijo.LayoutOrder > fila.LayoutOrder then
-                        fila = hijo
+        local function findNewIn(parentObj)
+            if not parentObj then return end
+            for _, child in ipairs(parentObj:GetChildren()) do
+                if not previous[child] and child:IsA("GuiObject") then
+                    if not row or child.LayoutOrder > row.LayoutOrder then
+                        row = child
                     end
                 end
             end
         end
 
-        buscarNuevoEn(contenedor)
-        buscarNuevoEn(self._col1)
-        buscarNuevoEn(self._col2)
+        findNewIn(container)
+        findNewIn(self._col1)
+        findNewIn(self._col2)
 
-        if not fila then return resultado end
-        local elem = resultado
-        if typeof(resultado) == "Instance" then elem = Utils.EnvolverInstancia(resultado) end
-        if type(elem) ~= "table" then return resultado end
-        local bloquearInicial = Utils.AnexarBloqueo(elem, fila)
-        if type(cfg) == "table" and cfg.Locked then bloquearInicial(cfg.LockedTitle) end
+        if not row then return result end
+        local elem = result
+        if typeof(result) == "Instance" then elem = Utils.WrapInstance(result) end
+        if type(elem) ~= "table" then return result end
+        local lockInitial = Utils.AttachLock(elem, row)
+        if type(cfg) == "table" and cfg.Locked then lockInitial(cfg.LockedTitle) end
         return elem
     end
 end
+Utils.EnvolverControlBloqueable = Utils.WrapLockableControl
 
-function Utils.FundirEntrada(raiz, duracion, incluirRaiz)
-    local objetivos = {}
-    local function registrar(inst)
+function Utils.FadeIn(root, duration, includeRoot)
+    local targets = {}
+    local function register(inst)
         if inst:IsA("GuiObject") then
             if inst.BackgroundTransparency < 0.99 then
-                table.insert(objetivos, {inst, "BackgroundTransparency", inst.BackgroundTransparency})
+                table.insert(targets, {inst, "BackgroundTransparency", inst.BackgroundTransparency})
             end
             if (inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox")) and inst.TextTransparency < 0.99 then
-                table.insert(objetivos, {inst, "TextTransparency", inst.TextTransparency})
+                table.insert(targets, {inst, "TextTransparency", inst.TextTransparency})
             end
             if (inst:IsA("ImageLabel") or inst:IsA("ImageButton")) and inst.ImageTransparency < 0.99 then
-                table.insert(objetivos, {inst, "ImageTransparency", inst.ImageTransparency})
+                table.insert(targets, {inst, "ImageTransparency", inst.ImageTransparency})
             end
         elseif inst:IsA("UIStroke") and inst.Transparency < 0.99 then
-            table.insert(objetivos, {inst, "Transparency", inst.Transparency})
+            table.insert(targets, {inst, "Transparency", inst.Transparency})
         end
     end
-    if incluirRaiz then registrar(raiz) end
-    for _, d in ipairs(raiz:GetDescendants()) do registrar(d) end
-    for _, o in ipairs(objetivos) do o[1][o[2]] = 1 end
-    for _, o in ipairs(objetivos) do
-        Utils.Tween(o[1], {[o[2]] = o[3]}, duracion, AlanLuna.Motion.EaseEntrar)
+    if includeRoot then register(root) end
+    for _, d in ipairs(root:GetDescendants()) do register(d) end
+    for _, o in ipairs(targets) do o[1][o[2]] = 1 end
+    for _, o in ipairs(targets) do
+        Utils.Tween(o[1], {[o[2]] = o[3]}, duration, LouisHub.Motion.EaseEnter)
     end
 end
+Utils.FundirEntrada = Utils.FadeIn
 
-function Utils.AnimarInsercion(marco, eje)
-    if not (marco and marco.Parent) then return end
-    local tamFinal = marco.Size
-    local clipOriginal = marco.ClipsDescendants
-    marco.ClipsDescendants = true
-    if eje == "x" then
-        marco.Size = UDim2.new(tamFinal.X.Scale, 0, tamFinal.Y.Scale, tamFinal.Y.Offset)
+function Utils.AnimateInsertion(frame, axis)
+    if not (frame and frame.Parent) then return end
+    local finalSize = frame.Size
+    local origClip = frame.ClipsDescendants
+    frame.ClipsDescendants = true
+    if axis == "x" then
+        frame.Size = UDim2.new(finalSize.X.Scale, 0, finalSize.Y.Scale, finalSize.Y.Offset)
     else
-        marco.Size = UDim2.new(tamFinal.X.Scale, tamFinal.X.Offset, tamFinal.Y.Scale, 0)
+        frame.Size = UDim2.new(finalSize.X.Scale, finalSize.X.Offset, finalSize.Y.Scale, 0)
     end
-    Utils.FundirEntrada(marco, AlanLuna.Motion.Expand, false)
-    Utils.Tween(marco, {Size = tamFinal}, AlanLuna.Motion.Expand, AlanLuna.Motion.EaseEntrar)
-    task.delay(AlanLuna.Motion.Expand + 0.05, function()
-        if marco.Parent then
-            marco.Size = tamFinal
-            marco.ClipsDescendants = clipOriginal
+    Utils.FadeIn(frame, LouisHub.Motion.Expand, false)
+    Utils.Tween(frame, {Size = finalSize}, LouisHub.Motion.Expand, LouisHub.Motion.EaseEnter)
+    task.delay(LouisHub.Motion.Expand + 0.05, function()
+        if frame.Parent then
+            frame.Size = finalSize
+            frame.ClipsDescendants = origClip
         end
     end)
 end
+Utils.AnimarInsercion = Utils.AnimateInsertion
 
-function Utils.EntradaModal(fondo, card)
-    local transparenciaFondo = fondo.BackgroundTransparency
-    fondo.BackgroundTransparency = 1
-    local escala = Instance.new("UIScale")
-    escala.Scale = 0.95
-    escala.Parent = card
-    Utils.FundirEntrada(card, AlanLuna.Motion.Modal, true)
-    Utils.Tween(fondo, {BackgroundTransparency = transparenciaFondo}, AlanLuna.Motion.Expand, AlanLuna.Motion.EaseEntrar)
-    Utils.Tween(escala, {Scale = 1}, AlanLuna.Motion.Modal, AlanLuna.Motion.EasePop)
+function Utils.ModalEntry(backdrop, card)
+    local transBackdrop = backdrop.BackgroundTransparency
+    backdrop.BackgroundTransparency = 1
+    local scale = Instance.new("UIScale")
+    scale.Scale = 0.95
+    scale.Parent = card
+    Utils.FadeIn(card, LouisHub.Motion.Modal, true)
+    Utils.Tween(backdrop, {BackgroundTransparency = transBackdrop}, LouisHub.Motion.Expand, LouisHub.Motion.EaseEnter)
+    Utils.Tween(scale, {Scale = 1}, LouisHub.Motion.Modal, LouisHub.Motion.EasePop)
 end
+Utils.EntradaModal = Utils.ModalEntry
 
-function Utils.IconoImagen(padre, asset, color, tamano, posicion)
+function Utils.ImageIcon(parent, asset, color, size, position)
     local img = Instance.new("ImageLabel")
     img.BackgroundTransparency = 1
     img.BorderSizePixel = 0
     img.Image = asset
     img.ImageColor3 = color or Color3.new(1, 1, 1)
     img.ScaleType = Enum.ScaleType.Fit
-    img.Size = UDim2.new(0, tamano, 0, tamano)
+    img.Size = UDim2.new(0, size, 0, size)
     img.AnchorPoint = Vector2.new(0.5, 0.5)
-    img.Position = posicion
-    img.Parent = padre
+    img.Position = position
+    img.Parent = parent
     return img
 end
+Utils.IconoImagen = Utils.ImageIcon
 
-function Utils.AnexarDescripcion(fila, padre, orden, texto, anchoZona)
+function Utils.AttachDescription(row, parent, order, text, zoneWidth)
     local panel = Utils.Frame({
-        Padre = padre, Size = UDim2.new(1, 0, 0, 0),
-        Color = Theme.Fila, Orden = orden, Radio = 6,
+        Parent = parent, Size = UDim2.new(1, 0, 0, 0),
+        Color = Theme.Row or Theme.Fila, Order = order, Radius = 6,
     })
     panel.AutomaticSize = Enum.AutomaticSize.Y
     panel.Visible = false
-    AlanLuna:Registrar(panel, "BackgroundColor3", "Fila")
+    LouisHub:Register(panel, "BackgroundColor3", "Row")
 
-    local relleno = Instance.new("UIPadding")
-    relleno.PaddingTop, relleno.PaddingBottom = UDim.new(0, 6), UDim.new(0, 6)
-    relleno.PaddingLeft, relleno.PaddingRight = UDim.new(0, 24), UDim.new(0, 10)
-    relleno.Parent = panel
+    local padding = Instance.new("UIPadding")
+    padding.PaddingTop, padding.PaddingBottom = UDim.new(0, 6), UDim.new(0, 6)
+    padding.PaddingLeft, padding.PaddingRight = UDim.new(0, 24), UDim.new(0, 10)
+    padding.Parent = panel
 
-    local lblDescripcion = Utils.Texto({
-        Padre = panel, Texto = tostring(texto),
-        Size = UDim2.new(1, 0, 0, 0), Posicion = UDim2.new(0, 0, 0, 0),
-        Ajustar = true, Tamano = 10, Color = Theme.TextDark, ColorTema = "TextDark",
+    local lblDesc = Utils.Text({
+        Parent = panel, Text = tostring(text),
+        Size = UDim2.new(1, 0, 0, 0), Position = UDim2.new(0, 0, 0, 0),
+        Wrapped = true, TextSize = 10, Color = Theme.TextDark, ThemeColor = "TextDark",
     })
-    lblDescripcion.AutomaticSize = Enum.AutomaticSize.Y
+    lblDesc.AutomaticSize = Enum.AutomaticSize.Y
 
-    local zona = Utils.BotonBase({
-        Padre = fila, Size = anchoZona or UDim2.new(1, 0, 1, 0),
-        Color = Theme.Fila, Transparencia = 1, Radio = 6,
+    local zone = Utils.BaseButton({
+        Parent = row, Size = zoneWidth or UDim2.new(1, 0, 1, 0),
+        Color = Theme.Row or Theme.Fila, Transparency = 1, Radius = 6,
     })
-    local flecha = Instance.new("ImageLabel")
-    flecha.BackgroundTransparency = 1
-    flecha.Image = "rbxassetid://83472139709682"
-    flecha.ScaleType = Enum.ScaleType.Fit
-    flecha.Size = UDim2.new(0, 9, 0, 9)
-    flecha.AnchorPoint = Vector2.new(0.5, 0.5)
-    flecha.Position = UDim2.new(0, 12, 0.5, 0)
-    flecha.Rotation = -90
-    flecha.Parent = fila
-    AlanLuna:Registrar(flecha, "ImageColor3", "Text")
+    local arrow = Instance.new("ImageLabel")
+    arrow.BackgroundTransparency = 1
+    arrow.Image = "rbxassetid://83472139709682"
+    arrow.ScaleType = Enum.ScaleType.Fit
+    arrow.Size = UDim2.new(0, 9, 0, 9)
+    arrow.AnchorPoint = Vector2.new(0.5, 0.5)
+    arrow.Position = UDim2.new(0, 12, 0.5, 0)
+    arrow.Rotation = -90
+    arrow.Parent = row
+    LouisHub:Register(arrow, "ImageColor3", "Text")
 
-    Utils.ClickConfiable(zona, function()
+    Utils.ReliableClick(zone, function()
         panel.Visible = not panel.Visible
-        Utils.Tween(flecha, {Rotation = panel.Visible and 0 or -90}, AlanLuna.Motion.Expand)
+        Utils.Tween(arrow, {Rotation = panel.Visible and 0 or -90}, LouisHub.Motion.Expand)
     end)
     return panel
 end
+Utils.AnexarDescripcion = Utils.AttachDescription
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 8: STATE SYSTEM, PROXY AUTOSAVE & KEYBIND REGISTRY
+--  SECTION 8: STATE SYSTEM, PROXY AUTOSAVE & KEYBIND REGISTRY
 -- ══════════════════════════════════════════════════════════════
-local function nuevaTablaElementos()
+local function newElementTable()
     return setmetatable({}, {
         __newindex = function(t, flag, elem)
             rawset(t, flag, elem)
             if type(elem) == "table" and type(elem.Get) == "function" then
-                local ok, valor = pcall(elem.Get)
-                if ok and valor ~= nil then elem._defecto = copiarDefecto(valor) end
+                local ok, val = pcall(elem.Get)
+                if ok and val ~= nil then elem._defecto = copyDefault(val) end
             end
         end,
     })
 end
 
-AlanLuna.Elementos = nuevaTablaElementos()
-AlanLuna.Options = {}
+LouisHub.Elements = newElementTable()
+LouisHub.Elementos = LouisHub.Elements
+LouisHub.Options  = {}
 
-local ventanaActivaGuardado = nil
-local hayCambiosSinGuardar = false
-local loopAutoguardadoActivo = false
-local _cargandoDesdeArchivo = false
+local activeSaveWindow = nil
+local hasPendingUnsavedChanges = false
+local isAutosaveLoopActive = false
+local _isLoadingFromFile = false
 
-local function marcarCambioPendiente()
-    if _cargandoDesdeArchivo then return end
-    hayCambiosSinGuardar = true
+local function markPendingChange()
+    if _isLoadingFromFile then return end
+    hasPendingUnsavedChanges = true
 end
 
-local function iniciarLoopAutoguardado()
-    if loopAutoguardadoActivo then return end
-    loopAutoguardadoActivo = true
-    AlanLuna:RegistrarHilo(task.spawn(function()
-        while loopAutoguardadoActivo do
+local function startAutosaveLoop()
+    if isAutosaveLoopActive then return end
+    isAutosaveLoopActive = true
+    LouisHub:RegisterThread(task.spawn(function()
+        while isAutosaveLoopActive do
             task.wait(10)
-            if hayCambiosSinGuardar and ventanaActivaGuardado and ventanaActivaGuardado.NombreConfig and AlanLuna.SaveManager then
-                hayCambiosSinGuardar = false
+            if hasPendingUnsavedChanges and activeSaveWindow and activeSaveWindow.NombreConfig and LouisHub.SaveManager then
+                hasPendingUnsavedChanges = false
                 pcall(function()
-                    AlanLuna.SaveManager:GuardarSilencioso(ventanaActivaGuardado.NombreConfig)
+                    LouisHub.SaveManager:SaveSilent(activeSaveWindow.NombreConfig)
                 end)
             end
         end
     end))
 end
 
-local _ventanasConSelectorTemas = setmetatable({}, {__mode = "k"})
-local _flagsReales = {}
-local _flagsNoPersistir = {}
-local _flagsUI = {}
-local _keybindsRegistrados = {}
+local _windowsWithThemeSelectors = setmetatable({}, {__mode = "k"})
+local _realFlags = {}
+local _nonPersistentFlags = {}
+local _uiFlags = {}
+local _registeredKeybinds = {}
 
-local function _descomponerTecla(v)
+local function _decomposeKey(v)
     if typeof(v) == "table" then
         return v.KeyCode, v.Ctrl or false, v.Shift or false, v.Alt or false
     end
     return v, false, false, false
 end
 
-local function _formatoTecla(keyCode, ctrl, shift, alt)
-    if not keyCode or keyCode == Enum.KeyCode.Unknown then return "Ninguna" end
-    local partes = {}
-    if ctrl then table.insert(partes, "Ctrl") end
-    if shift then table.insert(partes, "Shift") end
-    if alt then table.insert(partes, "Alt") end
-    table.insert(partes, keyCode.Name)
-    return table.concat(partes, "+")
+local function _formatKey(keyCode, ctrl, shift, alt)
+    if not keyCode or keyCode == Enum.KeyCode.Unknown then return "None" end
+    local parts = {}
+    if ctrl then table.insert(parts, "Ctrl") end
+    if shift then table.insert(parts, "Shift") end
+    if alt then table.insert(parts, "Alt") end
+    table.insert(parts, keyCode.Name)
+    return table.concat(parts, "+")
 end
 
-local function _teclasEnConflicto(a, b)
-    local kA, cA, sA, aA = _descomponerTecla(a)
-    local kB, cB, sB, aB = _descomponerTecla(b)
+local function _keysInConflict(a, b)
+    local kA, cA, sA, aA = _decomposeKey(a)
+    local kB, cB, sB, aB = _decomposeKey(b)
     if not kA or not kB then return false end
     if kA == Enum.KeyCode.Unknown or kB == Enum.KeyCode.Unknown then return false end
     return kA == kB and cA == cB and sA == sB and aA == aB
 end
 
-local function _revisarConflictoKeybind(entryPropio, nuevoValor)
-    local conflictos = {}
-    for _, entrada in ipairs(_keybindsRegistrados) do
-        if entrada ~= entryPropio then
-            local okValor, valorAjeno = pcall(entrada.GetValor)
-            if okValor and _teclasEnConflicto(nuevoValor, valorAjeno) then
-                table.insert(conflictos, entrada.texto or "Keybind")
+local function _checkKeybindConflict(ownEntry, newVal)
+    local conflicts = {}
+    for _, entry in ipairs(_registeredKeybinds) do
+        if entry ~= ownEntry then
+            local okVal, otherVal = pcall(entry.GetValor or entry.GetValue)
+            if okVal and _keysInConflict(newVal, otherVal) then
+                table.insert(conflicts, entry.text or entry.texto or "Keybind")
             end
         end
     end
-    if #conflictos > 0 then
-        local k, c, s, a = _descomponerTecla(nuevoValor)
+    if #conflicts > 0 then
+        local k, c, s, a = _decomposeKey(newVal)
         pcall(function()
-            AlanLuna:Notificar({
-                Title    = "⚠️ Tecla en uso",
-                Content  = "'" .. _formatoTecla(k, c, s, a) .. "' ya está asignada a: " .. table.concat(conflictos, ", "),
+            LouisHub:Notify({
+                Title    = "⚠️ Keybind in Use",
+                Content  = "'" .. _formatKey(k, c, s, a) .. "' is already assigned to: " .. table.concat(conflicts, ", "),
                 Duration = 4,
                 Icon     = "warning"
             })
@@ -3130,29 +3206,29 @@ local function _revisarConflictoKeybind(entryPropio, nuevoValor)
     end
 end
 
-local function _revisarConflictosAlCargar()
-    if #_keybindsRegistrados < 2 then return end
-    local porFirma = {}
-    for _, entrada in ipairs(_keybindsRegistrados) do
-        local ok, valor = pcall(entrada.GetValor)
+local function _checkConflictsOnLoad()
+    if #_registeredKeybinds < 2 then return end
+    local bySignature = {}
+    for _, entry in ipairs(_registeredKeybinds) do
+        local ok, val = pcall(entry.GetValor or entry.GetValue)
         if ok then
-            local k, c, s, a = _descomponerTecla(valor)
+            local k, c, s, a = _decomposeKey(val)
             if k and k ~= Enum.KeyCode.Unknown then
-                local firma = k.Name .. "|" .. tostring(c) .. "|" .. tostring(s) .. "|" .. tostring(a)
-                porFirma[firma] = porFirma[firma] or {
-                    k = k, c = c, s = s, a = a, textos = {},
+                local sig = k.Name .. "|" .. tostring(c) .. "|" .. tostring(s) .. "|" .. tostring(a)
+                bySignature[sig] = bySignature[sig] or {
+                    k = k, c = c, s = s, a = a, texts = {},
                 }
-                table.insert(porFirma[firma].textos, entrada.texto or "Keybind")
+                table.insert(bySignature[sig].texts, entry.text or entry.texto or "Keybind")
             end
         end
     end
 
-    for _, grupo in pairs(porFirma) do
-        if #grupo.textos >= 2 then
+    for _, group in pairs(bySignature) do
+        if #group.texts >= 2 then
             pcall(function()
-                AlanLuna:Notificar({
-                    Title    = "⚠️ Teclas en conflicto",
-                    Content  = "'" .. _formatoTecla(grupo.k, grupo.c, grupo.s, grupo.a) .. "' está asignada a: " .. table.concat(grupo.textos, ", "),
+                LouisHub:Notify({
+                    Title    = "⚠️ Keybind Conflict",
+                    Content  = "'" .. _formatKey(group.k, group.c, group.s, group.a) .. "' is assigned to: " .. table.concat(group.texts, ", "),
                     Duration = 6,
                     Icon     = "warning"
                 })
@@ -3161,80 +3237,101 @@ local function _revisarConflictosAlCargar()
     end
 end
 
-local function crearSenal()
-    local conectados = {}
-    local senal = {}
-    function senal:Connect(callback)
+local function createSignal()
+    local connected = {}
+    local sig = {}
+    function sig:Connect(callback)
         if type(callback) ~= "function" then
             return {Disconnect = function() end}
         end
-        local entrada = {activo = true, callback = callback}
-        table.insert(conectados, entrada)
+        local entry = {active = true, callback = callback}
+        table.insert(connected, entry)
         return {
-            Disconnect = function() entrada.activo = false end,
+            Disconnect = function() entry.active = false end,
         }
     end
-    function senal:Fire(...)
-        local instantanea = table.move(conectados, 1, #conectados, 1, {})
-        for _, entrada in ipairs(instantanea) do
-            if entrada.activo then
-                local ok, err = pcall(entrada.callback, ...)
-                if not ok then AlanLuna:_RegistrarError("Eventos", err) end
+    function sig:Fire(...)
+        local snapshot = table.move(connected, 1, #connected, 1, {})
+        for _, entry in ipairs(snapshot) do
+            if entry.active then
+                local ok, err = pcall(entry.callback, ...)
+                if not ok then LouisHub:_LogError("Events", err) end
             end
         end
     end
-    return senal
+    return sig
 end
 
-AlanLuna.Eventos = {
-    FlagCambiada      = crearSenal(),
-    TabCambiada       = crearSenal(),
-    TemaCambiado      = crearSenal(),
-    ControlRegistrado = crearSenal(),
-    TipoCambiado      = crearSenal(),
-    HistorialCambiado = crearSenal(),
-    CategoriaCambiada = crearSenal(),
-    SubTabCambiada    = crearSenal(),
+LouisHub.Events = {
+    FlagChanged         = createSignal(),
+    FlagCambiada        = nil,
+    TabChanged          = createSignal(),
+    TabCambiada         = nil,
+    ThemeChanged        = createSignal(),
+    TemaCambiado        = nil,
+    ControlRegistered   = createSignal(),
+    ControlRegistrado   = nil,
+    TypeChanged         = createSignal(),
+    TipoCambiado        = nil,
+    HistoryChanged      = createSignal(),
+    HistorialCambiado   = nil,
+    CategoryChanged     = createSignal(),
+    CategoriaCambiada   = nil,
+    SubTabChanged       = createSignal(),
+    SubTabCambiada      = nil,
 }
+LouisHub.Events.FlagCambiada      = LouisHub.Events.FlagChanged
+LouisHub.Events.TabCambiada       = LouisHub.Events.TabChanged
+LouisHub.Events.TemaCambiado      = LouisHub.Events.ThemeChanged
+LouisHub.Events.ControlRegistrado = LouisHub.Events.ControlRegistered
+LouisHub.Events.TipoCambiado      = LouisHub.Events.TypeChanged
+LouisHub.Events.HistorialCambiado = LouisHub.Events.HistoryChanged
+LouisHub.Events.CategoriaCambiada = LouisHub.Events.CategoryChanged
+LouisHub.Events.SubTabCambiada    = LouisHub.Events.SubTabChanged
+LouisHub.Eventos = LouisHub.Events
 
-AlanLuna.Flags = setmetatable({}, {
-    __index = _flagsReales,
-    __newindex = function(_, clave, valor)
-        if type(valor) ~= "table" and _flagsReales[clave] == valor then
+LouisHub.Flags = setmetatable({}, {
+    __index = _realFlags,
+    __newindex = function(_, key, val)
+        if type(val) ~= "table" and _realFlags[key] == val then
             return
         end
-        _flagsReales[clave] = valor
-        marcarCambioPendiente()
-        if AlanLuna.Eventos then
-            AlanLuna.Eventos.FlagCambiada:Fire(clave, valor)
+        _realFlags[key] = val
+        markPendingChange()
+        if LouisHub.Events and LouisHub.Events.FlagChanged then
+            LouisHub.Events.FlagChanged:Fire(key, val)
         end
     end,
 })
 
-function AlanLuna:ObtenerFlag(flag)
-    return AlanLuna.Flags[flag]
+function LouisHub:GetFlag(flag)
+    return LouisHub.Flags[flag]
 end
+LouisHub.ObtenerFlag = LouisHub.GetFlag
 
-function AlanLuna:ObtenerElemento(flag)
-    return AlanLuna.Elementos[flag]
+function LouisHub:GetElement(flag)
+    return LouisHub.Elements[flag]
 end
+LouisHub.ObtenerElemento = LouisHub.GetElement
 
-function AlanLuna:ActualizarLabel(flag, texto)
-    local elem = self.Elementos[flag]
+function LouisHub:UpdateLabel(flag, text)
+    local elem = self.Elements[flag]
     if not elem then return false end
-    return pcall(elem.Set, texto)
+    return pcall(elem.Set, text)
 end
+LouisHub.ActualizarLabel = LouisHub.UpdateLabel
 
-function AlanLuna:MarcarComoUI(flagOTabla)
-    if type(flagOTabla) == "table" then
-        for _, f in ipairs(flagOTabla) do _flagsUI[f] = true end
+function LouisHub:MarkAsUI(flagOrTable)
+    if type(flagOrTable) == "table" then
+        for _, f in ipairs(flagOrTable) do _uiFlags[f] = true end
     else
-        _flagsUI[flagOTabla] = true
+        _uiFlags[flagOrTable] = true
     end
 end
+LouisHub.MarcarComoUI = LouisHub.MarkAsUI
 
-function AlanLuna:Try(flag, fallback)
-    local elem = self.Elementos[flag]
+function LouisHub:Try(flag, fallback)
+    local elem = self.Elements[flag]
     if not elem then return fallback end
     local ok, val = pcall(elem.Get)
     if not ok or val == nil then return fallback end
@@ -3242,83 +3339,92 @@ function AlanLuna:Try(flag, fallback)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 9: ERROR HANDLING & LOGGING ENGINE
+--  SECTION 9: ERROR HANDLING & LOGGING ENGINE
 -- ══════════════════════════════════════════════════════════════
-local MAX_LOGS_ERRORES = 50
-AlanLuna._Logs = {}
+local MAX_ERROR_LOGS = 50
+LouisHub._Logs = {}
 
-function AlanLuna:_RegistrarError(contexto, mensaje)
+function LouisHub:_LogError(context, message)
     table.insert(self._Logs, {
-        Momento  = os.time(),
-        Contexto = tostring(contexto or "?"),
-        Mensaje  = tostring(mensaje or ""),
+        Time    = os.time(),
+        Momento = os.time(),
+        Context = tostring(context or "?"),
+        Contexto= tostring(context or "?"),
+        Message = tostring(message or ""),
+        Mensaje = tostring(message or ""),
     })
-    if #self._Logs > MAX_LOGS_ERRORES then
+    if #self._Logs > MAX_ERROR_LOGS then
         table.remove(self._Logs, 1)
     end
-    warn("[AlanLuna] Error en '" .. tostring(contexto or "?") .. "': " .. tostring(mensaje or ""))
+    warn("[LouisHub] Error in '" .. tostring(context or "?") .. "': " .. tostring(message or ""))
 end
+LouisHub._RegistrarError = LouisHub._LogError
 
-function AlanLuna:ObtenerErrores()
-    local copia = {}
-    for i, entrada in ipairs(self._Logs) do copia[i] = clonarTabla(entrada) end
-    return copia
+function LouisHub:GetErrors()
+    local copy = {}
+    for i, entry in ipairs(self._Logs) do copy[i] = cloneTable(entry) end
+    return copy
 end
+LouisHub.ObtenerErrores = LouisHub.GetErrors
 
-local function intentarSilencioso(descripcion, fn, ...)
+local function silentTry(description, fn, ...)
     local ok, err = pcall(fn, ...)
-    if not ok and AlanLuna.DebugMode then
-        warn("[AlanLuna] (DebugMode) '" .. descripcion .. "' falló: " .. tostring(err))
+    if not ok and LouisHub.DebugMode then
+        warn("[LouisHub] (DebugMode) '" .. description .. "' failed: " .. tostring(err))
     end
     return ok, err
 end
+local intentarSilencioso = silentTry
 
-local function advertirDev(tipo, nombre, mensaje)
-    warn(("[AlanLuna] %s \"%s\": %s"):format(tipo, tostring(nombre or "?"), mensaje))
+local function warnDev(ctrlType, name, message)
+    warn(("[LouisHub] %s \"%s\": %s"):format(ctrlType, tostring(name or "?"), message))
 end
+local advertirDev = warnDev
 
-local function ejecutarConFallback(callback, contexto, ...)
+local function executeWithFallback(callback, context, ...)
     if not callback then return end
     local args = {...}
     local ok, err = pcall(function() return callback(table.unpack(args)) end)
     if not ok then
-        AlanLuna:_RegistrarError(contexto, err)
-        local mensajeCompleto = tostring(err)
-        local mensajeMostrado = mensajeCompleto:sub(1, 120)
-        if #mensajeCompleto > 120 then
-            mensajeMostrado = mensajeMostrado .. "… (ver AlanLuna:ObtenerErrores())"
+        LouisHub:_LogError(context, err)
+        local fullMsg = tostring(err)
+        local displayMsg = fullMsg:sub(1, 120)
+        if #fullMsg > 120 then
+            displayMsg = displayMsg .. "… (inspect LouisHub:GetErrors())"
         end
-        if AlanLuna.MostrarErroresEnUI ~= false and AlanLuna.Notificar then
+        if LouisHub.ShowUIErrors ~= false and (LouisHub.Notify or LouisHub.Notificar) then
             pcall(function()
-                AlanLuna:Notificar({
-                    Title = "⚠️ Error en " .. (contexto or "control"),
-                    Content = mensajeMostrado,
+                LouisHub:Notify({
+                    Title    = "⚠️ Error in " .. (context or "control"),
+                    Content  = displayMsg,
                     Duration = 6,
-                    Icon = "warning"
+                    Icon     = "warning"
                 })
             end)
         end
-        warn("[AlanLuna] Callback error (" .. (contexto or "?") .. "):", err)
+        warn("[LouisHub] Callback error (" .. (context or "?") .. "):", err)
     end
     return ok
 end
+local ejecutarConFallback = executeWithFallback
 
-local function validarCallback(tipo, cfg)
+local function validateCallback(ctrlType, cfg)
     if cfg.Callback ~= nil and type(cfg.Callback) ~= "function" then
-        advertirDev(tipo, cfg.Texto or cfg.Name, "'Callback' se pasó pero no es una función (es " .. typeof(cfg.Callback) .. "). Se ignoró.")
+        warnDev(ctrlType, cfg.Text or cfg.Texto or cfg.Name, "'Callback' provided but is not a function (got " .. typeof(cfg.Callback) .. "). Ignored.")
         cfg.Callback = nil
     end
 end
+local validarCallback = validateCallback
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 10: HARDWARE CAPABILITIES & ENVIRONMENT DIAGNOSTICS
+--  SECTION 10: HARDWARE CAPABILITIES & ENVIRONMENT DIAGNOSTICS
 -- ══════════════════════════════════════════════════════════════
-local function detectarEjecutor()
+local function detectExecutor()
     if type(getexecutorname) == "function" then
-        local ok, nombre = pcall(getexecutorname)
-        if ok and nombre and nombre ~= "" then return nombre end
+        local ok, name = pcall(getexecutorname)
+        if ok and name and name ~= "" then return name end
     end
-    local lista = {
+    local list = {
         {function() return syn ~= nil end, "Synapse X"},
         {function() return krnl ~= nil end, "Krnl"},
         {function() return fluxus ~= nil end, "Fluxus"},
@@ -3327,969 +3433,1037 @@ local function detectarEjecutor()
         {function() return is_sirhurt_closure ~= nil end, "SirHurt (alt)"},
         {function() return identifyexecutor ~= nil end, (identifyexecutor and identifyexecutor()) or "Identified Executor"},
     }
-    for _, entrada in ipairs(lista) do
-        local ok2, esEse = pcall(entrada[1])
-        if ok2 and esEse then return entrada[2] end
+    for _, entry in ipairs(list) do
+        local ok2, matches = pcall(entry[1])
+        if ok2 and matches then return entry[2] end
     end
-    return "Desconocido"
+    return "Unknown"
 end
+local detectarEjecutor = detectExecutor
 
-local TIPOS_ENTORNO_VALIDOS = {
-    PC = true, Movil = true, Tablet = true,
-    Consola = true, Studio = true, Desconocido = true,
+local VALID_ENV_TYPES = {
+    PC = true, Mobile = true, Movil = true, Tablet = true,
+    Console = true, Consola = true, Studio = true, Unknown = true, Desconocido = true,
 }
 
-AlanLuna.Capacidades = {
-    Archivos     = fsDisponible(),
+LouisHub.Capabilities = {
+    Filesystem   = isFilesystemAvailable(),
+    Archivos     = isFilesystemAvailable(),
     Drawing      = type(Drawing) == "table" and type(Drawing.new) == "function",
     ProtectGUI   = (type(syn) == "table" and type(syn.protect_gui) == "function") or type(protectgui) == "function",
     GetHUI       = type(gethui) == "function",
+    Keyboard     = UserInputService.KeyboardEnabled,
     Teclado      = UserInputService.KeyboardEnabled,
     Gamepad      = UserInputService.GamepadEnabled,
+    IsStudio     = RunService:IsStudio(),
     EsStudio     = RunService:IsStudio(),
+    TouchEnabled = UserInputService.TouchEnabled,
     TieneTouch   = UserInputService.TouchEnabled,
+    MouseEnabled = UserInputService.MouseEnabled,
     TieneMouse   = UserInputService.MouseEnabled,
-    Plataforma   = (function()
+    Platform     = (function()
         local ok, p = pcall(function() return UserInputService:GetPlatform() end)
         return (ok and p) or nil
     end)(),
+    Plataforma   = nil,
     ViewportSize = (function()
         local c = Workspace.CurrentCamera
         return c and c.ViewportSize or Vector2.new(0, 0)
     end)(),
-    Tipo         = "Desconocido",
+    Type         = "Unknown",
+    Tipo         = "Unknown",
+    IsTouch      = false,
     EsTactil     = false,
+    IsDesktop    = false,
     EsEscritorio = false,
+    IsTouchOnly  = false,
     EsTouchOnly  = false,
 }
+LouisHub.Capabilities.Plataforma = LouisHub.Capabilities.Platform
+LouisHub.Capacidades = LouisHub.Capabilities
 
-function AlanLuna.Capacidades:NombrePlataforma()
-    local p = self.Plataforma
-    if not p then return "Desconocida" end
+function LouisHub.Capabilities:PlatformName()
+    local p = self.Platform or self.Plataforma
+    if not p then return "Unknown" end
     return p.Name or tostring(p)
 end
+LouisHub.Capabilities.NombrePlataforma = LouisHub.Capabilities.PlatformName
 
-function AlanLuna:RecalcularDerivadosEntorno()
-    local C = self.Capacidades
-    local PLATAFORMAS_CONSOLA = {
+function LouisHub:RecalculateEnvironmentDerivatives()
+    local C = self.Capabilities
+    local CONSOLE_PLATFORMS = {
         XboxOne = true, XboxSeriesX = true, XboxSeriesS = true,
         PS4 = true, PS5 = true, UWP = true,
     }
-    local nombrePlataforma = C.Plataforma and C.Plataforma.Name
-    local tipo
+    local platformName = C.Platform and C.Platform.Name
+    local detectedType
 
-    if _G.AlanLuna_TipoForzado and TIPOS_ENTORNO_VALIDOS[_G.AlanLuna_TipoForzado] then
-        tipo = _G.AlanLuna_TipoForzado
-    elseif C.EsStudio then
-        tipo = "Studio"
-    elseif nombrePlataforma and PLATAFORMAS_CONSOLA[nombrePlataforma] then
-        tipo = "Consola"
-    elseif C.TieneMouse and C.Teclado then
-        tipo = "PC"
-    elseif C.TieneTouch then
+    if _G.LouisHub_ForcedType and VALID_ENV_TYPES[_G.LouisHub_ForcedType] then
+        detectedType = _G.LouisHub_ForcedType
+    elseif _G.AlanLuna_TipoForzado and VALID_ENV_TYPES[_G.AlanLuna_TipoForzado] then
+        detectedType = _G.AlanLuna_TipoForzado
+    elseif C.IsStudio then
+        detectedType = "Studio"
+    elseif platformName and CONSOLE_PLATFORMS[platformName] then
+        detectedType = "Console"
+    elseif C.MouseEnabled and C.Keyboard then
+        detectedType = "PC"
+    elseif C.TouchEnabled then
         if C.ViewportSize.Y < 500 or C.ViewportSize.X < 600 then
-            tipo = "Movil"
+            detectedType = "Mobile"
         else
-            tipo = "Tablet"
+            detectedType = "Tablet"
         end
-    elseif C.Teclado then
-        tipo = "PC"
+    elseif C.Keyboard then
+        detectedType = "PC"
     else
-        tipo = "Desconocido"
+        detectedType = "Unknown"
     end
 
-    C.Tipo         = tipo
-    C.EsTactil     = (tipo == "Movil" or tipo == "Tablet")
-    C.EsEscritorio = (tipo == "PC" or tipo == "Consola")
-    C.EsTouchOnly  = C.TieneTouch and not C.TieneMouse and not C.Teclado
+    C.Type        = detectedType
+    C.Tipo        = detectedType
+    C.IsTouch     = (detectedType == "Mobile" or detectedType == "Movil" or detectedType == "Tablet")
+    C.EsTactil    = C.IsTouch
+    C.IsDesktop   = (detectedType == "PC" or detectedType == "Console" or detectedType == "Consola")
+    C.EsEscritorio= C.IsDesktop
+    C.IsTouchOnly = C.TouchEnabled and not C.MouseEnabled and not C.Keyboard
+    C.EsTouchOnly = C.IsTouchOnly
 
-    if self.Eventos and self.Eventos.TipoCambiado then
-        self.Eventos.TipoCambiado:Fire(tipo)
+    if self.Events and self.Events.TypeChanged then
+        self.Events.TypeChanged:Fire(detectedType)
     end
-    return tipo
+    return detectedType
 end
+LouisHub.RecalcularDerivadosEntorno = LouisHub.RecalculateEnvironmentDerivatives
 
-AlanLuna:RecalcularDerivadosEntorno()
+LouisHub:RecalculateEnvironmentDerivatives()
 
-if type(_G.AlanLuna_ConexionesCapacidades) == "table" then
-    for _, c in ipairs(_G.AlanLuna_ConexionesCapacidades) do
+if type(_G.LouisHub_CapabilitiesConnections) == "table" then
+    for _, c in ipairs(_G.LouisHub_CapabilitiesConnections) do
         pcall(function() if c and c.Connected then c:Disconnect() end end)
     end
 end
-_G.AlanLuna_ConexionesCapacidades = {}
+_G.LouisHub_CapabilitiesConnections = {}
 
-local function engancharViewportCapacidades(camara)
-    if not camara then return end
-    local conexion = camara:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-        AlanLuna.Capacidades.ViewportSize = camara.ViewportSize
-        AlanLuna:RecalcularDerivadosEntorno()
+local function hookViewportCapabilities(cam)
+    if not cam then return end
+    local conn = cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+        LouisHub.Capabilities.ViewportSize = cam.ViewportSize
+        LouisHub:RecalculateEnvironmentDerivatives()
     end)
-    table.insert(_G.AlanLuna_ConexionesCapacidades, conexion)
+    table.insert(_G.LouisHub_CapabilitiesConnections, conn)
 end
 
-engancharViewportCapacidades(Workspace.CurrentCamera)
-table.insert(_G.AlanLuna_ConexionesCapacidades,
+hookViewportCapabilities(Workspace.CurrentCamera)
+table.insert(_G.LouisHub_CapabilitiesConnections,
     Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
-        local c = Workspace.CurrentCamera
-        if not c then return end
-        AlanLuna.Capacidades.ViewportSize = c.ViewportSize
-        AlanLuna:RecalcularDerivadosEntorno()
-        engancharViewportCapacidades(c)
+        local cam = Workspace.CurrentCamera
+        if not cam then return end
+        LouisHub.Capabilities.ViewportSize = cam.ViewportSize
+        LouisHub:RecalculateEnvironmentDerivatives()
+        hookViewportCapabilities(cam)
     end)
 )
 
-AlanLuna.Features = {
-    { nombre = "GUI",          claveCapacidad = nil,          test = function() return true end, nivel = "requerido" },
-    { nombre = "Archivos",     claveCapacidad = "Archivos",   nivel = "recomendado", mensaje = "No se podrán guardar configuraciones." },
-    { nombre = "Drawing",      claveCapacidad = "Drawing",    nivel = "recomendado", mensaje = "Los ESP visuales no funcionarán." },
-    { nombre = "ProtectGUI",   claveCapacidad = "ProtectGUI", nivel = "recomendado", mensaje = "La GUI puede ser detectada por anti-cheats." },
-    { nombre = "GetHUI",       claveCapacidad = "GetHUI",     nivel = "recomendado", mensaje = "La GUI puede quedar detrás del CoreGui." },
-    { nombre = "Teclado",      claveCapacidad = "Teclado",    nivel = "opcional",    mensaje = "Los Keybind se activarán en modo táctil." },
-    { nombre = "Gamepad",      claveCapacidad = "Gamepad",    nivel = "opcional",    mensaje = "No se podrá usar control para atajos." },
-    { nombre = "Loadstring",   test = function() return type(loadstring) == "function" end, nivel = "opcional", mensaje = "No se podrán cargar scripts externos." },
-    { nombre = "SetClipboard", test = function() return type(setclipboard) == "function" end, nivel = "opcional", mensaje = "No se podrá copiar texto al portapapeles." },
+LouisHub.Features = {
+    { name = "GUI",          nombre = "GUI",          capKey = nil,             test = function() return true end, level = "required",    nivel = "requerido" },
+    { name = "Filesystem",   nombre = "Archivos",     capKey = "Filesystem",    level = "recommended", nivel = "recomendado", message = "Configurations will not save to disk.", mensaje = "No se podrán guardar configuraciones." },
+    { name = "Drawing",      nombre = "Drawing",      capKey = "Drawing",       level = "recommended", nivel = "recomendado", message = "Visual ESP components will not function.", mensaje = "Los ESP visuales no funcionarán." },
+    { name = "ProtectGUI",   nombre = "ProtectGUI",   capKey = "ProtectGUI",    level = "recommended", nivel = "recomendado", message = "GUI might be detected by client checks.", mensaje = "La GUI puede ser detectada por anti-cheats." },
+    { name = "GetHUI",       nombre = "GetHUI",       capKey = "GetHUI",        level = "recommended", nivel = "recomendado", message = "GUI might render behind CoreGui elements.", mensaje = "La GUI puede quedar detrás del CoreGui." },
+    { name = "Keyboard",     nombre = "Teclado",      capKey = "Keyboard",      level = "optional",    nivel = "opcional",    message = "Keybinds will default to touch-cancel mode.", mensaje = "Los Keybind se activarán en modo táctil." },
+    { name = "Gamepad",      nombre = "Gamepad",      capKey = "Gamepad",       level = "optional",    nivel = "opcional",    message = "Gamepad shortcuts will be unavailable.", mensaje = "No se podrá usar control para atajos." },
+    { name = "Loadstring",   nombre = "Loadstring",   test = function() return type(loadstring) == "function" end, level = "optional", nivel = "opcional", message = "External scripts cannot be evaluated.", mensaje = "No se podrán cargar scripts externos." },
+    { name = "SetClipboard", nombre = "SetClipboard", test = function() return type(setclipboard) == "function" end, level = "optional", nivel = "opcional", message = "Cannot copy text to system clipboard.", mensaje = "No se podrá copiar texto al portapapeles." },
 }
 
-local _indiceFeatures = {}
-for _, f in ipairs(AlanLuna.Features) do _indiceFeatures[f.nombre] = f end
+local _featuresIndex = {}
+for _, f in ipairs(LouisHub.Features) do
+    _featuresIndex[f.name] = f
+    _featuresIndex[f.nombre] = f
+end
 
-function AlanLuna:VerificarSoporte(nombre)
-    local f = _indiceFeatures[nombre]
+function LouisHub:VerifySupport(featureName)
+    local f = _featuresIndex[featureName]
     if not f then
-        return { ok = false, nivel = "desconocido", nombre = nombre, mensaje = "Función no reconocida por AlanLuna." }
+        return { ok = false, level = "unknown", nivel = "desconocido", name = featureName, message = "Feature not recognized by LouisHub." }
     end
     local ok = false
-    if f.claveCapacidad then
-        ok = self.Capacidades[f.claveCapacidad] == true
+    if f.capKey then
+        ok = self.Capabilities[f.capKey] == true or self.Capabilities[f.nombre] == true
     elseif f.test then
-        local okTest, r = pcall(f.test)
-        ok = okTest and r == true
+        local okTest, res = pcall(f.test)
+        ok = okTest and res == true
     end
-    return { ok = ok, nivel = f.nivel, nombre = f.nombre, mensaje = ok and nil or f.mensaje }
+    return { ok = ok, level = f.level, nivel = f.nivel, name = f.name, message = ok and nil or f.message }
 end
+LouisHub.VerificarSoporte = LouisHub.VerifySupport
 
-function AlanLuna:ForzarTipo(tipo)
-    if tipo and not TIPOS_ENTORNO_VALIDOS[tipo] then
-        return false, "Tipo inválido. Válidos: PC, Movil, Tablet, Consola, Studio, Desconocido."
+function LouisHub:ForceType(envType)
+    if envType and not VALID_ENV_TYPES[envType] then
+        return false, "Invalid environment type. Valid: PC, Mobile, Tablet, Console, Studio, Unknown."
     end
-    _G.AlanLuna_TipoForzado = tipo
-    self:RecalcularDerivadosEntorno()
+    _G.LouisHub_ForcedType = envType
+    _G.AlanLuna_TipoForzado = envType
+    self:RecalculateEnvironmentDerivatives()
     return true
 end
+LouisHub.ForzarTipo = LouisHub.ForceType
 
-function AlanLuna:LiberarForzado()
-    return self:ForzarTipo(nil)
+function LouisHub:ReleaseForcedType()
+    return self:ForceType(nil)
 end
+LouisHub.LiberarForzado = LouisHub.ReleaseForcedType
 
-function AlanLuna:DiagnosticoCompleto()
-    local C = self.Capacidades
-    local soportadas, total, advertencias = 0, 0, {}
+function LouisHub:FullDiagnostics()
+    local C = self.Capabilities
+    local supportedCount, totalCount, warnings = 0, 0, {}
     for _, f in ipairs(self.Features) do
-        total = total + 1
-        local r = self:VerificarSoporte(f.nombre)
+        totalCount = totalCount + 1
+        local r = self:VerifySupport(f.name)
         if r.ok then
-            soportadas = soportadas + 1
-        elseif f.nivel ~= "requerido" then
-            table.insert(advertencias, {
-                nombre  = f.nombre,
-                nivel   = f.nivel,
-                mensaje = r.mensaje,
+            supportedCount = supportedCount + 1
+        elseif f.level ~= "required" and f.nivel ~= "requerido" then
+            table.insert(warnings, {
+                name    = f.name,
+                level   = f.level,
+                message = r.message,
             })
         end
     end
     return {
-        Tipo          = C.Tipo,
-        Plataforma    = C:NombrePlataforma(),
-        EsStudio      = C.EsStudio,
-        Ejecutor      = detectarEjecutor(),
+        Type          = C.Type,
+        Platform      = C:PlatformName(),
+        IsStudio      = C.IsStudio,
+        Executor      = detectExecutor(),
         Viewport      = C.ViewportSize,
-        Forzado       = _G.AlanLuna_TipoForzado,
-        FeaturesOk    = soportadas,
-        FeaturesTotal = total,
-        Advertencias  = advertencias,
-        Capacidades   = C,
+        ForcedType    = _G.LouisHub_ForcedType,
+        FeaturesOk    = supportedCount,
+        FeaturesTotal = totalCount,
+        Warnings      = warnings,
+        Capabilities  = C,
     }
 end
+LouisHub.DiagnosticoCompleto = LouisHub.FullDiagnostics
 
-function AlanLuna:Profiler()
-    local datos = {
-        Flags      = 0,
-        Elementos  = 0,
-        Conexiones = 0,
-        Hilos      = 0,
-        Dibujos    = 0,
-        Instancias = 0,
-        ObjetosGui = 0,
-        MemoriaMb  = nil,
+function LouisHub:Profiler()
+    local data = {
+        Flags       = 0,
+        Elements    = 0,
+        Connections = 0,
+        Threads     = 0,
+        Drawings    = 0,
+        Instances   = 0,
+        GuiObjects  = 0,
+        MemoryMb    = nil,
     }
-    for _ in pairs(_flagsReales) do datos.Flags = datos.Flags + 1 end
-    for _ in pairs(AlanLuna.Elementos) do datos.Elementos = datos.Elementos + 1 end
-    local instancia = _G.AlanLuna_Instancia
-    if instancia then
-        datos.Conexiones = #(instancia.Conexiones or {})
-        datos.Hilos      = #(instancia.Hilos or {})
-        datos.Dibujos    = #(instancia.Dibujos or {})
-        datos.Instancias = #(instancia.Instancias or {})
+    for _ in pairs(_realFlags) do data.Flags = data.Flags + 1 end
+    for _ in pairs(LouisHub.Elements) do data.Elements = data.Elements + 1 end
+    local inst = _G.LouisHub_Instance
+    if inst then
+        data.Connections = #(inst.Connections or {})
+        data.Threads     = #(inst.Threads or {})
+        data.Drawings    = #(inst.Drawings or {})
+        data.Instances   = #(inst.Instances or {})
     end
-    local okGui, padreGui = pcall(obtenerPadreGui)
-    if okGui and padreGui then
-        local sg = padreGui:FindFirstChild("AlanLuna_ScreenGui")
+    local okGui, parentGui = pcall(getGuiParent)
+    if okGui and parentGui then
+        local sg = parentGui:FindFirstChild("LouisHub_ScreenGui") or parentGui:FindFirstChild("AlanLuna_ScreenGui")
         if sg then
             local okDesc, desc = pcall(function() return sg:GetDescendants() end)
-            if okDesc then datos.ObjetosGui = #desc end
+            if okDesc then data.GuiObjects = #desc end
         end
     end
     local okStats, statsService = pcall(function() return game:GetService("Stats") end)
     if okStats and statsService then
         local okMem, mem = pcall(function() return statsService:GetTotalMemoryUsageMb() end)
         if okMem and type(mem) == "number" and mem > 0 then
-            datos.MemoriaMb = math.floor(mem + 0.5)
+            data.MemoryMb = math.floor(mem + 0.5)
         end
     end
-    print(("[AlanLuna] Profiler -> Flags:%d  Elementos:%d  Conexiones:%d  Hilos:%d  Dibujos:%d  Instancias:%d  ObjetosGUI:%d  Memoria:%s")
-        :format(datos.Flags, datos.Elementos, datos.Conexiones, datos.Hilos,
-                datos.Dibujos, datos.Instancias, datos.ObjetosGui,
-                datos.MemoriaMb and ("~" .. datos.MemoriaMb .. "MB") or "N/D"))
-    return datos
+    print(("[LouisHub] Profiler -> Flags:%d  Elements:%d  Connections:%d  Threads:%d  Drawings:%d  Instances:%d  GuiObjects:%d  Memory:%s")
+        :format(data.Flags, data.Elements, data.Connections, data.Threads,
+                data.Drawings, data.Instances, data.GuiObjects,
+                data.MemoryMb and ("~" .. data.MemoryMb .. "MB") or "N/A"))
+    return data
 end
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 11: UNDO / REDO HISTORY ENGINE
+--  SECTION 11: UNDO / REDO HISTORY ENGINE
 -- ══════════════════════════════════════════════════════════════
-AlanLuna._historial = { deshacer = {}, rehacer = {}, ultimos = {}, pausa = 0 }
-local MAX_HISTORIAL = 50
+LouisHub._history = { undo = {}, redo = {}, lastValues = {}, pause = 0 }
+LouisHub._historial = LouisHub._history
+local MAX_HISTORY = 50
 
-local function avisarHistorial()
-    local h = AlanLuna._historial
-    AlanLuna.Eventos.HistorialCambiado:Fire(#h.deshacer, #h.rehacer)
+local function notifyHistoryChanged()
+    local h = LouisHub._history
+    LouisHub.Events.HistoryChanged:Fire(#h.undo, #h.redo)
 end
 
-if type(_G.AlanLuna_ConexionesModulo) == "table" then
-    for _, c in ipairs(_G.AlanLuna_ConexionesModulo) do
+if type(_G.LouisHub_ModuleConnections) == "table" then
+    for _, c in ipairs(_G.LouisHub_ModuleConnections) do
         pcall(function() c:Disconnect() end)
     end
 end
-_G.AlanLuna_ConexionesModulo = {}
+_G.LouisHub_ModuleConnections = {}
 
-table.insert(_G.AlanLuna_ConexionesModulo, AlanLuna.Eventos.FlagCambiada:Connect(function(flag, valor)
-    local h = AlanLuna._historial
-    local previo = h.ultimos[flag]
-    h.ultimos[flag] = copiarDefecto(valor)
-    if h.pausa > 0 or _flagsUI[flag] or _flagsNoPersistir[flag] then return end
-    local elem = AlanLuna.Elementos[flag]
-    if previo == nil and elem then previo = elem._defecto end
-    if previo == nil then return end
-    if type(valor) ~= "table" and previo == valor then return end
+table.insert(_G.LouisHub_ModuleConnections, LouisHub.Events.FlagChanged:Connect(function(flag, val)
+    local h = LouisHub._history
+    local prev = h.lastValues[flag]
+    h.lastValues[flag] = copyDefault(val)
+    if h.pause > 0 or _uiFlags[flag] or _nonPersistentFlags[flag] then return end
+    local elem = LouisHub.Elements[flag]
+    if prev == nil and elem then prev = elem._defecto end
+    if prev == nil then return end
+    if type(val) ~= "table" and prev == val then return end
 
-    local ahora = os.clock()
-    local ultima = h.deshacer[#h.deshacer]
-    if ultima and #ultima.cambios == 1 and ultima.cambios[1].flag == flag and ahora - ultima.t < 0.6 then
-        ultima.cambios[1].despues = copiarDefecto(valor)
-        ultima.t = ahora
-        if type(valor) ~= "table" and ultima.cambios[1].antes == valor then
-            table.remove(h.deshacer)
+    local now = os.clock()
+    local lastEntry = h.undo[#h.undo]
+    if lastEntry and #lastEntry.changes == 1 and lastEntry.changes[1].flag == flag and now - lastEntry.t < 0.6 then
+        lastEntry.changes[1].after = copyDefault(val)
+        lastEntry.t = now
+        if type(val) ~= "table" and lastEntry.changes[1].before == val then
+            table.remove(h.undo)
         end
-    elseif ultima and ahora - ultima.t < 0.05 then
-        table.insert(ultima.cambios, { flag = flag, antes = copiarDefecto(previo), despues = copiarDefecto(valor) })
-        ultima.t = ahora
+    elseif lastEntry and now - lastEntry.t < 0.05 then
+        table.insert(lastEntry.changes, { flag = flag, before = copyDefault(prev), after = copyDefault(val) })
+        lastEntry.t = now
     else
-        table.insert(h.deshacer, {
-            t = ahora,
-            cambios = { { flag = flag, antes = copiarDefecto(previo), despues = copiarDefecto(valor) } },
+        table.insert(h.undo, {
+            t = now,
+            changes = { { flag = flag, before = copyDefault(prev), after = copyDefault(val) } },
         })
-        if #h.deshacer > MAX_HISTORIAL then table.remove(h.deshacer, 1) end
+        if #h.undo > MAX_HISTORY then table.remove(h.undo, 1) end
     end
-    h.rehacer = {}
-    avisarHistorial()
+    h.redo = {}
+    notifyHistoryChanged()
 end))
 
-local function aplicarCambiosHistorial(cambios, usarAntes, enReverso)
-    local h = AlanLuna._historial
-    h.pausa = h.pausa + 1
-    local total = #cambios
+local function applyHistoryChanges(changes, useBefore, inReverse)
+    local h = LouisHub._history
+    h.pause = h.pause + 1
+    local total = #changes
     for i = 1, total do
-        local c = cambios[enReverso and (total - i + 1) or i]
-        local elem = AlanLuna.Elementos[c.flag]
+        local c = changes[inReverse and (total - i + 1) or i]
+        local elem = LouisHub.Elements[c.flag]
         if elem and type(elem.Set) == "function" then
-            local fuente = usarAntes and c.antes or c.despues
-            local valor = copiarDefecto(fuente)
-            pcall(elem.Set, valor, true)
-            h.ultimos[c.flag] = copiarDefecto(valor)
+            local source = useBefore and c.before or c.after
+            local val = copyDefault(source)
+            pcall(elem.Set, val, true)
+            h.lastValues[c.flag] = copyDefault(val)
         end
     end
-    h.pausa = h.pausa - 1
+    h.pause = h.pause - 1
 end
 
-function AlanLuna:Deshacer()
-    local h = self._historial
-    local entrada = table.remove(h.deshacer)
-    if not entrada then return false end
-    aplicarCambiosHistorial(entrada.cambios, true, true)
-    table.insert(h.rehacer, entrada)
-    avisarHistorial()
-    return true, entrada
+function LouisHub:Undo()
+    local h = self._history
+    local entry = table.remove(h.undo)
+    if not entry then return false end
+    applyHistoryChanges(entry.changes, true, true)
+    table.insert(h.redo, entry)
+    notifyHistoryChanged()
+    return true, entry
 end
+LouisHub.Deshacer = LouisHub.Undo
 
-function AlanLuna:Rehacer()
-    local h = self._historial
-    local entrada = table.remove(h.rehacer)
-    if not entrada then return false end
-    aplicarCambiosHistorial(entrada.cambios, false, false)
-    table.insert(h.deshacer, entrada)
-    avisarHistorial()
-    return true, entrada
+function LouisHub:Redo()
+    local h = self._history
+    local entry = table.remove(h.redo)
+    if not entry then return false end
+    applyHistoryChanges(entry.changes, false, false)
+    table.insert(h.undo, entry)
+    notifyHistoryChanged()
+    return true, entry
 end
+LouisHub.Rehacer = LouisHub.Redo
 
-function AlanLuna:PuedeDeshacer() return #self._historial.deshacer > 0 end
-function AlanLuna:PuedeRehacer() return #self._historial.rehacer > 0 end
-function AlanLuna:ObtenerHistorial() return { Deshacer = #self._historial.deshacer, Rehacer = #self._historial.rehacer } end
+function LouisHub:CanUndo() return #self._history.undo > 0 end
+LouisHub.PuedeDeshacer = LouisHub.CanUndo
 
-function AlanLuna:LimpiarHistorial()
-    local h = self._historial
-    h.deshacer, h.rehacer, h.ultimos = {}, {}, {}
-    for flag, elem in pairs(self.Elementos) do
+function LouisHub:CanRedo() return #self._history.redo > 0 end
+LouisHub.PuedeRehacer = LouisHub.CanRedo
+
+function LouisHub:GetHistory() return { Undo = #self._history.undo, Redo = #self._history.redo, Deshacer = #self._history.undo, Rehacer = #self._history.redo } end
+LouisHub.ObtenerHistorial = LouisHub.GetHistory
+
+function LouisHub:ClearHistory()
+    local h = self._history
+    h.undo, h.redo, h.lastValues = {}, {}, {}
+    for flag, elem in pairs(self.Elements) do
         if type(elem) == "table" and type(elem.Get) == "function" then
-            local ok, valor = pcall(elem.Get)
-            if ok and valor ~= nil then h.ultimos[flag] = copiarDefecto(valor) end
+            local ok, val = pcall(elem.Get)
+            if ok and val ~= nil then h.lastValues[flag] = copyDefault(val) end
         end
     end
-    avisarHistorial()
+    notifyHistoryChanged()
 end
+LouisHub.LimpiarHistorial = LouisHub.ClearHistory
 
-function AlanLuna:DescribirCambio(entrada)
-    if type(entrada) ~= "table" or not entrada.cambios or #entrada.cambios == 0 then return "" end
-    local primero = entrada.cambios[1]
-    local function texto(v)
-        if type(v) == "table" then return "[tabla]" end
+function LouisHub:DescribeChange(entry)
+    if type(entry) ~= "table" or not entry.changes or #entry.changes == 0 then return "" end
+    local first = entry.changes[1]
+    local function text(v)
+        if type(v) == "table" then return "[table]" end
         return tostring(v)
     end
-    local resumen = tostring(primero.flag) .. ": " .. texto(primero.antes) .. " -> " .. texto(primero.despues)
-    if #entrada.cambios > 1 then resumen = resumen .. " (+" .. (#entrada.cambios - 1) .. ")" end
-    return resumen
+    local summary = tostring(first.flag) .. ": " .. text(first.before) .. " -> " .. text(first.after)
+    if #entry.changes > 1 then summary = summary .. " (+" .. (#entry.changes - 1) .. ")" end
+    return summary
 end
+LouisHub.DescribirCambio = LouisHub.DescribeChange
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 12: UNIFIED SAVE MANAGER v3 (LUNA & ALANUI FORMATS)
+--  SECTION 12: UNIFIED SAVE MANAGER v3 (MULTI-FORMAT SUPPORT)
 -- ══════════════════════════════════════════════════════════════
-local VERSION_FORMATO_GUARDADO = 3
-_G.AlanLuna_EstadoNavegacion = { cat = nil, tab = nil, sub = nil }
+local SAVE_FORMAT_VERSION = 3
+_G.LouisHub_NavigationState = { cat = nil, tab = nil, sub = nil }
+_G.AlanLuna_EstadoNavegacion = _G.LouisHub_NavigationState
 
-local function esColor3(v) return typeof and typeof(v) == "Color3" end
-local function esEnum(v) return typeof and typeof(v) == "EnumItem" end
+local function isColor3Type(v) return typeof and typeof(v) == "Color3" end
+local function isEnumType(v) return typeof and typeof(v) == "EnumItem" end
 
-local function empaquetarFlagsParaGuardar(flags, soloUI)
-    local resultado = {
-        __version = VERSION_FORMATO_GUARDADO,
-        __navegacion = _G.AlanLuna_EstadoNavegacion
+local function packFlagsForSaving(flags, uiOnly)
+    local result = {
+        __version = SAVE_FORMAT_VERSION,
+        __navigation = _G.LouisHub_NavigationState
     }
-    for clave, valor in pairs(flags) do
-        local omitir = _flagsNoPersistir[clave]
-            or (soloUI and not _flagsUI[clave])
-            or (not soloUI and _flagsUI[clave])
-        if not omitir then
-            if esColor3(valor) then
-                resultado[clave] = {
+    for key, val in pairs(flags) do
+        local skip = _nonPersistentFlags[key]
+            or (uiOnly and not _uiFlags[key])
+            or (not uiOnly and _uiFlags[key])
+        if not skip then
+            if isColor3Type(val) then
+                result[key] = {
                     __color3 = true,
-                    R = math.floor(valor.R * 255 + 0.5),
-                    G = math.floor(valor.G * 255 + 0.5),
-                    B = math.floor(valor.B * 255 + 0.5),
+                    R = math.floor(val.R * 255 + 0.5),
+                    G = math.floor(val.G * 255 + 0.5),
+                    B = math.floor(val.B * 255 + 0.5),
                 }
-            elseif esEnum(valor) then
-                resultado[clave] = {
+            elseif isEnumType(val) then
+                result[key] = {
                     __enum = true,
-                    EnumType = tostring(valor.EnumType),
-                    Name = valor.Name,
+                    EnumType = tostring(val.EnumType),
+                    Name = val.Name,
                 }
-            elseif type(valor) == "table" and esEnum(valor.KeyCode) then
-                resultado[clave] = {
+            elseif type(val) == "table" and isEnumType(val.KeyCode) then
+                result[key] = {
                     __keybindMods = true,
-                    KeyCode = valor.KeyCode.Name,
-                    Ctrl = valor.Ctrl or false,
-                    Shift = valor.Shift or false,
-                    Alt = valor.Alt or false,
+                    KeyCode = val.KeyCode.Name,
+                    Ctrl = val.Ctrl or false,
+                    Shift = val.Shift or false,
+                    Alt = val.Alt or false,
                 }
             else
-                resultado[clave] = valor
+                result[key] = val
             end
         end
     end
-    return resultado
+    return result
 end
 
-local function desempaquetarValorCargado(valor)
-    if type(valor) == "table" and valor.__color3 then
-        return Color3.fromRGB(valor.R or 0, valor.G or 0, valor.B or 0)
+local function unpackLoadedValue(val)
+    if type(val) == "table" and val.__color3 then
+        return Color3.fromRGB(val.R or 0, val.G or 0, val.B or 0)
     end
-    if type(valor) == "table" and valor.__enum then
-        local ok, enumItem = pcall(function() return Enum[valor.EnumType][valor.Name] end)
+    if type(val) == "table" and val.__enum then
+        local ok, enumItem = pcall(function() return Enum[val.EnumType][val.Name] end)
         return (ok and enumItem) or Enum.KeyCode.Unknown
     end
-    if type(valor) == "table" and valor.__keybindMods then
-        local ok, keyCode = pcall(function() return Enum.KeyCode[valor.KeyCode] end)
+    if type(val) == "table" and val.__keybindMods then
+        local ok, keyCode = pcall(function() return Enum.KeyCode[val.KeyCode] end)
         return {
             KeyCode = ok and keyCode or Enum.KeyCode.Unknown,
-            Ctrl = valor.Ctrl or false,
-            Shift = valor.Shift or false,
-            Alt = valor.Alt or false,
+            Ctrl = val.Ctrl or false,
+            Shift = val.Shift or false,
+            Alt = val.Alt or false,
         }
     end
-    return valor
+    return val
 end
 
-local function prepararDatosCargados(datos)
-    if type(datos) ~= "table" then return {} end
+local function prepareLoadedData(data)
+    if type(data) ~= "table" then return {} end
 
-    if type(datos.objects) == "table" then
-        local migrado = {}
-        for _, obj in ipairs(datos.objects) do
+    if type(data.objects) == "table" then
+        local migrated = {}
+        for _, obj in ipairs(data.objects) do
             if obj.flag then
                 if obj.state ~= nil then
-                    migrado[obj.flag] = obj.state
+                    migrated[obj.flag] = obj.state
                 elseif obj.value ~= nil then
-                    migrado[obj.flag] = tonumber(obj.value) or obj.value
+                    migrated[obj.flag] = tonumber(obj.value) or obj.value
                 elseif obj.text ~= nil then
-                    migrado[obj.flag] = obj.text
+                    migrated[obj.flag] = obj.text
                 elseif obj.color ~= nil then
                     if type(obj.color) == "string" and obj.color:sub(1,1) == "#" then
                         local r = tonumber(obj.color:sub(2, 3), 16) or 255
                         local g = tonumber(obj.color:sub(4, 5), 16) or 255
                         local b = tonumber(obj.color:sub(6, 7), 16) or 255
-                        migrado[obj.flag] = Color3.fromRGB(r, g, b)
+                        migrated[obj.flag] = Color3.fromRGB(r, g, b)
                     end
                 end
             end
         end
-        return migrado
+        return migrated
     end
 
-    local versionOrigen = tonumber(datos.__version) or 1
-    datos.__version = nil
+    local sourceVersion = tonumber(data.__version) or 1
+    data.__version = nil
 
-    if datos.__navegacion and type(datos.__navegacion) == "table" then
-        _G.AlanLuna_EstadoNavegacion = datos.__navegacion
-        datos.__navegacion = nil
+    if data.__navigation and type(data.__navigation) == "table" then
+        _G.LouisHub_NavigationState = data.__navigation
+        data.__navigation = nil
     end
 
-    if versionOrigen > VERSION_FORMATO_GUARDADO then
+    if sourceVersion > SAVE_FORMAT_VERSION then
         pcall(function()
-            AlanLuna:Notificar({
-                Title   = "⚠️ Config más nueva",
-                Content = "El archivo guardado es de un formato más reciente (v" .. versionOrigen .. ").",
+            LouisHub:Notify({
+                Title    = "⚠️ Newer Config",
+                Content  = "The config file is from a newer version (v" .. sourceVersion .. ").",
                 Duration = 5,
-                Icon = "warning"
+                Icon     = "warning"
             })
         end)
     end
 
-    return datos
+    return data
 end
 
-AlanLuna.SaveManager = {}
-local SM = AlanLuna.SaveManager
-SM.Carpeta = "AlanUI/Config"
-SM.CarpetaUI = "AlanUI/Config/_ui"
+LouisHub.SaveManager = {}
+local SM = LouisHub.SaveManager
+SM.Folder = "LouisHub/Config"
+SM.FolderUI = "LouisHub/Config/_ui"
+SM.Carpeta = SM.Folder
+SM.CarpetaUI = SM.FolderUI
 
-function SM:Configurar(carpeta) self.Carpeta = carpeta or self.Carpeta end
+function SM:Configure(folder)
+    self.Folder = folder or self.Folder
+    self.Carpeta = self.Folder
+end
+SM.Configurar = SM.Configure
 
-local function asegurarCarpeta()
-    if not (fsDisponible() and type(isfolder) == "function" and type(makefolder) == "function") then return end
-    local ruta = ""
-    for parte in SM.Carpeta:gmatch("[^/]+") do
-        ruta = ruta == "" and parte or (ruta .. "/" .. parte)
-        if not isfolder(ruta) then pcall(makefolder, ruta) end
+local function ensureFolder()
+    if not (isFilesystemAvailable() and type(isfolder) == "function" and type(makefolder) == "function") then return end
+    local path = ""
+    for part in SM.Folder:gmatch("[^/]+") do
+        path = path == "" and part or (path .. "/" .. part)
+        if not isfolder(path) then pcall(makefolder, path) end
     end
 end
 
-local function asegurarCarpetaUI()
-    if not (fsDisponible() and type(isfolder) == "function" and type(makefolder) == "function") then return end
-    local ruta = ""
-    for parte in SM.CarpetaUI:gmatch("[^/]+") do
-        ruta = ruta == "" and parte or (ruta .. "/" .. parte)
-        if not isfolder(ruta) then pcall(makefolder, ruta) end
+local function ensureFolderUI()
+    if not (isFilesystemAvailable() and type(isfolder) == "function" and type(makefolder) == "function") then return end
+    local path = ""
+    for part in SM.FolderUI:gmatch("[^/]+") do
+        path = path == "" and part or (path .. "/" .. part)
+        if not isfolder(path) then pcall(makefolder, path) end
     end
 end
 
-function SM:Guardar(nombre)
-    nombre = nombre or "default"
-    if not fsDisponible() then
-        AlanLuna:Notificar({Title = "SaveManager", Content = "Ejecutor sin soporte de archivos.", Duration = 4, Icon = "warning"})
+function SM:Save(name)
+    name = name or "default"
+    if not isFilesystemAvailable() then
+        LouisHub:Notify({Title = "SaveManager", Content = "Executor missing filesystem support.", Duration = 4, Icon = "warning"})
         return false, "No filesystem support"
     end
-    asegurarCarpeta()
-    local ruta = SM.Carpeta .. "/" .. nombre .. ".json"
-    local huboCambios = true
+    ensureFolder()
+    local path = SM.Folder .. "/" .. name .. ".json"
+    local hadChanges = true
     local ok, err = pcall(function()
-        local datos = empaquetarFlagsParaGuardar(_flagsReales)
-        local json = HttpService:JSONEncode(datos)
-        if type(isfile) == "function" and isfile(ruta) then
-            local okLeer, jsonExistente = pcall(readfile, ruta)
-            if okLeer and jsonExistente == json then
-                huboCambios = false
+        local data = packFlagsForSaving(_realFlags)
+        local json = HttpService:JSONEncode(data)
+        if type(isfile) == "function" and isfile(path) then
+            local okRead, existingJson = pcall(readfile, path)
+            if okRead and existingJson == json then
+                hadChanges = false
             end
         end
-        if huboCambios then writefile(ruta, json) end
+        if hadChanges then writefile(path, json) end
     end)
     if ok then
-        if huboCambios then
-            AlanLuna:Notificar({Title = "Configuración guardada", Content = nombre .. ".json", Duration = 3, Icon = "check_circle"})
+        if hadChanges then
+            LouisHub:Notify({Title = "Config Saved", Content = name .. ".json", Duration = 3, Icon = "check_circle"})
         else
-            AlanLuna:Notificar({Title = "✅ Ya estaba al día", Content = nombre .. ".json sin cambios", Duration = 3, Icon = "info"})
+            LouisHub:Notify({Title = "✅ Already Up to Date", Content = name .. ".json has no changes", Duration = 3, Icon = "info"})
         end
     else
-        AlanLuna:_RegistrarError("SaveManager:Guardar", err)
-        AlanLuna:Notificar({Title = "❌ Error al guardar", Content = tostring(err):sub(1, 100), Duration = 5, Icon = "warning"})
+        LouisHub:_LogError("SaveManager:Save", err)
+        LouisHub:Notify({Title = "❌ Save Error", Content = tostring(err):sub(1, 100), Duration = 5, Icon = "warning"})
     end
     return ok, err
 end
+SM.Guardar = SM.Save
 
-function SM:GuardarSilencioso(nombre)
-    nombre = nombre or "default"
-    if not fsDisponible() then return false end
-    asegurarCarpeta()
+function SM:SaveSilent(name)
+    name = name or "default"
+    if not isFilesystemAvailable() then return false end
+    ensureFolder()
     local ok, err = pcall(function()
-        local datos = empaquetarFlagsParaGuardar(_flagsReales)
-        local json = HttpService:JSONEncode(datos)
-        writefile(SM.Carpeta .. "/" .. nombre .. ".json", json)
+        local data = packFlagsForSaving(_realFlags)
+        local json = HttpService:JSONEncode(data)
+        writefile(SM.Folder .. "/" .. name .. ".json", json)
     end)
-    if not ok then AlanLuna:_RegistrarError("SaveManager:GuardarSilencioso", err) end
+    if not ok then LouisHub:_LogError("SaveManager:SaveSilent", err) end
     return ok
 end
+SM.GuardarSilencioso = SM.SaveSilent
 
-function SM:Cargar(nombre)
-    nombre = nombre or "default"
-    local ruta = SM.Carpeta .. "/" .. nombre .. ".json"
-    if not (fsDisponible() and type(isfile) == "function" and isfile(ruta)) then return false end
+function SM:Load(name)
+    name = name or "default"
+    local path = SM.Folder .. "/" .. name .. ".json"
+    if not (isFilesystemAvailable() and type(isfile) == "function" and isfile(path)) then return false end
 
-    local okLeer, contenido = pcall(readfile, ruta)
-    if not okLeer then
-        AlanLuna:_RegistrarError("SaveManager:Cargar (leer)", contenido)
+    local okRead, content = pcall(readfile, path)
+    if not okRead then
+        LouisHub:_LogError("SaveManager:Load (read)", content)
         return false
     end
-    local okDecode, datos = pcall(function() return HttpService:JSONDecode(contenido) end)
+    local okDecode, data = pcall(function() return HttpService:JSONDecode(content) end)
     if not okDecode then
-        AlanLuna:_RegistrarError("SaveManager:Cargar (JSONDecode)", datos)
+        LouisHub:_LogError("SaveManager:Load (JSONDecode)", data)
         return false
     end
-    datos = prepararDatosCargados(datos)
+    data = prepareLoadedData(data)
 
-    _cargandoDesdeArchivo = true
-    local okBucle, errBucle = pcall(function()
-        for flag, valorCrudo in pairs(datos) do
-            local valor = desempaquetarValorCargado(valorCrudo)
-            AlanLuna.Flags[flag] = valor
-            if AlanLuna.Elementos[flag] then
-                pcall(AlanLuna.Elementos[flag].Set, valor, true)
+    _isLoadingFromFile = true
+    local okLoop, errLoop = pcall(function()
+        for flag, rawVal in pairs(data) do
+            local val = unpackLoadedValue(rawVal)
+            LouisHub.Flags[flag] = val
+            if LouisHub.Elements[flag] then
+                pcall(LouisHub.Elements[flag].Set, val, true)
             end
         end
     end)
-    _cargandoDesdeArchivo = false
-    if not okBucle then AlanLuna:_RegistrarError("SaveManager:Cargar (bucle)", errBucle) end
-    _revisarConflictosAlCargar()
-    AlanLuna:Notificar({Title = "Configuración cargada", Content = nombre .. ".json", Duration = 3, Icon = "check_circle"})
+    _isLoadingFromFile = false
+    if not okLoop then LouisHub:_LogError("SaveManager:Load (loop)", errLoop) end
+    _checkConflictsOnLoad()
+    LouisHub:Notify({Title = "Config Loaded", Content = name .. ".json", Duration = 3, Icon = "check_circle"})
     return true
 end
+SM.Cargar = SM.Load
 
-function SM:CargarSilencioso(nombre)
-    nombre = nombre or "default"
-    local ruta = SM.Carpeta .. "/" .. nombre .. ".json"
-    if not (fsDisponible() and type(isfile) == "function" and isfile(ruta)) then return false end
+function SM:LoadSilent(name)
+    name = name or "default"
+    local path = SM.Folder .. "/" .. name .. ".json"
+    if not (isFilesystemAvailable() and type(isfile) == "function" and isfile(path)) then return false end
 
-    local okLeer, contenido = pcall(readfile, ruta)
-    if not okLeer then return false end
-    local okDecode, datos = pcall(function() return HttpService:JSONDecode(contenido) end)
+    local okRead, content = pcall(readfile, path)
+    if not okRead then return false end
+    local okDecode, data = pcall(function() return HttpService:JSONDecode(content) end)
     if not okDecode then return false end
-    datos = prepararDatosCargados(datos)
+    data = prepareLoadedData(data)
 
-    _cargandoDesdeArchivo = true
+    _isLoadingFromFile = true
     pcall(function()
-        for flag, valorCrudo in pairs(datos) do
-            local valor = desempaquetarValorCargado(valorCrudo)
-            AlanLuna.Flags[flag] = valor
-            if AlanLuna.Elementos[flag] then
-                pcall(AlanLuna.Elementos[flag].Set, valor, false)
+        for flag, rawVal in pairs(data) do
+            local val = unpackLoadedValue(rawVal)
+            LouisHub.Flags[flag] = val
+            if LouisHub.Elements[flag] then
+                pcall(LouisHub.Elements[flag].Set, val, false)
             end
         end
     end)
-    _cargandoDesdeArchivo = false
-    _revisarConflictosAlCargar()
+    _isLoadingFromFile = false
+    _checkConflictsOnLoad()
     return true
 end
+SM.CargarSilencioso = SM.LoadSilent
 
-function SM:Listar()
-    if not (fsDisponible() and type(listfiles) == "function") then return {} end
-    asegurarCarpeta()
-    local resultado = {}
-    local ok, archivos = pcall(listfiles, SM.Carpeta)
+function SM:List()
+    if not (isFilesystemAvailable() and type(listfiles) == "function") then return {} end
+    ensureFolder()
+    local result = {}
+    local ok, files = pcall(listfiles, SM.Folder)
     if ok then
-        for _, ruta in ipairs(archivos) do
-            local nombre = ruta:match("([^/\\]+)%.json$")
-            if nombre and not nombre:match("^_") then table.insert(resultado, nombre) end
+        for _, path in ipairs(files) do
+            local name = path:match("([^/\\]+)%.json$")
+            if name and not name:match("^_") then table.insert(result, name) end
         end
     end
-    return resultado
+    return result
 end
+SM.Listar = SM.List
 
-function SM:Eliminar(nombre)
-    if type(nombre) ~= "string" or nombre == "" then return false end
-    if not (fsDisponible() and type(isfile) == "function" and type(delfile) == "function") then return false end
-    local ruta = SM.Carpeta .. "/" .. nombre .. ".json"
-    if not isfile(ruta) then return false end
-    return (pcall(delfile, ruta))
+function SM:Delete(name)
+    if type(name) ~= "string" or name == "" then return false end
+    if not (isFilesystemAvailable() and type(isfile) == "function" and type(delfile) == "function") then return false end
+    local path = SM.Folder .. "/" .. name .. ".json"
+    if not isfile(path) then return false end
+    return (pcall(delfile, path))
 end
+SM.Eliminar = SM.Delete
 
-function SM:CambiarPerfil(ventana, nombre)
-    if type(ventana) ~= "table" or type(nombre) ~= "string" or nombre == "" then return false end
-    if ventana.NombreConfig then SM:GuardarSilencioso(ventana.NombreConfig) end
-    ventana.NombreConfig = nombre
-    local existia = SM:Cargar(nombre)
-    if not existia then
-        AlanLuna:Notificar({Title = "Perfil nuevo", Content = "'" .. nombre .. "' sin guardado previo", Duration = 3, Icon = "info"})
+function SM:SwitchProfile(window, name)
+    if type(window) ~= "table" or type(name) ~= "string" or name == "" then return false end
+    if window.NombreConfig then SM:SaveSilent(window.NombreConfig) end
+    window.NombreConfig = name
+    local exists = SM:Load(name)
+    if not exists then
+        LouisHub:Notify({Title = "New Profile", Content = "'" .. name .. "' has no previous save", Duration = 3, Icon = "info"})
     end
     return true
 end
+SM.CambiarPerfil = SM.SwitchProfile
 
-local function nombrePerfilValido(nombre)
-    if type(nombre) ~= "string" then return false end
-    local limpio = nombre:match("^%s*(.-)%s*$")
-    if limpio == "" or #limpio > 60 or limpio:find('[/\\:*?"<>|%c]') then return false end
-    return true, limpio
+local function validProfileName(name)
+    if type(name) ~= "string" then return false end
+    local clean = name:match("^%s*(.-)%s*$")
+    if clean == "" or #clean > 60 or clean:find('[/\\:*?"<>|%c]') then return false end
+    return true, clean
 end
 
-function SM:Duplicar(origen, destino)
-    local okO, nombreO = nombrePerfilValido(origen)
-    local okD, nombreD = nombrePerfilValido(destino)
-    if not (okO and okD) then return false, "Nombre de perfil inválido" end
-    if not (fsDisponible() and type(isfile) == "function") then return false, "Sin soporte de archivos" end
-    asegurarCarpeta()
-    local rutaO = SM.Carpeta .. "/" .. nombreO .. ".json"
-    local rutaD = SM.Carpeta .. "/" .. nombreD .. ".json"
-    if not isfile(rutaO) then return false, "No existe perfil origen" end
-    if isfile(rutaD) then return false, "Ya existe perfil destino" end
-    local ok, err = pcall(function() writefile(rutaD, readfile(rutaO)) end)
+function SM:Duplicate(source, destination)
+    local okS, nameS = validProfileName(source)
+    local okD, nameD = validProfileName(destination)
+    if not (okS and okD) then return false, "Invalid profile name" end
+    if not (isFilesystemAvailable() and type(isfile) == "function") then return false, "No filesystem support" end
+    ensureFolder()
+    local pathS = SM.Folder .. "/" .. nameS .. ".json"
+    local pathD = SM.Folder .. "/" .. nameD .. ".json"
+    if not isfile(pathS) then return false, "Source profile does not exist" end
+    if isfile(pathD) then return false, "Destination profile already exists" end
+    local ok, err = pcall(function() writefile(pathD, readfile(pathS)) end)
     return ok, err
 end
+SM.Duplicar = SM.Duplicate
 
-function SM:Renombrar(origen, destino)
-    local ok, motivo = SM:Duplicar(origen, destino)
-    if not ok then return false, motivo end
-    local _, nombreO = nombrePerfilValido(origen)
-    SM:Eliminar(nombreO)
+function SM:Rename(source, destination)
+    local ok, reason = SM:Duplicate(source, destination)
+    if not ok then return false, reason end
+    local _, nameS = validProfileName(source)
+    SM:Delete(nameS)
     return true
 end
+SM.Renombrar = SM.Rename
 
-function SM:Exportar(nombre)
-    local okN, limpio = nombrePerfilValido(nombre)
-    if not okN or not fsDisponible() then return nil, "Error de archivo" end
-    local ruta = SM.Carpeta .. "/" .. limpio .. ".json"
-    if not isfile(ruta) then return nil, "No existe perfil" end
-    local okL, texto = pcall(readfile, ruta)
-    if not okL then return nil, "Error al leer" end
-    local copiado = false
-    if type(setclipboard) == "function" then copiado = (pcall(setclipboard, texto)) end
-    return texto, copiado
+function SM:Export(name)
+    local okN, clean = validProfileName(name)
+    if not okN or not isFilesystemAvailable() then return nil, "File error" end
+    local path = SM.Folder .. "/" .. clean .. ".json"
+    if not isfile(path) then return nil, "Profile does not exist" end
+    local okR, text = pcall(readfile, path)
+    if not okR then return nil, "Read error" end
+    local copied = false
+    if type(setclipboard) == "function" then copied = (pcall(setclipboard, text)) end
+    return text, copied
 end
+SM.Exportar = SM.Export
 
-function SM:Importar(nombre, texto, sobreescribir)
-    local okN, limpio = nombrePerfilValido(nombre)
-    if not okN or type(texto) ~= "string" or not fsDisponible() then return false, "Datos inválidos" end
-    local okJ, datos = pcall(function() return HttpService:JSONDecode(texto) end)
-    if not okJ or type(datos) ~= "table" then return false, "JSON inválido" end
-    asegurarCarpeta()
-    local ruta = SM.Carpeta .. "/" .. limpio .. ".json"
-    if isfile(ruta) and not sobreescribir then return false, "Ya existe" end
-    local ok, err = pcall(writefile, ruta, texto)
+function SM:Import(name, text, overwrite)
+    local okN, clean = validProfileName(name)
+    if not okN or type(text) ~= "string" or not isFilesystemAvailable() then return false, "Invalid data" end
+    local okJ, data = pcall(function() return HttpService:JSONDecode(text) end)
+    if not okJ or type(data) ~= "table" then return false, "Invalid JSON" end
+    ensureFolder()
+    local path = SM.Folder .. "/" .. clean .. ".json"
+    if isfile(path) and not overwrite then return false, "Profile already exists" end
+    local ok, err = pcall(writefile, path, text)
     return ok, err
 end
+SM.Importar = SM.Import
 
-function SM:GuardarUI(nombre)
-    nombre = nombre or "default"
-    if not fsDisponible() then return false end
-    asegurarCarpetaUI()
-    local ruta = SM.CarpetaUI .. "/" .. nombre .. ".json"
+function SM:SaveUI(name)
+    name = name or "default"
+    if not isFilesystemAvailable() then return false end
+    ensureFolderUI()
+    local path = SM.FolderUI .. "/" .. name .. ".json"
     local ok = pcall(function()
-        local datos = empaquetarFlagsParaGuardar(_flagsReales, true)
-        writefile(ruta, HttpService:JSONEncode(datos))
+        local data = packFlagsForSaving(_realFlags, true)
+        writefile(path, HttpService:JSONEncode(data))
     end)
     return ok
 end
+SM.GuardarUI = SM.SaveUI
 
-function SM:CargarUI(nombre)
-    nombre = nombre or "default"
-    local ruta = SM.CarpetaUI .. "/" .. nombre .. ".json"
-    if not (fsDisponible() and type(isfile) == "function" and isfile(ruta)) then return false end
-    local okLeer, contenido = pcall(readfile, ruta)
-    if not okLeer then return false end
-    local okDecode, datos = pcall(function() return HttpService:JSONDecode(contenido) end)
+function SM:LoadUI(name)
+    name = name or "default"
+    local path = SM.FolderUI .. "/" .. name .. ".json"
+    if not (isFilesystemAvailable() and type(isfile) == "function" and isfile(path)) then return false end
+    local okRead, content = pcall(readfile, path)
+    if not okRead then return false end
+    local okDecode, data = pcall(function() return HttpService:JSONDecode(content) end)
     if not okDecode then return false end
-    datos = prepararDatosCargados(datos)
+    data = prepareLoadedData(data)
 
-    _cargandoDesdeArchivo = true
+    _isLoadingFromFile = true
     pcall(function()
-        for flag, valorCrudo in pairs(datos) do
-            if _flagsUI[flag] then
-                local valor = desempaquetarValorCargado(valorCrudo)
-                AlanLuna.Flags[flag] = valor
-                if AlanLuna.Elementos[flag] then
-                    pcall(AlanLuna.Elementos[flag].Set, valor, false)
+        for flag, rawVal in pairs(data) do
+            if _uiFlags[flag] then
+                local val = unpackLoadedValue(rawVal)
+                LouisHub.Flags[flag] = val
+                if LouisHub.Elements[flag] then
+                    pcall(LouisHub.Elements[flag].Set, val, false)
                 end
             end
         end
     end)
-    _cargandoDesdeArchivo = false
-    _revisarConflictosAlCargar()
+    _isLoadingFromFile = false
+    _checkConflictsOnLoad()
     return true
 end
+SM.CargarUI = SM.LoadUI
 
-function SM:ListarUI()
-    if not (fsDisponible() and type(listfiles) == "function") then return {} end
-    asegurarCarpetaUI()
-    local resultado = {}
-    local ok, archivos = pcall(listfiles, SM.CarpetaUI)
+function SM:ListUI()
+    if not (isFilesystemAvailable() and type(listfiles) == "function") then return {} end
+    ensureFolderUI()
+    local result = {}
+    local ok, files = pcall(listfiles, SM.FolderUI)
     if ok then
-        for _, ruta in ipairs(archivos) do
-            local n = ruta:match("([^/\\]+)%.json$")
-            if n then table.insert(resultado, n) end
+        for _, path in ipairs(files) do
+            local n = path:match("([^/\\]+)%.json$")
+            if n then table.insert(result, n) end
         end
     end
-    return resultado
+    return result
+end
+SM.ListarUI = SM.ListUI
+
+function SM:DeleteUI(name)
+    if not (isFilesystemAvailable() and type(isfile) == "function" and type(delfile) == "function") then return false end
+    local path = SM.FolderUI .. "/" .. (name or "default") .. ".json"
+    if not isfile(path) then return false end
+    return (pcall(delfile, path))
+end
+SM.EliminarUI = SM.DeleteUI
+
+function LouisHub:SaveConfig(path)
+    return self.SaveManager:Save(path)
 end
 
-function SM:EliminarUI(nombre)
-    if not (fsDisponible() and type(isfile) == "function" and type(delfile) == "function") then return false end
-    local ruta = SM.CarpetaUI .. "/" .. (nombre or "default") .. ".json"
-    if not isfile(ruta) then return false end
-    return (pcall(delfile, ruta))
+function LouisHub:LoadConfig(path)
+    return self.SaveManager:Load(path)
 end
 
-function AlanLuna:SaveConfig(Path)
-    return self.SaveManager:Guardar(Path)
+function LouisHub:RefreshConfigList()
+    return self.SaveManager:List()
 end
 
-function AlanLuna:LoadConfig(Path)
-    return self.SaveManager:Cargar(Path)
-end
-
-function AlanLuna:RefreshConfigList()
-    return self.SaveManager:Listar()
-end
-
-function AlanLuna:LoadAutoloadConfig()
-    if not fsDisponible() then return false end
-    local ruta = self.Folder .. "/autoload.txt"
-    if type(isfile) == "function" and isfile(ruta) then
-        local ok, n = pcall(readfile, ruta)
+function LouisHub:LoadAutoloadConfig()
+    if not isFilesystemAvailable() then return false end
+    local path = self.Folder .. "/autoload.txt"
+    if type(isfile) == "function" and isfile(path) then
+        local ok, n = pcall(readfile, path)
         if ok and n and n ~= "" then
-            return self.SaveManager:Cargar(n)
+            return self.SaveManager:Load(n)
         end
     end
     return false
 end
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 13: VISIBILIDAD CONDICIONAL & LABELS AUTO-ACTUALIZABLES
+--  SECTION 13: CONDITIONAL VISIBILITY & AUTO-UPDATING LABELS
 -- ══════════════════════════════════════════════════════════════
-local _labelsAutoActualizables = setmetatable({}, {__mode = "k"})
+local _autoUpdateLabels = setmetatable({}, {__mode = "k"})
 
-table.insert(_G.AlanLuna_ConexionesModulo, RunService.Heartbeat:Connect(function()
-    local ahora = os.clock()
-    for entrada, config in pairs(_labelsAutoActualizables) do
-        if not (entrada and entrada.Parent) then
-            _labelsAutoActualizables[entrada] = nil
-        elseif ahora >= config.proxima then
-            config.proxima = ahora + config.cada
-            local ok, nuevo = pcall(config.fn)
-            if ok and nuevo ~= nil then
-                pcall(config.aplicar, nuevo)
+table.insert(_G.LouisHub_ModuleConnections, RunService.Heartbeat:Connect(function()
+    local now = os.clock()
+    for entry, cfg in pairs(_autoUpdateLabels) do
+        if not (entry and entry.Parent) then
+            _autoUpdateLabels[entry] = nil
+        elseif now >= cfg.nextTime then
+            cfg.nextTime = now + cfg.interval
+            local ok, newVal = pcall(cfg.fn)
+            if ok and newVal ~= nil then
+                pcall(cfg.apply, newVal)
             elseif not ok then
-                AlanLuna:_RegistrarError("Label auto-update ('" .. tostring(config.flag) .. "')", nuevo)
+                LouisHub:_LogError("Label auto-update ('" .. tostring(cfg.flag) .. "')", newVal)
             end
         end
     end
 end))
 
-local registroVisibilidad = setmetatable({}, {__mode = "k"})
+local visibilityRegistry = setmetatable({}, {__mode = "k"})
 
-local function cumpleVisibilidadCondicional(fila)
-    local condicion = registroVisibilidad[fila]
-    if not condicion then return true end
-    local ok, resultado = pcall(condicion)
+local function checkConditionalVisibility(row)
+    local condition = visibilityRegistry[row]
+    if not condition then return true end
+    local ok, res = pcall(condition)
     if not ok then
-        AlanLuna:_RegistrarError("VisibleSi", resultado)
+        LouisHub:_LogError("VisibleIf", res)
         return true
     end
-    return resultado and true or false
+    return res and true or false
 end
 
-local function registrarVisibilidadCondicional(fila, visibleSi)
-    if type(visibleSi) ~= "function" or not fila then return end
-    registroVisibilidad[fila] = visibleSi
-    fila.Visible = cumpleVisibilidadCondicional(fila)
+local function registerConditionalVisibility(row, visibleIf)
+    if type(visibleIf) ~= "function" or not row then return end
+    visibilityRegistry[row] = visibleIf
+    row.Visible = checkConditionalVisibility(row)
 end
 
-local function reevaluarVisibilidadCondicional()
-    for fila, _ in pairs(registroVisibilidad) do
-        if fila and fila.Parent then
-            fila.Visible = cumpleVisibilidadCondicional(fila)
+local function reevaluateConditionalVisibility()
+    for row, _ in pairs(visibilityRegistry) do
+        if row and row.Parent then
+            row.Visible = checkConditionalVisibility(row)
         end
     end
 end
 
-table.insert(_G.AlanLuna_ConexionesModulo, AlanLuna.Eventos.FlagCambiada:Connect(reevaluarVisibilidadCondicional))
+table.insert(_G.LouisHub_ModuleConnections, LouisHub.Events.FlagChanged:Connect(reevaluateConditionalVisibility))
 
-local indiceBusqueda = {}
-local seccionesRegistradas = {}
+local searchIndex = {}
+local registeredSections = {}
 
-local function registrarBuscable(fila, texto, visibleSi)
-    table.insert(indiceBusqueda, {fila = fila, texto = (texto or ""):lower()})
-    registrarVisibilidadCondicional(fila, visibleSi)
+local function registerSearchable(row, text, visibleIf)
+    table.insert(searchIndex, {row = row, text = (text or ""):lower()})
+    registerConditionalVisibility(row, visibleIf)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 14: THEME MANAGER (ESTILO HIBRIDO & PRESETS)
+--  SECTION 14: THEME MANAGER (HYBRID STYLES & PRESET GRADIENTS)
 -- ══════════════════════════════════════════════════════════════
-AlanLuna.ThemeManager = {}
-local TM = AlanLuna.ThemeManager
-TM.Temas = Themes.Lista
+LouisHub.ThemeManager = {}
+local TM = LouisHub.ThemeManager
+TM.Themes = Themes.List
+TM.Temas = Themes.List
 
-function TM:AplicarTema(nombreOTabla)
-    local esPreset = false
-    local presetColores = nil
+function TM:ApplyTheme(nameOrTable)
+    local isPreset = false
+    local presetColors = nil
 
-    if type(nombreOTabla) == "string" and string.sub(nombreOTabla, 1, 10) == "Gradient: " then
-        local rawName = string.sub(nombreOTabla, 11)
+    if type(nameOrTable) == "string" and string.sub(nameOrTable, 1, 10) == "Gradient: " then
+        local rawName = string.sub(nameOrTable, 11)
         if PresetGradients[rawName] then
-            esPreset = true
-            presetColores = PresetGradients[rawName]
-            Theme.Accent      = presetColores[1]
-            Theme.AccentLight = presetColores[2]
-            Theme.Highlight   = presetColores[3]
-            AlanLuna.ThemeGradient = ColorSequence.new{
-                ColorSequenceKeypoint.new(0.00, presetColores[1]),
-                ColorSequenceKeypoint.new(0.50, presetColores[2]),
-                ColorSequenceKeypoint.new(1.00, presetColores[3])
+            isPreset = true
+            presetColors = PresetGradients[rawName]
+            Theme.Accent      = presetColors[1]
+            Theme.AccentLight = presetColors[2]
+            Theme.Highlight   = presetColors[3]
+            LouisHub.ThemeGradient = ColorSequence.new{
+                ColorSequenceKeypoint.new(0.00, presetColors[1]),
+                ColorSequenceKeypoint.new(0.50, presetColors[2]),
+                ColorSequenceKeypoint.new(1.00, presetColors[3])
             }
         end
     end
 
-    if not esPreset then
-        local tabla = type(nombreOTabla) == "string" and self.Temas[nombreOTabla] or nombreOTabla
-        if not tabla then return end
-        for clave, valor in pairs(tabla) do Theme[clave] = valor end
-        AlanLuna.ThemeGradient = ColorSequence.new{
+    if not isPreset then
+        local tbl = type(nameOrTable) == "string" and self.Themes[nameOrTable] or nameOrTable
+        if not tbl then return end
+        for k, v in pairs(tbl) do Theme[k] = v end
+        LouisHub.ThemeGradient = ColorSequence.new{
             ColorSequenceKeypoint.new(0.00, Theme.Accent),
             ColorSequenceKeypoint.new(0.50, Theme.AccentLight),
             ColorSequenceKeypoint.new(1.00, Theme.Highlight)
         }
     end
 
-    local animar = AlanLuna._ventanaRevelada == true
-    local paginasOcultas = {}
-    if animar then
-        local activa = _G.AlanLuna_Instancia
-        local ventana = activa and activa.Ventana
-        if ventana and ventana.Tabs then
-            for _, tab in ipairs(ventana.Tabs) do
-                if tab.Pagina and not tab.Pagina.Visible then
-                    table.insert(paginasOcultas, tab.Pagina)
+    local animate = LouisHub._windowRevealed == true or LouisHub._ventanaRevelada == true
+    local hiddenPages = {}
+    if animate then
+        local active = _G.LouisHub_Instance
+        local win = active and (active.Window or active.Ventana)
+        if win and win.Tabs then
+            for _, tab in ipairs(win.Tabs) do
+                local page = tab.Page or tab.Pagina
+                if page and not page.Visible then
+                    table.insert(hiddenPages, page)
                 end
             end
         end
     end
 
-    local function estaEnPaginaOculta(instancia)
-        for _, pagina in ipairs(paginasOcultas) do
-            if instancia:IsDescendantOf(pagina) then return true end
+    local function isInHiddenPage(inst)
+        for _, page in ipairs(hiddenPages) do
+            if inst:IsDescendantOf(page) then return true end
         end
         return false
     end
 
-    for i = #registroTema, 1, -1 do
-        local entrada = registroTema[i]
-        if entrada.instancia and entrada.instancia.Parent then
-            local nuevoValor
-            if type(entrada.claveTema) == "function" then
-                local ok, resultado = pcall(entrada.claveTema)
-                if ok then nuevoValor = resultado end
+    for i = #themeRegistry, 1, -1 do
+        local entry = themeRegistry[i]
+        if entry.instance and entry.instance.Parent then
+            local newVal
+            if type(entry.themeKey) == "function" then
+                local ok, res = pcall(entry.themeKey)
+                if ok then newVal = res end
             else
-                nuevoValor = Theme[entrada.claveTema]
+                newVal = Theme[entry.themeKey]
             end
-            if nuevoValor ~= nil then
-                intentarSilencioso(
-                    "ThemeManager: aplicar " .. tostring(entrada.propiedad),
+            if newVal ~= nil then
+                silentTry(
+                    "ThemeManager: apply " .. tostring(entry.property),
                     function()
-                        local instancia, propiedad = entrada.instancia, entrada.propiedad
-                        if animar and typeof(nuevoValor) == "Color3"
-                        and typeof(instancia[propiedad]) == "Color3"
-                        and not estaEnPaginaOculta(instancia) then
-                            Utils.Tween(instancia, {[propiedad] = nuevoValor}, AlanLuna.Motion.Page, AlanLuna.Motion.EaseSuave)
+                        local inst, prop = entry.instance, entry.property
+                        if animate and typeof(newVal) == "Color3"
+                        and typeof(inst[prop]) == "Color3"
+                        and not isInHiddenPage(inst) then
+                            Utils.Tween(inst, {[prop] = newVal}, LouisHub.Motion.Page, LouisHub.Motion.EaseSmooth)
                         else
-                            instancia[propiedad] = nuevoValor
+                            inst[prop] = newVal
                         end
                     end
                 )
             end
         else
-            entrada.muerta = true
+            entry.dead = true
         end
     end
 
-    local nombreAplicado = type(nombreOTabla) == "string" and nombreOTabla or nil
-    for ventana in pairs(_ventanasConSelectorTemas) do
-        if ventana._SincronizarSelectorTemas then
-            pcall(ventana._SincronizarSelectorTemas, nombreAplicado)
+    local appliedName = type(nameOrTable) == "string" and nameOrTable or nil
+    for win in pairs(_windowsWithThemeSelectors) do
+        if win._SyncThemeSelector or win._SincronizarSelectorTemas then
+            local fn = win._SyncThemeSelector or win._SincronizarSelectorTemas
+            pcall(fn, appliedName)
         end
     end
 
-    AlanLuna.Eventos.TemaCambiado:Fire(nombreAplicado)
+    LouisHub.Events.ThemeChanged:Fire(appliedName)
 end
+TM.AplicarTema = TM.ApplyTheme
 
-function TM:AgregarTema(nombre, tabla)
-    if type(nombre) == "string" and type(tabla) == "table" then
-        self.Temas[nombre] = tabla
+function TM:AddTheme(name, tbl)
+    if type(name) == "string" and type(tbl) == "table" then
+        self.Themes[name] = tbl
+        self.Temas[name] = tbl
     end
 end
+TM.AgregarTema = TM.AddTheme
 
-function TM:GuardarTemaActual()
-    if not fsDisponible() then return false end
-    asegurarCarpeta()
+function TM:SaveCurrentTheme()
+    if not isFilesystemAvailable() then return false end
+    ensureFolder()
     local ok, json = pcall(function()
-        local datos = {}
-        for clave, valor in pairs(Theme) do
-            datos[clave] = {valor.R, valor.G, valor.B}
+        local data = {}
+        for k, v in pairs(Theme) do
+            data[k] = {v.R, v.G, v.B}
         end
-        return HttpService:JSONEncode(datos)
+        return HttpService:JSONEncode(data)
     end)
     if not ok then return false end
-    return pcall(writefile, SM.Carpeta .. "/tema.json", json)
+    return pcall(writefile, SM.Folder .. "/theme.json", json)
 end
+TM.GuardarTemaActual = TM.SaveCurrentTheme
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 15: NOTIFICACIONES LUNA UI (BLUR & ANIMACION ESCALONADA)
+--  SECTION 15: NOTIFICATIONS ENGINE (GLASS BLUR & STAGGERED MOTION)
 -- ══════════════════════════════════════════════════════════════
 local notifGuiRef = nil
 local notifContainer = nil
-local MAX_NOTIF_SIMULTANEAS = 4
-local colaNotif = {}
-local notifActivas = 0
+local MAX_SIMULTANEOUS_NOTIFS = 4
+local notifQueue = {}
+local activeNotifCount = 0
 
-local function asegurarContenedorNotificaciones()
+local function ensureNotificationContainer()
     if notifContainer and notifContainer.Parent then return notifContainer end
-    local padre = obtenerPadreGui()
+    local parent = getGuiParent()
     if not notifGuiRef or not notifGuiRef.Parent then
-        notifGuiRef = (padre and padre:FindFirstChild("AlanLuna_NotifGui")) or Instance.new("ScreenGui")
-        notifGuiRef.Name = "AlanLuna_NotifGui"
+        notifGuiRef = (parent and (parent:FindFirstChild("LouisHub_NotifGui") or parent:FindFirstChild("AlanLuna_NotifGui"))) or Instance.new("ScreenGui")
+        notifGuiRef.Name = "LouisHub_NotifGui"
         notifGuiRef.ResetOnSpawn = false
         notifGuiRef.IgnoreGuiInset = true
         notifGuiRef.DisplayOrder = 10000000
-        notifGuiRef.Parent = padre
-        protegerGui(notifGuiRef)
-        AlanLuna:RegistrarInstancia(notifGuiRef)
+        notifGuiRef.Parent = parent
+        protectGui(notifGuiRef)
+        LouisHub:RegisterInstance(notifGuiRef)
     end
 
-    notifContainer = notifGuiRef:FindFirstChild("AlanUI_Notificaciones")
+    notifContainer = notifGuiRef:FindFirstChild("LouisHub_Notifications") or notifGuiRef:FindFirstChild("AlanUI_Notificaciones")
     if not notifContainer then
         notifContainer = Instance.new("Frame")
-        notifContainer.Name = "AlanUI_Notificaciones"
+        notifContainer.Name = "LouisHub_Notifications"
         notifContainer.BackgroundTransparency = 1
         notifContainer.Size = UDim2.new(0, 310, 1, -20)
         notifContainer.Position = UDim2.new(1, -320, 0, 10)
@@ -4306,75 +4480,75 @@ local function asegurarContenedorNotificaciones()
     return notifContainer
 end
 
-local COLORES_TIPO_NOTIF = {
+local NOTIF_TYPE_COLORS = {
     Success = Color3.fromRGB(46, 204, 113),
     Warning = Color3.fromRGB(241, 196, 15),
     Error   = Color3.fromRGB(231, 76, 60),
     Info    = Color3.fromRGB(90, 140, 210),
 }
 
-local function mostrarTarjetaNotif(data)
-    notifActivas = notifActivas + 1
-    local contenedor = asegurarContenedorNotificaciones()
+local function showNotificationCard(data)
+    activeNotifCount = activeNotifCount + 1
+    local container = ensureNotificationContainer()
 
-    local titulo = data.Title or data.Titulo or "Notificación"
-    local contenido = data.Content or data.Texto or ""
-    local iconoNombre = data.Icon or data.Icono or "info"
+    local title = data.Title or data.Titulo or "Notification"
+    local content = data.Content or data.Texto or ""
+    local iconName = data.Icon or data.Icono or "info"
     local source = data.ImageSource or "Material"
-    local duracion = data.Duration or data.Duracion or math.min(math.max((#contenido * 0.08) + 2.5, 3), 10)
-    local tipo = data.Type or data.Tipo
-    local colorAcento = (tipo and COLORES_TIPO_NOTIF[tipo]) or Theme.Accent
+    local duration = data.Duration or data.Duracion or math.min(math.max((#content * 0.08) + 2.5, 3), 10)
+    local nType = data.Type or data.Tipo
+    local accentCol = (nType and NOTIF_TYPE_COLORS[nType]) or Theme.Accent
 
     local card = Instance.new("Frame")
-    card.Name = titulo
+    card.Name = title
     card.BackgroundColor3 = Theme.Panel
     card.BackgroundTransparency = 1
     card.BorderSizePixel = 0
     card.ClipsDescendants = true
     card.Size = UDim2.new(1, 0, 0, 0)
     card.ZIndex = 10001
-    card.Parent = contenedor
+    card.Parent = container
 
     Utils.Corner(card, 8)
-    local stroke = Utils.Stroke(card, colorAcento, 1, 1)
+    local stroke = Utils.Stroke(card, accentCol, 1, 1)
 
     local blurData = BlurModule(card)
 
-    local sombra = Instance.new("ImageLabel")
-    sombra.Name = "Shadow"
-    sombra.BackgroundTransparency = 1
-    sombra.Image = "rbxassetid://1316045217"
-    sombra.ImageColor3 = Color3.new(0, 0, 0)
-    sombra.ImageTransparency = 1
-    sombra.ScaleType = Enum.ScaleType.Slice
-    sombra.SliceCenter = Rect.new(10, 10, 118, 118)
-    sombra.Size = UDim2.new(1, 14, 1, 14)
-    sombra.Position = UDim2.new(0, -7, 0, -7)
-    sombra.ZIndex = 10000
-    sombra.Parent = card
+    local shadow = Instance.new("ImageLabel")
+    shadow.Name = "Shadow"
+    shadow.BackgroundTransparency = 1
+    shadow.Image = "rbxassetid://1316045217"
+    shadow.ImageColor3 = Color3.new(0, 0, 0)
+    shadow.ImageTransparency = 1
+    shadow.ScaleType = Enum.ScaleType.Slice
+    shadow.SliceCenter = Rect.new(10, 10, 118, 118)
+    shadow.Size = UDim2.new(1, 14, 1, 14)
+    shadow.Position = UDim2.new(0, -7, 0, -7)
+    shadow.ZIndex = 10000
+    shadow.Parent = card
 
-    local iconoImg = Instance.new("ImageLabel")
-    iconoImg.Name = "Icon"
-    iconoImg.BackgroundTransparency = 1
-    iconoImg.ImageTransparency = 1
-    iconoImg.Size = UDim2.new(0, 22, 0, 22)
-    iconoImg.Position = UDim2.new(0, 10, 0, 10)
-    iconoImg.ZIndex = 10002
-    iconoImg.Parent = card
+    local iconImg = Instance.new("ImageLabel")
+    iconImg.Name = "Icon"
+    iconImg.BackgroundTransparency = 1
+    iconImg.ImageTransparency = 1
+    iconImg.Size = UDim2.new(0, 22, 0, 22)
+    iconImg.Position = UDim2.new(0, 10, 0, 10)
+    iconImg.ZIndex = 10002
+    iconImg.Parent = card
 
-    local iconData = GetIcon(iconoNombre, source)
+    local iconData = GetIcon(iconName, source)
     if type(iconData) == "table" then
-        iconoImg.Image = "rbxassetid://" .. tostring(iconData.id)
-        iconoImg.ImageRectSize = iconData.imageRectSize
-        iconoImg.ImageRectOffset = iconData.imageRectOffset
+        iconImg.Image = "rbxassetid://" .. tostring(iconData.id)
+        iconImg.ImageRectSize = iconData.imageRectSize
+        iconImg.ImageRectOffset = iconData.imageRectOffset
     elseif type(iconData) == "string" then
-        iconoImg.Image = iconData
+        iconImg.Image = iconData
     else
-        iconoImg.Visible = false
+        iconImg.Visible = false
     end
 
-    local offsetX = iconoImg.Visible and 38 or 12
-    local reduceWidth = iconoImg.Visible and -44 or -24
+    local offsetX = iconImg.Visible and 38 or 12
+    local reduceWidth = iconImg.Visible and -44 or -24
 
     local titleLbl = Instance.new("TextLabel")
     titleLbl.Name = "Title"
@@ -4386,7 +4560,7 @@ local function mostrarTarjetaNotif(data)
     titleLbl.TextXAlignment = Enum.TextXAlignment.Left
     titleLbl.Size = UDim2.new(1, reduceWidth, 0, 20)
     titleLbl.Position = UDim2.new(0, offsetX, 0, 10)
-    titleLbl.Text = titulo
+    titleLbl.Text = title
     titleLbl.ZIndex = 10002
     titleLbl.Parent = card
 
@@ -4401,140 +4575,138 @@ local function mostrarTarjetaNotif(data)
     descLbl.TextWrapped = true
     descLbl.Size = UDim2.new(1, reduceWidth, 0, 0)
     descLbl.Position = UDim2.new(0, offsetX, 0, 30)
-    descLbl.Text = contenido
+    descLbl.Text = content
     descLbl.ZIndex = 10002
     descLbl.Parent = card
 
-    local boundsY = TextService:GetTextSize(contenido, 11, Enum.Font.Gotham, Vector2.new(250, 1000)).Y
-    local alturaTotal = math.max(48, boundsY + 42)
+    local boundsY = TextService:GetTextSize(content, 11, Enum.Font.Gotham, Vector2.new(250, 1000)).Y
+    local totalHeight = math.max(48, boundsY + 42)
     descLbl.Size = UDim2.new(1, reduceWidth, 0, boundsY)
 
-    Utils.Tween(card, {Size = UDim2.new(1, 0, 0, alturaTotal)}, 0.45, AlanLuna.Motion.EaseEntrar)
-    Utils.Tween(card, {BackgroundTransparency = 0.45}, 0.35, AlanLuna.Motion.EaseEntrar)
-    Utils.Tween(titleLbl, {TextTransparency = 0}, 0.3, AlanLuna.Motion.EaseEntrar)
-    if iconoImg.Visible then Utils.Tween(iconoImg, {ImageTransparency = 0}, 0.3, AlanLuna.Motion.EaseEntrar) end
-    Utils.Tween(descLbl, {TextTransparency = 0.15}, 0.3, AlanLuna.Motion.EaseEntrar)
-    Utils.Tween(stroke, {Transparency = 0.6}, 0.35, AlanLuna.Motion.EaseEntrar)
-    Utils.Tween(sombra, {ImageTransparency = 0.8}, 0.35, AlanLuna.Motion.EaseEntrar)
+    Utils.Tween(card, {Size = UDim2.new(1, 0, 0, totalHeight)}, 0.45, LouisHub.Motion.EaseEnter)
+    Utils.Tween(card, {BackgroundTransparency = 0.45}, 0.35, LouisHub.Motion.EaseEnter)
+    Utils.Tween(titleLbl, {TextTransparency = 0}, 0.3, LouisHub.Motion.EaseEnter)
+    if iconImg.Visible then Utils.Tween(iconImg, {ImageTransparency = 0}, 0.3, LouisHub.Motion.EaseEnter) end
+    Utils.Tween(descLbl, {TextTransparency = 0.15}, 0.3, LouisHub.Motion.EaseEnter)
+    Utils.Tween(stroke, {Transparency = 0.6}, 0.35, LouisHub.Motion.EaseEnter)
+    Utils.Tween(shadow, {ImageTransparency = 0.8}, 0.35, LouisHub.Motion.EaseEnter)
 
-    local function cerrar()
+    local function close()
         if not (card and card.Parent) then return end
-        Utils.Tween(card, {BackgroundTransparency = 1}, 0.3, AlanLuna.Motion.EaseSalir)
-        Utils.Tween(stroke, {Transparency = 1}, 0.3, AlanLuna.Motion.EaseSalir)
-        Utils.Tween(titleLbl, {TextTransparency = 1}, 0.25, AlanLuna.Motion.EaseSalir)
-        Utils.Tween(descLbl, {TextTransparency = 1}, 0.25, AlanLuna.Motion.EaseSalir)
-        if iconoImg.Visible then Utils.Tween(iconoImg, {ImageTransparency = 1}, 0.25, AlanLuna.Motion.EaseSalir) end
-        Utils.Tween(sombra, {ImageTransparency = 1}, 0.25, AlanLuna.Motion.EaseSalir)
-        Utils.Tween(card, {Size = UDim2.new(1, 0, 0, 0)}, 0.35, AlanLuna.Motion.EaseSalir)
+        Utils.Tween(card, {BackgroundTransparency = 1}, 0.3, LouisHub.Motion.EaseExit)
+        Utils.Tween(stroke, {Transparency = 1}, 0.3, LouisHub.Motion.EaseExit)
+        Utils.Tween(titleLbl, {TextTransparency = 1}, 0.25, LouisHub.Motion.EaseExit)
+        Utils.Tween(descLbl, {TextTransparency = 1}, 0.25, LouisHub.Motion.EaseExit)
+        if iconImg.Visible then Utils.Tween(iconImg, {ImageTransparency = 1}, 0.25, LouisHub.Motion.EaseExit) end
+        Utils.Tween(shadow, {ImageTransparency = 1}, 0.25, LouisHub.Motion.EaseExit)
+        Utils.Tween(card, {Size = UDim2.new(1, 0, 0, 0)}, 0.35, LouisHub.Motion.EaseExit)
 
         task.delay(0.36, function()
             pcall(function() card:Destroy() end)
-            notifActivas = math.max(0, notifActivas - 1)
-            local siguiente = table.remove(colaNotif, 1)
-            if siguiente then mostrarTarjetaNotif(siguiente) end
+            activeNotifCount = math.max(0, activeNotifCount - 1)
+            local nextCard = table.remove(notifQueue, 1)
+            if nextCard then showNotificationCard(nextCard) end
         end)
     end
 
-    task.delay(duracion, cerrar)
+    task.delay(duration, close)
 end
 
-function AlanLuna:Notificar(data)
+function LouisHub:Notify(data)
     data = data or {}
-    if notifActivas >= MAX_NOTIF_SIMULTANEAS then
-        local prioridad = data.Prioridad or 0
-        local pos = #colaNotif + 1
-        for i, enCola in ipairs(colaNotif) do
-            if (enCola.Prioridad or 0) < prioridad then
+    if activeNotifCount >= MAX_SIMULTANEOUS_NOTIFS then
+        local priority = data.Priority or data.Prioridad or 0
+        local pos = #notifQueue + 1
+        for i, queued in ipairs(notifQueue) do
+            if (queued.Priority or queued.Prioridad or 0) < priority then
                 pos = i
                 break
             end
         end
-        table.insert(colaNotif, pos, data)
+        table.insert(notifQueue, pos, data)
         return
     end
-    mostrarTarjetaNotif(data)
+    showNotificationCard(data)
 end
-
-function AlanLuna:Notification(data)
-    self:Notificar(data)
-end
+LouisHub.Notificar = LouisHub.Notify
+LouisHub.Notification = LouisHub.Notify
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 16: DIALOGO MODAL DE CONFIRMACION (AlanLuna:Confirmar)
+--  SECTION 16: MODAL CONFIRMATION DIALOG SYSTEM
 -- ══════════════════════════════════════════════════════════════
-function AlanLuna:Confirmar(cfg)
+function LouisHub:Confirm(cfg)
     cfg = cfg or {}
-    local padre = obtenerPadreGui()
-    local gui = self._guiConfirmar or (padre and padre:FindFirstChild("AlanLuna_ScreenGui")) or (padre and padre:FindFirstChild("AlanLuna_NotifGui"))
+    local parent = getGuiParent()
+    local gui = self._guiConfirm or (parent and (parent:FindFirstChild("LouisHub_ScreenGui") or parent:FindFirstChild("AlanLuna_ScreenGui"))) or (parent and (parent:FindFirstChild("LouisHub_NotifGui") or parent:FindFirstChild("AlanLuna_NotifGui")))
     if not (gui and gui.Parent) then
-        self:_RegistrarError("Confirmar", "no hay una ventana activa donde mostrar el modal")
+        self:_LogError("Confirm", "No active window available to display modal")
         return nil
     end
 
-    local botones = {}
-    if type(cfg.Botones) == "table" and #cfg.Botones > 0 then
-        for _, b in ipairs(cfg.Botones) do table.insert(botones, clonarTabla(b)) end
+    local buttons = {}
+    if type(cfg.Buttons or cfg.Botones) == "table" and #(cfg.Buttons or cfg.Botones) > 0 then
+        for _, b in ipairs(cfg.Buttons or cfg.Botones) do table.insert(buttons, cloneTable(b)) end
     else
-        if cfg.BotonCancelar then
-            local b = clonarTabla(cfg.BotonCancelar)
-            b.Texto = b.Texto or "Cancelar"
-            b.Variante = b.Variante or "neutral"
-            table.insert(botones, b)
+        if cfg.CancelButton or cfg.BotonCancelar then
+            local b = cloneTable(cfg.CancelButton or cfg.BotonCancelar)
+            b.Text = b.Text or b.Texto or "Cancel"
+            b.Variant = b.Variant or b.Variante or "neutral"
+            table.insert(buttons, b)
         end
-        local aceptar = clonarTabla(cfg.BotonAceptar or {})
-        aceptar.Texto = aceptar.Texto or "Aceptar"
-        aceptar.Variante = aceptar.Variante or "primary"
-        table.insert(botones, aceptar)
+        local accept = cloneTable(cfg.AcceptButton or cfg.BotonAceptar or {})
+        accept.Text = accept.Text or accept.Texto or "Accept"
+        accept.Variant = accept.Variant or accept.Variante or "primary"
+        table.insert(buttons, accept)
     end
 
-    self._modalesAbiertos = (self._modalesAbiertos or 0) + 1
-    local zBase = 500 + (self._modalesAbiertos - 1) * 10
-    local tituloError = cfg.Titulo or "Confirmar"
+    self._openModals = (self._openModals or 0) + 1
+    local zBase = 500 + (self._openModals - 1) * 10
+    local titleErr = cfg.Title or cfg.Titulo or "Confirm"
 
-    local fondo = Utils.Frame({
-        Padre = gui, Size = UDim2.new(1, 0, 1, 0),
-        Color = Color3.new(0, 0, 0), Transparencia = 0.5, Radio = false,
-        Borde = false,
+    local backdrop = Utils.Frame({
+        Parent = gui, Size = UDim2.new(1, 0, 1, 0),
+        Color = Color3.new(0, 0, 0), Transparency = 0.5, Radius = false,
+        Border = false,
     })
-    fondo.ZIndex = zBase
-    fondo.Active = true
+    backdrop.ZIndex = zBase
+    backdrop.Active = true
 
-    local blurData = BlurModule(fondo)
+    local blurData = BlurModule(backdrop)
 
-    local cerrado = false
-    fondo.Destroying:Connect(function()
-        if cerrado then return end
-        cerrado = true
-        self._modalesAbiertos = math.max(0, (self._modalesAbiertos or 1) - 1)
-        for i = #registroTema, 1, -1 do
-            local inst = registroTema[i].instancia
-            if inst == fondo or inst:IsDescendantOf(fondo) then table.remove(registroTema, i) end
+    local closed = false
+    backdrop.Destroying:Connect(function()
+        if closed then return end
+        closed = true
+        self._openModals = math.max(0, (self._openModals or 1) - 1)
+        for i = #themeRegistry, 1, -1 do
+            local inst = themeRegistry[i].instance
+            if inst == backdrop or inst:IsDescendantOf(backdrop) then table.remove(themeRegistry, i) end
         end
-        for i = #registroEscalaTexto, 1, -1 do
-            local inst = registroEscalaTexto[i].instancia
-            if inst == fondo or inst:IsDescendantOf(fondo) then table.remove(registroEscalaTexto, i) end
+        for i = #textScaleRegistry, 1, -1 do
+            local inst = textScaleRegistry[i].instance
+            if inst == backdrop or inst:IsDescendantOf(backdrop) then table.remove(textScaleRegistry, i) end
         end
         task.defer(function()
-            local activa = _G.AlanLuna_Instancia
-            if not activa then return end
-            for i = #activa.Conexiones, 1, -1 do
-                if activa.Conexiones[i].Connected == false then table.remove(activa.Conexiones, i) end
+            local active = _G.LouisHub_Instance
+            if not active then return end
+            for i = #active.Connections, 1, -1 do
+                if active.Connections[i].Connected == false then table.remove(active.Connections, i) end
             end
         end)
     end)
 
     local card = Utils.Frame({
-        Padre = fondo, Size = UDim2.new(0, 300, 0, 0),
-        Posicion = UDim2.new(0.5, 0, 0.5, 0), Ancla = Vector2.new(0.5, 0.5),
-        Color = Theme.Panel, Radio = 8,
-        Borde = true, ColorBorde = Theme.Border, GrosorBorde = 1,
-        ClaveTemaBorde = "Border",
-        Transparencia = 0.25,
+        Parent = backdrop, Size = UDim2.new(0, 300, 0, 0),
+        Position = UDim2.new(0.5, 0, 0.5, 0), Anchor = Vector2.new(0.5, 0.5),
+        Color = Theme.Panel, Radius = 8,
+        Border = true, BorderColor = Theme.Border, BorderThickness = 1,
+        BorderThemeKey = "Border",
+        Transparency = 0.25,
     })
     card.ZIndex = zBase + 1
     card.Active = true
     card.AutomaticSize = Enum.AutomaticSize.Y
-    AlanLuna:Registrar(card, "BackgroundColor3", "Panel")
+    LouisHub:Register(card, "BackgroundColor3", "Panel")
 
     local layout = Instance.new("UIListLayout")
     layout.Padding = UDim.new(0, 10)
@@ -4546,15 +4718,16 @@ function AlanLuna:Confirmar(cfg)
     pad.PaddingTop, pad.PaddingBottom = UDim.new(0, 14), UDim.new(0, 14)
     pad.Parent = card
 
-    local orden = 0
-    if cfg.Icono then
-        orden = orden + 1
-        local iconAsset = GetIcon(cfg.Icono, "Material")
+    local order = 0
+    local iconParam = cfg.Icon or cfg.Icono
+    if iconParam then
+        order = order + 1
+        local iconAsset = GetIcon(iconParam, "Material")
         if iconAsset then
             local iconHolder = Instance.new("Frame")
             iconHolder.BackgroundTransparency = 1
             iconHolder.Size = UDim2.new(1, 0, 0, 28)
-            iconHolder.LayoutOrder = orden
+            iconHolder.LayoutOrder = order
             iconHolder.ZIndex = zBase + 2
             iconHolder.Parent = card
 
@@ -4573,152 +4746,155 @@ function AlanLuna:Confirmar(cfg)
             end
             imgIco.Parent = iconHolder
         else
-            local lblIcono = Utils.Texto({
-                Padre = card, Texto = tostring(cfg.Icono),
-                Size = UDim2.new(1, 0, 0, 26), Orden = orden,
-                Alineacion = Enum.TextXAlignment.Center, Tamano = 22,
+            local lblIcon = Utils.Text({
+                Parent = card, Text = tostring(iconParam),
+                Size = UDim2.new(1, 0, 0, 26), Order = order,
+                Alignment = Enum.TextXAlignment.Center, TextSize = 22,
             })
-            lblIcono.ZIndex = zBase + 2
+            lblIcon.ZIndex = zBase + 2
         end
     end
 
-    if cfg.Titulo then
-        orden = orden + 1
-        local lblTitulo = Utils.Texto({
-            Padre = card, Texto = tostring(cfg.Titulo),
-            Size = UDim2.new(1, 0, 0, 0), Orden = orden,
-            Fuente = Enum.Font.GothamBold, Tamano = 14, Ajustar = true,
-            Alineacion = cfg.Icono and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left,
+    local titleParam = cfg.Title or cfg.Titulo
+    if titleParam then
+        order = order + 1
+        local lblTitle = Utils.Text({
+            Parent = card, Text = tostring(titleParam),
+            Size = UDim2.new(1, 0, 0, 0), Order = order,
+            Font = Enum.Font.GothamBold, TextSize = 14, Wrapped = true,
+            Alignment = iconParam and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left,
             Color = Theme.Highlight,
         })
-        lblTitulo.AutomaticSize = Enum.AutomaticSize.Y
-        lblTitulo.ZIndex = zBase + 2
-        AlanLuna:Registrar(lblTitulo, "TextColor3", "Highlight")
+        lblTitle.AutomaticSize = Enum.AutomaticSize.Y
+        lblTitle.ZIndex = zBase + 2
+        LouisHub:Register(lblTitle, "TextColor3", "Highlight")
     end
 
-    if cfg.Contenido then
-        orden = orden + 1
-        local lblCuerpo = Utils.Texto({
-            Padre = card, Texto = tostring(cfg.Contenido),
-            Size = UDim2.new(1, 0, 0, 0), Orden = orden,
-            Ajustar = true, Tamano = 11, TextoTransparencia = 0.15,
-            Alineacion = cfg.Icono and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left,
+    local contentParam = cfg.Content or cfg.Contenido
+    if contentParam then
+        order = order + 1
+        local lblBody = Utils.Text({
+            Parent = card, Text = tostring(contentParam),
+            Size = UDim2.new(1, 0, 0, 0), Order = order,
+            Wrapped = true, TextSize = 11, TextTransparency = 0.15,
+            Alignment = iconParam and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left,
         })
-        lblCuerpo.AutomaticSize = Enum.AutomaticSize.Y
-        lblCuerpo.ZIndex = zBase + 2
+        lblBody.AutomaticSize = Enum.AutomaticSize.Y
+        lblBody.ZIndex = zBase + 2
     end
 
-    local total = #botones
+    local total = #buttons
     local vertical = total > 3
-    orden = orden + 1
-    local filaBotones = Utils.Frame({
-        Padre = card, Size = UDim2.new(1, 0, 0, vertical and 0 or 30),
-        Transparencia = 1, Orden = orden, Radio = false, Borde = false,
+    order = order + 1
+    local buttonRow = Utils.Frame({
+        Parent = card, Size = UDim2.new(1, 0, 0, vertical and 0 or 30),
+        Transparency = 1, Order = order, Radius = false, Border = false,
     })
-    filaBotones.ZIndex = zBase + 2
-    if vertical then filaBotones.AutomaticSize = Enum.AutomaticSize.Y end
+    buttonRow.ZIndex = zBase + 2
+    if vertical then buttonRow.AutomaticSize = Enum.AutomaticSize.Y end
 
-    local layoutBotones = Instance.new("UIListLayout")
-    layoutBotones.FillDirection = vertical and Enum.FillDirection.Vertical or Enum.FillDirection.Horizontal
-    layoutBotones.Padding = UDim.new(0, 6)
-    layoutBotones.SortOrder = Enum.SortOrder.LayoutOrder
-    layoutBotones.Parent = filaBotones
+    local layoutButtons = Instance.new("UIListLayout")
+    layoutButtons.FillDirection = vertical and Enum.FillDirection.Vertical or Enum.FillDirection.Horizontal
+    layoutButtons.Padding = UDim.new(0, 6)
+    layoutButtons.SortOrder = Enum.SortOrder.LayoutOrder
+    layoutButtons.Parent = buttonRow
 
-    local blanco = Color3.fromRGB(255, 255, 255)
-    local function cerrar()
-        if fondo.Parent then fondo:Destroy() end
+    local white = Color3.fromRGB(255, 255, 255)
+    local function close()
+        if backdrop.Parent then backdrop:Destroy() end
     end
-    local function presionar(i)
-        local boton = botones[i]
-        if not boton then return end
-        cerrar()
-        if type(boton.Callback) == "function" then
-            ejecutarConFallback(boton.Callback, boton.Texto or tituloError)
+    local function press(i)
+        local btn = buttons[i]
+        if not btn then return end
+        close()
+        if type(btn.Callback) == "function" then
+            executeWithFallback(btn.Callback, btn.Text or btn.Texto or titleErr)
         end
     end
 
-    for i, boton in ipairs(botones) do
-        local variante = boton.Variante or "neutral"
-        local anchoBtn = vertical and UDim2.new(1, 0, 0, 30)
+    for i, btnData in ipairs(buttons) do
+        local variant = btnData.Variant or btnData.Variante or "neutral"
+        local btnWidth = vertical and UDim2.new(1, 0, 0, 30)
             or UDim2.new(1 / total, -math.ceil(6 * (total - 1) / total), 1, 0)
-        local color, claveTema, colorTexto, conBorde = Theme.Fila, "Fila", nil, false
-        local transparencia = 0.3
-        if variante == "primary" then
-            color, claveTema, colorTexto = Theme.Accent, "Accent", blanco
-        elseif variante == "danger" then
-            color, claveTema, colorTexto = Color3.fromRGB(180, 50, 50), nil, blanco
-        elseif variante == "tertiary" then
-            color, claveTema, conBorde, transparencia = Theme.Panel, nil, true, 1
+        local color, themeKey, textColor, hasBorder = Theme.Row, "Row", nil, false
+        local transparency = 0.3
+        if variant == "primary" then
+            color, themeKey, textColor = Theme.Accent, "Accent", white
+        elseif variant == "danger" then
+            color, themeKey, textColor = Color3.fromRGB(180, 50, 50), nil, white
+        elseif variant == "tertiary" then
+            color, themeKey, hasBorder, transparency = Theme.Panel, nil, true, 1
         end
 
-        local btn = Utils.BotonBase({
-            Padre = filaBotones, Size = anchoBtn,
-            Color = color, Transparencia = transparencia, Radio = 6,
+        local btn = Utils.BaseButton({
+            Parent = buttonRow, Size = btnWidth,
+            Color = color, Transparency = transparency, Radius = 6,
         })
         btn.LayoutOrder = i
         btn.ZIndex = zBase + 3
-        if claveTema then AlanLuna:Registrar(btn, "BackgroundColor3", claveTema) end
-        if conBorde then
-            local trazo = Utils.Stroke(btn, Theme.Border, 1, 0)
-            AlanLuna:Registrar(trazo, "Color", "Border")
+        if themeKey then LouisHub:Register(btn, "BackgroundColor3", themeKey) end
+        if hasBorder then
+            local stroke = Utils.Stroke(btn, Theme.Border, 1, 0)
+            LouisHub:Register(stroke, "Color", "Border")
         else
             Utils.Hover(btn, btn)
         end
 
-        local lbl = Utils.Texto({
-            Padre = btn, Texto = tostring(boton.Texto or "OK"),
-            Alineacion = Enum.TextXAlignment.Center, Tamano = 11,
-            Fuente = Enum.Font.GothamMedium, Color = colorTexto, Truncar = true,
+        local lbl = Utils.Text({
+            Parent = btn, Text = tostring(btnData.Text or btnData.Texto or "OK"),
+            Alignment = Enum.TextXAlignment.Center, TextSize = 11,
+            Font = Enum.Font.GothamMedium, Color = textColor, Truncate = true,
         })
         lbl.ZIndex = zBase + 4
 
-        btn.MouseButton1Click:Connect(function() presionar(i) end)
+        btn.MouseButton1Click:Connect(function() press(i) end)
     end
 
-    Utils.EntradaModal(fondo, card)
+    Utils.ModalEntry(backdrop, card)
 
-    return { Cerrar = cerrar, Presionar = presionar, Fondo = fondo }
+    return { Close = close, Cerrar = close, Press = press, Presionar = press, Backdrop = backdrop, Fondo = backdrop }
 end
+LouisHub.Confirmar = LouisHub.Confirm
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 17: KOMPONEN BARU 1 — POPUP SYSTEM (MODAL APILABLE)
+--  SECTION 17: INTERACTIVE POPUP SYSTEM (STACKABLE GLASS MODALS)
 -- ══════════════════════════════════════════════════════════════
-AlanLuna._modalesAbiertos = 0
+LouisHub._openModals = 0
 
-function AlanLuna:Popup(cfg)
+function LouisHub:Popup(cfg)
     cfg = cfg or {}
-    local padre = obtenerPadreGui()
-    local sg = (padre and padre:FindFirstChild("AlanLuna_ScreenGui")) or (padre and padre:FindFirstChild("AlanLuna_NotifGui"))
+    local parent = getGuiParent()
+    local sg = (parent and (parent:FindFirstChild("LouisHub_ScreenGui") or parent:FindFirstChild("AlanLuna_ScreenGui"))) or (parent and (parent:FindFirstChild("LouisHub_NotifGui") or parent:FindFirstChild("AlanLuna_NotifGui")))
     if not sg then
         sg = Instance.new("ScreenGui")
-        sg.Name = "AlanLuna_PopupGui"
+        sg.Name = "LouisHub_PopupGui"
         sg.ResetOnSpawn = false
         sg.IgnoreGuiInset = true
         sg.DisplayOrder = 999999
-        sg.Parent = padre
-        protegerGui(sg)
-        AlanLuna:RegistrarInstancia(sg)
+        sg.Parent = parent
+        protectGui(sg)
+        LouisHub:RegisterInstance(sg)
     end
 
-    self._modalesAbiertos = (self._modalesAbiertos or 0) + 1
-    local zBase = 500 + (self._modalesAbiertos - 1) * 10
+    self._openModals = (self._openModals or 0) + 1
+    local zBase = 500 + (self._openModals - 1) * 10
 
-    local fondo = Instance.new("TextButton")
-    fondo.Name = "PopupBackdrop"
-    fondo.Size = UDim2.new(1, 0, 1, 0)
-    fondo.BackgroundColor3 = Color3.new(0, 0, 0)
-    fondo.BackgroundTransparency = 1
-    fondo.AutoButtonColor = false
-    fondo.Text = ""
-    fondo.ZIndex = zBase
-    fondo.Parent = sg
+    local backdrop = Instance.new("TextButton")
+    backdrop.Name = "PopupBackdrop"
+    backdrop.Size = UDim2.new(1, 0, 1, 0)
+    backdrop.BackgroundColor3 = Color3.new(0, 0, 0)
+    backdrop.BackgroundTransparency = 1
+    backdrop.AutoButtonColor = false
+    backdrop.Text = ""
+    backdrop.ZIndex = zBase
+    backdrop.Parent = sg
 
-    local blurData = BlurModule(fondo)
+    local blurData = BlurModule(backdrop)
 
-    local anchoCard = math.clamp(cfg.Ancho or 340, 300, 420)
+    local cardWidth = math.clamp(cfg.Width or cfg.Ancho or 340, 300, 420)
     local card = Instance.new("Frame")
     card.Name = "PopupCard"
-    card.Size = UDim2.new(0, anchoCard, 0, 0)
+    card.Size = UDim2.new(0, cardWidth, 0, 0)
     card.Position = UDim2.new(0.5, 0, 0.5, 0)
     card.AnchorPoint = Vector2.new(0.5, 0.5)
     card.BackgroundColor3 = Theme.Panel
@@ -4728,11 +4904,11 @@ function AlanLuna:Popup(cfg)
     card.Active = true
     card.AutomaticSize = Enum.AutomaticSize.Y
     card.ZIndex = zBase + 1
-    card.Parent = fondo
+    card.Parent = backdrop
 
     Utils.Corner(card, 8)
     local cardStroke = Utils.Stroke(card, Theme.Accent, 1, 0.4)
-    AlanLuna:Registrar(cardStroke, "Color", "Accent")
+    LouisHub:Register(cardStroke, "Color", "Accent")
 
     local layout = Instance.new("UIListLayout")
     layout.Padding = UDim.new(0, 10)
@@ -4746,16 +4922,16 @@ function AlanLuna:Popup(cfg)
     pad.PaddingBottom = UDim.new(0, 14)
     pad.Parent = card
 
-    local orden = 0
-
-    if cfg.Icono then
-        orden = orden + 1
+    local order = 0
+    local iconParam = cfg.Icon or cfg.Icono
+    if iconParam then
+        order = order + 1
         local iconFrame = Instance.new("ImageLabel")
         iconFrame.BackgroundTransparency = 1
         iconFrame.Size = UDim2.new(0, 26, 0, 26)
-        iconFrame.LayoutOrder = orden
+        iconFrame.LayoutOrder = order
         iconFrame.ZIndex = zBase + 2
-        local ic = GetIcon(cfg.Icono, "Material")
+        local ic = GetIcon(iconParam, "Material")
         if type(ic) == "table" then
             iconFrame.Image = "rbxassetid://" .. tostring(ic.id)
             iconFrame.ImageRectSize = ic.imageRectSize
@@ -4767,169 +4943,181 @@ function AlanLuna:Popup(cfg)
         end
     end
 
-    if cfg.Titulo then
-        orden = orden + 1
-        local lblTitulo = Utils.Texto({
-            Padre = card,
-            Texto = tostring(cfg.Titulo),
+    local titleParam = cfg.Title or cfg.Titulo
+    if titleParam then
+        order = order + 1
+        local lblTitle = Utils.Text({
+            Parent = card,
+            Text = tostring(titleParam),
             Size = UDim2.new(1, 0, 0, 22),
-            Fuente = Enum.Font.GothamBold,
-            Tamano = 14,
+            Font = Enum.Font.GothamBold,
+            TextSize = 14,
             Color = Theme.Highlight,
-            Orden = orden,
+            Order = order,
         })
-        lblTitulo.ZIndex = zBase + 2
-        AlanLuna:Registrar(lblTitulo, "TextColor3", "Highlight")
+        lblTitle.ZIndex = zBase + 2
+        LouisHub:Register(lblTitle, "TextColor3", "Highlight")
     end
 
-    local contenedorContenido = nil
-    if cfg.Contenido then
-        orden = orden + 1
-        if type(cfg.Contenido) == "function" then
-            contenedorContenido = Instance.new("Frame")
-            contenedorContenido.BackgroundTransparency = 1
-            contenedorContenido.Size = UDim2.new(1, 0, 0, 0)
-            contenedorContenido.AutomaticSize = Enum.AutomaticSize.Y
-            contenedorContenido.LayoutOrder = orden
-            contenedorContenido.ZIndex = zBase + 2
-            contenedorContenido.Parent = card
-            pcall(cfg.Contenido, contenedorContenido)
+    local contentContainer = nil
+    local contentParam = cfg.Content or cfg.Contenido
+    if contentParam then
+        order = order + 1
+        if type(contentParam) == "function" then
+            contentContainer = Instance.new("Frame")
+            contentContainer.BackgroundTransparency = 1
+            contentContainer.Size = UDim2.new(1, 0, 0, 0)
+            contentContainer.AutomaticSize = Enum.AutomaticSize.Y
+            contentContainer.LayoutOrder = order
+            contentContainer.ZIndex = zBase + 2
+            contentContainer.Parent = card
+            pcall(contentParam, contentContainer)
         else
-            local lblCuerpo = Utils.Texto({
-                Padre = card,
-                Texto = tostring(cfg.Contenido),
+            local lblBody = Utils.Text({
+                Parent = card,
+                Text = tostring(contentParam),
                 Size = UDim2.new(1, 0, 0, 0),
-                Ajustar = true,
-                Tamano = 11,
+                Wrapped = true,
+                TextSize = 11,
                 Color = Theme.Text,
-                Orden = orden,
+                Order = order,
             })
-            lblCuerpo.AutomaticSize = Enum.AutomaticSize.Y
-            lblCuerpo.ZIndex = zBase + 2
-            AlanLuna:Registrar(lblCuerpo, "TextColor3", "Text")
+            lblBody.AutomaticSize = Enum.AutomaticSize.Y
+            lblBody.ZIndex = zBase + 2
+            LouisHub:Register(lblBody, "TextColor3", "Text")
         end
     end
 
-    local botones = cfg.Botones or { { Texto = "OK", Variante = "primary" } }
-    orden = orden + 1
+    local buttons = cfg.Buttons or cfg.Botones or { { Text = "OK", Variant = "primary" } }
+    order = order + 1
 
-    local filaBotones = Instance.new("Frame")
-    filaBotones.BackgroundTransparency = 1
-    filaBotones.Size = UDim2.new(1, 0, 0, 28)
-    filaBotones.LayoutOrder = orden
-    filaBotones.ZIndex = zBase + 2
-    filaBotones.Parent = card
+    local buttonRow = Instance.new("Frame")
+    buttonRow.BackgroundTransparency = 1
+    buttonRow.Size = UDim2.new(1, 0, 0, 28)
+    buttonRow.LayoutOrder = order
+    buttonRow.ZIndex = zBase + 2
+    buttonRow.Parent = card
 
     local bLayout = Instance.new("UIListLayout")
     bLayout.FillDirection = Enum.FillDirection.Horizontal
     bLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
     bLayout.Padding = UDim.new(0, 6)
-    bLayout.Parent = filaBotones
+    bLayout.Parent = buttonRow
 
-    local cerrado = false
-    local function cerrarModal()
-        if cerrado then return end
-        cerrado = true
-        AlanLuna._modalesAbiertos = math.max(0, (AlanLuna._modalesAbiertos or 1) - 1)
-        Utils.Tween(fondo, {BackgroundTransparency = 1}, 0.25, AlanLuna.Motion.EaseSalir)
-        Utils.Tween(card, {Position = UDim2.new(0.5, 0, 0.6, 0), BackgroundTransparency = 1}, 0.25, AlanLuna.Motion.EaseSalir)
+    local closed = false
+    local function closeModal()
+        if closed then return end
+        closed = true
+        LouisHub._openModals = math.max(0, (LouisHub._openModals or 1) - 1)
+        Utils.Tween(backdrop, {BackgroundTransparency = 1}, 0.25, LouisHub.Motion.EaseExit)
+        Utils.Tween(card, {Position = UDim2.new(0.5, 0, 0.6, 0), BackgroundTransparency = 1}, 0.25, LouisHub.Motion.EaseExit)
         task.delay(0.26, function()
-            pcall(function() fondo:Destroy() end)
-            if cfg.AlCerrar then pcall(cfg.AlCerrar) end
+            pcall(function() backdrop:Destroy() end)
+            if cfg.OnClose or cfg.AlCerrar then pcall(cfg.OnClose or cfg.AlCerrar) end
         end)
     end
 
-    for _, bDef in ipairs(botones) do
-        local btn = Utils.BotonBase({
-            Padre = filaBotones,
+    for _, bDef in ipairs(buttons) do
+        local btn = Utils.BaseButton({
+            Parent = buttonRow,
             Size = UDim2.new(0, 75, 1, 0),
-            Color = Theme.Fila,
-            Transparencia = 0.3,
-            Radio = 6
+            Color = Theme.Row,
+            Transparency = 0.3,
+            Radius = 6
         })
         btn.ZIndex = zBase + 3
 
-        local bColor = Theme.Fila
+        local bColor = Theme.Row
         local tColor = Theme.Text
-        if bDef.Variante == "primary" then
+        local variant = bDef.Variant or bDef.Variante
+        if variant == "primary" then
             bColor = Theme.Accent
             tColor = Color3.fromRGB(255, 255, 255)
-        elseif bDef.Variante == "danger" then
+        elseif variant == "danger" then
             bColor = Color3.fromRGB(180, 50, 50)
             tColor = Color3.fromRGB(255, 255, 255)
         end
         btn.BackgroundColor3 = bColor
         Utils.Hover(btn, btn)
 
-        local bLbl = Utils.Texto({
-            Padre = btn,
-            Texto = bDef.Texto or "Boton",
-            Alineacion = Enum.TextXAlignment.Center,
-            Tamano = 11,
+        local bLbl = Utils.Text({
+            Parent = btn,
+            Text = bDef.Text or bDef.Texto or "Button",
+            Alignment = Enum.TextXAlignment.Center,
+            TextSize = 11,
             Color = tColor,
             Size = UDim2.new(1, 0, 1, 0),
-            Posicion = UDim2.new(0, 0, 0, 0)
+            Position = UDim2.new(0, 0, 0, 0)
         })
         bLbl.ZIndex = zBase + 4
 
         btn.MouseButton1Click:Connect(function()
-            if bDef.Callback then ejecutarConFallback(bDef.Callback, bDef.Texto or "PopupBtn") end
-            cerrarModal()
+            if bDef.Callback then executeWithFallback(bDef.Callback, bDef.Text or bDef.Texto or "PopupBtn") end
+            closeModal()
         end)
     end
 
-    if cfg.Cerrable ~= false then
-        fondo.MouseButton1Click:Connect(function()
-            cerrarModal()
+    if (cfg.Closable ~= false and cfg.Cerrable ~= false) then
+        backdrop.MouseButton1Click:Connect(function()
+            closeModal()
         end)
     end
 
-    if cfg.AutoCerrar and tonumber(cfg.AutoCerrar) then
-        task.delay(cfg.AutoCerrar, cerrarModal)
+    local autoCloseTime = cfg.AutoClose or cfg.AutoCerrar
+    if autoCloseTime and tonumber(autoCloseTime) then
+        task.delay(tonumber(autoCloseTime), closeModal)
     end
 
     local cardScale = Instance.new("UIScale")
     cardScale.Scale = 0.9
     cardScale.Parent = card
-    Utils.Tween(fondo, {BackgroundTransparency = 0.5}, 0.3, AlanLuna.Motion.EaseEntrar)
-    Utils.Tween(cardScale, {Scale = 1}, 0.35, AlanLuna.Motion.EasePop)
+    Utils.Tween(backdrop, {BackgroundTransparency = 0.5}, 0.3, LouisHub.Motion.EaseEnter)
+    Utils.Tween(cardScale, {Scale = 1}, 0.35, LouisHub.Motion.EasePop)
 
     return {
-        Cerrar = cerrarModal,
-        Actualizar = function(_, nuevoTexto)
-            if contenedorContenido and contenedorContenido:FindFirstChildOfClass("TextLabel") then
-                contenedorContenido:FindFirstChildOfClass("TextLabel").Text = tostring(nuevoTexto)
+        Close = closeModal,
+        Cerrar = closeModal,
+        Update = function(_, newText)
+            if contentContainer and contentContainer:FindFirstChildOfClass("TextLabel") then
+                contentContainer:FindFirstChildOfClass("TextLabel").Text = tostring(newText)
             end
         end,
-        Contenedor = contenedorContenido or card,
-        Fondo = fondo,
+        Actualizar = function(_, newText)
+            if contentContainer and contentContainer:FindFirstChildOfClass("TextLabel") then
+                contentContainer:FindFirstChildOfClass("TextLabel").Text = tostring(newText)
+            end
+        end,
+        Container = contentContainer or card,
+        Contenedor = contentContainer or card,
+        Backdrop = backdrop,
+        Fondo = backdrop,
     }
 end
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 18: KOMPONEN BARU 2 — HUD STATS OVERLAY
+--  SECTION 18: HUD STATS OVERLAY ENGINE
 -- ══════════════════════════════════════════════════════════════
-local hudsActivos = {}
+local activeHUDs = {}
 
-function AlanLuna:HUD(cfg)
+function LouisHub:HUD(cfg)
     cfg = cfg or {}
-    local nombre = cfg.Nombre or "HUD"
-    if hudsActivos[nombre] then return hudsActivos[nombre] end
+    local name = cfg.Name or cfg.Nombre or "HUD"
+    if activeHUDs[name] then return activeHUDs[name] end
 
-    local padre = obtenerPadreGui()
-    local sg = (padre and padre:FindFirstChild("AlanLuna_ScreenGui")) or (padre and padre:FindFirstChild("AlanLuna_NotifGui"))
+    local parent = getGuiParent()
+    local sg = (parent and (parent:FindFirstChild("LouisHub_ScreenGui") or parent:FindFirstChild("AlanLuna_ScreenGui"))) or (parent and (parent:FindFirstChild("LouisHub_NotifGui") or parent:FindFirstChild("AlanLuna_NotifGui")))
     if not sg then
         sg = Instance.new("ScreenGui")
-        sg.Name = "AlanLuna_ScreenGui"
+        sg.Name = "LouisHub_ScreenGui"
         sg.ResetOnSpawn = false
         sg.IgnoreGuiInset = true
-        sg.Parent = padre
-        protegerGui(sg)
-        AlanLuna:RegistrarInstancia(sg)
+        sg.Parent = parent
+        protectGui(sg)
+        LouisHub:RegisterInstance(sg)
     end
 
-    local hudFolder = sg:FindFirstChild("AlanUI_HudOverlay") or Instance.new("Folder")
-    hudFolder.Name = "AlanUI_HudOverlay"
+    local hudFolder = sg:FindFirstChild("LouisHub_HudOverlay") or sg:FindFirstChild("AlanUI_HudOverlay") or Instance.new("Folder")
+    hudFolder.Name = "LouisHub_HudOverlay"
     hudFolder.Parent = sg
 
     local anchorPoints = {
@@ -4940,7 +5128,7 @@ function AlanLuna:HUD(cfg)
         Top         = Vector2.new(0.5, 0)
     }
 
-    local posiciones = {
+    local positions = {
         TopLeft     = UDim2.new(0, 15, 0, 15),
         TopRight    = UDim2.new(1, -15, 0, 15),
         BottomLeft  = UDim2.new(0, 15, 1, -15),
@@ -4948,23 +5136,23 @@ function AlanLuna:HUD(cfg)
         Top         = UDim2.new(0.5, 0, 0, 15)
     }
 
-    local posKey = type(cfg.Posicion) == "string" and cfg.Posicion or "TopLeft"
-    local posInicial = (typeof(cfg.Posicion) == "UDim2" and cfg.Posicion) or posiciones[posKey] or posiciones.TopLeft
+    local posKey = type(cfg.Position or cfg.Posicion) == "string" and (cfg.Position or cfg.Posicion) or "TopLeft"
+    local posInit = (typeof(cfg.Position or cfg.Posicion) == "UDim2" and (cfg.Position or cfg.Posicion)) or positions[posKey] or positions.TopLeft
     local anchorFinal = anchorPoints[posKey] or Vector2.new(0, 0)
 
     local hudFrame = Utils.Frame({
-        Padre = hudFolder,
+        Parent = hudFolder,
         Size = UDim2.new(0, 200, 0, 30),
-        Posicion = posInicial,
-        Ancla = anchorFinal,
+        Position = posInit,
+        Anchor = anchorFinal,
         Color = Theme.Panel,
-        Transparencia = 0.35,
-        Radio = 8,
-        Borde = true,
-        ColorBorde = Theme.Border,
-        ClaveTemaBorde = "Border"
+        Transparency = 0.35,
+        Radius = 8,
+        Border = true,
+        BorderColor = Theme.Border,
+        BorderThemeKey = "Border"
     })
-    hudFrame.Name = "HUD_" .. nombre
+    hudFrame.Name = "HUD_" .. name
     hudFrame.AutomaticSize = Enum.AutomaticSize.XY
     hudFrame.Active = true
 
@@ -4984,12 +5172,12 @@ function AlanLuna:HUD(cfg)
     pad.Parent = hudFrame
 
     if cfg.Draggable ~= false then
-        Utils.Arrastrable(hudFrame, hudFrame, AlanLuna.EventManager)
+        Utils.Draggable(hudFrame, hudFrame, LouisHub.EventManager)
     end
 
     local items = {}
 
-    for _, eDef in ipairs(cfg.Elementos or {}) do
+    for _, eDef in ipairs(cfg.Elements or cfg.Elementos or {}) do
         local itemFrame = Instance.new("Frame")
         itemFrame.BackgroundTransparency = 1
         itemFrame.Size = UDim2.new(0, 0, 1, 0)
@@ -5002,11 +5190,12 @@ function AlanLuna:HUD(cfg)
         iLayout.Padding = UDim.new(0, 4)
         iLayout.Parent = itemFrame
 
-        if eDef.Icono then
+        local icoParam = eDef.Icon or eDef.Icono
+        if icoParam then
             local ico = Instance.new("ImageLabel")
             ico.BackgroundTransparency = 1
             ico.Size = UDim2.new(0, 14, 0, 14)
-            local icAsset = GetIcon(eDef.Icono, "Material")
+            local icAsset = GetIcon(icoParam, "Material")
             if type(icAsset) == "table" then
                 ico.Image = "rbxassetid://" .. tostring(icAsset.id)
                 ico.ImageRectSize = icAsset.imageRectSize
@@ -5018,39 +5207,44 @@ function AlanLuna:HUD(cfg)
             end
         end
 
-        local valLbl = Utils.Texto({
-            Padre = itemFrame,
-            Texto = tostring(eDef.Label and (eDef.Label .. ": ") or "") .. tostring(eDef.Valor or "--") .. tostring(eDef.Sufijo or ""),
-            Tamano = 10,
+        local valParam = eDef.Value or eDef.Valor or "--"
+        local sufParam = eDef.Suffix or eDef.Sufijo or ""
+        local preParam = eDef.Label and (eDef.Label .. ": ") or ""
+
+        local valLbl = Utils.Text({
+            Parent = itemFrame,
+            Text = tostring(preParam) .. tostring(valParam) .. tostring(sufParam),
+            TextSize = 10,
             Color = Theme.Text,
             Size = UDim2.new(0, 0, 1, 0)
         })
         valLbl.AutomaticSize = Enum.AutomaticSize.X
 
-        local barraFill = nil
-        if eDef.Tipo == "bar" then
+        local barFill = nil
+        local typeParam = eDef.Type or eDef.Tipo
+        if typeParam == "bar" then
             local maxVal = tonumber(eDef.Max) or 100
             if maxVal <= 0 then maxVal = 100 end
-            local curVal = tonumber(eDef.Valor) or 0
+            local curVal = tonumber(valParam) or 0
 
             local bBg = Utils.Frame({
-                Padre = itemFrame,
+                Parent = itemFrame,
                 Size = UDim2.new(0, 40, 0, 6),
-                Color = Theme.Entrada,
-                Radio = 3,
-                Borde = false
+                Color = Theme.Input,
+                Radius = 3,
+                Border = false
             })
-            barraFill = Utils.Frame({
-                Padre = bBg,
+            barFill = Utils.Frame({
+                Parent = bBg,
                 Size = UDim2.new(math.clamp(curVal / maxVal, 0, 1), 0, 1, 0),
                 Color = Theme.Accent,
-                Radio = 3,
-                Borde = false
+                Radius = 3,
+                Border = false
             })
-            Utils.GradienteAcento(barraFill)
+            Utils.AccentGradient(barFill)
         end
 
-        items[eDef.Flag] = { Label = valLbl, Bar = barraFill, Def = eDef }
+        items[eDef.Flag] = { Label = valLbl, Bar = barFill, Def = eDef }
     end
 
     local HUDObj = {}
@@ -5058,7 +5252,7 @@ function AlanLuna:HUD(cfg)
     function HUDObj:Set(flag, val)
         local it = items[flag]
         if not it then return end
-        local suf = it.Def.Sufijo or ""
+        local suf = it.Def.Suffix or it.Def.Sufijo or ""
         local pre = it.Def.Label and (it.Def.Label .. ": ") or ""
         it.Label.Text = pre .. tostring(val) .. suf
         if it.Bar and it.Def.Max then
@@ -5069,91 +5263,99 @@ function AlanLuna:HUD(cfg)
         end
     end
 
-    function HUDObj:Vincular(flag, fn, cada)
-        cada = cada or 0.5
-        AlanLuna:RegistrarHilo(task.spawn(function()
+    function HUDObj:Bind(flag, fn, interval)
+        interval = interval or 0.5
+        LouisHub:RegisterThread(task.spawn(function()
             while hudFrame and hudFrame.Parent do
                 if hudFrame.Visible then
                     local ok, res = pcall(fn)
                     if ok and res ~= nil then HUDObj:Set(flag, res) end
                 end
-                task.wait(cada)
+                task.wait(interval)
             end
         end))
     end
+    HUDObj.Vincular = HUDObj.Bind
 
-    function HUDObj:Mostrar() hudFrame.Visible = true end
-    function HUDObj:Ocultar() hudFrame.Visible = false end
-    function HUDObj:Alternar() hudFrame.Visible = not hudFrame.Visible end
-    function HUDObj:Destruir()
-        hudsActivos[nombre] = nil
+    function HUDObj:Show() hudFrame.Visible = true end
+    HUDObj.Mostrar = HUDObj.Show
+
+    function HUDObj:Hide() hudFrame.Visible = false end
+    HUDObj.Ocultar = HUDObj.Hide
+
+    function HUDObj:Toggle() hudFrame.Visible = not hudFrame.Visible end
+    HUDObj.Alternar = HUDObj.Toggle
+
+    function HUDObj:Destroy()
+        activeHUDs[name] = nil
         pcall(function() hudFrame:Destroy() end)
     end
+    HUDObj.Destruir = HUDObj.Destroy
 
-    if cfg.Actualizar then pcall(cfg.Actualizar, HUDObj) end
+    if cfg.Update or cfg.Actualizar then pcall(cfg.Update or cfg.Actualizar, HUDObj) end
 
-    hudsActivos[nombre] = HUDObj
+    activeHUDs[name] = HUDObj
     return HUDObj
 end
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 19: KOMPONEN BARU 3 — BOTON EXTERNO (FLOATING BUTTON)
+--  SECTION 19: FLOATING ACTION BUTTON ENGINE (QUICK TOGGLES)
 -- ══════════════════════════════════════════════════════════════
-local botonesExternosSlots = {}
+local floatingButtonSlots = {}
 
-function AlanLuna:BotonExterno(cfg)
+function LouisHub:FloatingButton(cfg)
     cfg = cfg or {}
-    local nombre = cfg.Nombre or ("ExtBtn_" .. math.random(1e5, 1e6))
-    local padre = obtenerPadreGui()
-    local sg = (padre and padre:FindFirstChild("AlanLuna_ScreenGui")) or (padre and padre:FindFirstChild("AlanLuna_NotifGui"))
+    local name = cfg.Name or cfg.Nombre or ("FloatBtn_" .. math.random(1e5, 1e6))
+    local parent = getGuiParent()
+    local sg = (parent and (parent:FindFirstChild("LouisHub_ScreenGui") or parent:FindFirstChild("AlanLuna_ScreenGui"))) or (parent and (parent:FindFirstChild("LouisHub_NotifGui") or parent:FindFirstChild("AlanLuna_NotifGui")))
     if not sg then
         sg = Instance.new("ScreenGui")
-        sg.Name = "AlanLuna_ScreenGui"
+        sg.Name = "LouisHub_ScreenGui"
         sg.ResetOnSpawn = false
         sg.IgnoreGuiInset = true
-        sg.Parent = padre
-        protegerGui(sg)
-        AlanLuna:RegistrarInstancia(sg)
+        sg.Parent = parent
+        protectGui(sg)
+        LouisHub:RegisterInstance(sg)
     end
 
-    local extFolder = sg:FindFirstChild("AlanUI_ExternalOverlay") or Instance.new("Folder")
-    extFolder.Name = "AlanUI_ExternalOverlay"
+    local extFolder = sg:FindFirstChild("LouisHub_ExternalOverlay") or sg:FindFirstChild("AlanUI_ExternalOverlay") or Instance.new("Folder")
+    extFolder.Name = "LouisHub_ExternalOverlay"
     extFolder.Parent = sg
 
-    local posSlot = type(cfg.Posicion) == "string" and cfg.Posicion or "RightCenter"
-    botonesExternosSlots[posSlot] = (botonesExternosSlots[posSlot] or 0) + 1
-    local slotIndex = botonesExternosSlots[posSlot]
+    local posSlot = type(cfg.Position or cfg.Posicion) == "string" and (cfg.Position or cfg.Posicion) or "RightCenter"
+    floatingButtonSlots[posSlot] = (floatingButtonSlots[posSlot] or 0) + 1
+    local slotIndex = floatingButtonSlots[posSlot]
 
-    local posiciones = {
+    local positions = {
         RightCenter = UDim2.new(1, -55, 0.5, -25 + (slotIndex - 1) * 54),
         LeftCenter  = UDim2.new(0, 15, 0.5, -25 + (slotIndex - 1) * 54),
         BottomRight = UDim2.new(1, -55, 1, -65 - (slotIndex - 1) * 54)
     }
 
-    local posFinal = (typeof(cfg.Posicion) == "UDim2" and cfg.Posicion) or posiciones[posSlot] or posiciones.RightCenter
+    local posFinal = (typeof(cfg.Position or cfg.Posicion) == "UDim2" and (cfg.Position or cfg.Posicion)) or positions[posSlot] or positions.RightCenter
 
-    local btn = Utils.BotonBase({
-        Padre = extFolder,
+    local btn = Utils.BaseButton({
+        Parent = extFolder,
         Size = UDim2.new(0, 46, 0, 46),
-        Posicion = posFinal,
+        Position = posFinal,
         Color = Theme.Panel,
-        Transparencia = 0.35,
-        Radio = 23,
+        Transparency = 0.35,
+        Radius = 23,
     })
-    btn.Name = nombre
+    btn.Name = name
     btn.Active = true
     btn.ZIndex = 50000
 
     local blurData = BlurModule(btn)
     local stroke = Utils.Stroke(btn, Theme.Border, 1.5, 0.3)
-    AlanLuna:Registrar(stroke, "Color", "Border")
+    LouisHub:Register(stroke, "Color", "Border")
 
     local icon = Instance.new("ImageLabel")
     icon.BackgroundTransparency = 1
     icon.Size = UDim2.new(0, 22, 0, 22)
     icon.Position = UDim2.new(0.5, -11, 0.5, -11)
     icon.ZIndex = 50002
-    local icAsset = GetIcon(cfg.Icono or "crosshair", "Material")
+    local icAsset = GetIcon(cfg.Icon or cfg.Icono or "crosshair", "Material")
     if type(icAsset) == "table" then
         icon.Image = "rbxassetid://" .. tostring(icAsset.id)
         icon.ImageRectSize = icAsset.imageRectSize
@@ -5163,11 +5365,11 @@ function AlanLuna:BotonExterno(cfg)
     end
     icon.Parent = btn
 
-    Utils.Arrastrable(btn, btn, AlanLuna.EventManager)
+    Utils.Draggable(btn, btn, LouisHub.EventManager)
 
-    local estado = false
-    local enCooldown = false
-    local modo = cfg.Modo or "Toggle"
+    local state = false
+    local inCooldown = false
+    local mode = cfg.Mode or cfg.Modo or "Toggle"
 
     local pulseTween = nil
     local function setVisualState(on)
@@ -5183,26 +5385,26 @@ function AlanLuna:BotonExterno(cfg)
         end
     end
 
-    local function disparar(forzarEstado)
-        if modo == "Toggle" then
-            if forzarEstado ~= nil then
-                estado = (forzarEstado == true)
+    local function trigger(forceState)
+        if mode == "Toggle" then
+            if forceState ~= nil then
+                state = (forceState == true)
             else
-                estado = not estado
+                state = not state
             end
-            setVisualState(estado)
-            if cfg.Callback then ejecutarConFallback(cfg.Callback, nombre, estado) end
-            if estado and cfg.CallbackOn then ejecutarConFallback(cfg.CallbackOn, nombre) end
-            if not estado and cfg.CallbackOff then ejecutarConFallback(cfg.CallbackOff, nombre) end
-        elseif modo == "Once" and not enCooldown then
-            enCooldown = true
-            estado = true
+            setVisualState(state)
+            if cfg.Callback then executeWithFallback(cfg.Callback, name, state) end
+            if state and cfg.CallbackOn then executeWithFallback(cfg.CallbackOn, name) end
+            if not state and cfg.CallbackOff then executeWithFallback(cfg.CallbackOff, name) end
+        elseif mode == "Once" and not inCooldown then
+            inCooldown = true
+            state = true
             setVisualState(true)
-            if cfg.Callback then ejecutarConFallback(cfg.Callback, nombre, true) end
-            if cfg.CallbackOn then ejecutarConFallback(cfg.CallbackOn, nombre) end
+            if cfg.Callback then executeWithFallback(cfg.Callback, name, true) end
+            if cfg.CallbackOn then executeWithFallback(cfg.CallbackOn, name) end
 
-            local dur = cfg.Duracion or 2
-            local cd = cfg.Cooldown or 3
+            local dur = cfg.Duration or cfg.Duracion or 2
+            local cd  = cfg.Cooldown or 3
 
             local pRing = Instance.new("Frame")
             pRing.Size = UDim2.new(1, 0, 0, 3)
@@ -5216,19 +5418,19 @@ function AlanLuna:BotonExterno(cfg)
 
             task.delay(dur, function()
                 pcall(function() pRing:Destroy() end)
-                estado = false
+                state = false
                 setVisualState(false)
-                if cfg.Callback then ejecutarConFallback(cfg.Callback, nombre, false) end
-                if cfg.CallbackOff then ejecutarConFallback(cfg.CallbackOff, nombre) end
+                if cfg.Callback then executeWithFallback(cfg.Callback, name, false) end
+                if cfg.CallbackOff then executeWithFallback(cfg.CallbackOff, name) end
 
-                local cdLbl = Utils.Texto({
-                    Padre = btn,
-                    Texto = tostring(cd),
+                local cdLbl = Utils.Text({
+                    Parent = btn,
+                    Text = tostring(cd),
                     Size = UDim2.new(1, 0, 1, 0),
-                    Posicion = UDim2.new(0, 0, 0, 0),
-                    Alineacion = Enum.TextXAlignment.Center,
-                    Tamano = 14,
-                    Fuente = Enum.Font.GothamBold,
+                    Position = UDim2.new(0, 0, 0, 0),
+                    Alignment = Enum.TextXAlignment.Center,
+                    TextSize = 14,
+                    Font = Enum.Font.GothamBold,
                     Color = Color3.fromRGB(255, 100, 100)
                 })
                 cdLbl.ZIndex = 50004
@@ -5240,27 +5442,39 @@ function AlanLuna:BotonExterno(cfg)
                 end
                 pcall(function() cdLbl:Destroy() end)
                 icon.ImageTransparency = 0
-                enCooldown = false
+                inCooldown = false
             end)
         end
     end
 
-    Utils.ClickConfiable(btn, function() disparar() end)
+    Utils.ReliableClick(btn, function() trigger() end)
 
-    if cfg.Tecla then
-        AlanLuna:RegistrarConexion(UserInputService.InputBegan:Connect(function(inp, gpe)
+    local keyParam = cfg.Key or cfg.Tecla
+    if keyParam then
+        LouisHub:RegisterConnection(UserInputService.InputBegan:Connect(function(inp, gpe)
             if gpe then return end
-            if inp.KeyCode == cfg.Tecla then disparar() end
+            if inp.KeyCode == keyParam then trigger() end
         end))
     end
 
     local ExtObj = {
-        Activar = function() disparar(true) end,
-        Desactivar = function() disparar(false) end,
-        Alternar = function() disparar() end,
-        GetEstado = function() return estado end,
+        Activate = function() trigger(true) end,
+        Activar  = function() trigger(true) end,
+        Deactivate = function() trigger(false) end,
+        Desactivar = function() trigger(false) end,
+        Toggle   = function() trigger() end,
+        Alternar = function() trigger() end,
+        GetState = function() return state end,
+        GetEstado= function() return state end,
+        SetPosition = function(_, p)
+            if typeof(p) == "UDim2" then btn.Position = p end
+        end,
         SetPosicion = function(_, p)
             if typeof(p) == "UDim2" then btn.Position = p end
+        end,
+        Destroy = function()
+            if pulseTween then pulseTween:Cancel() end
+            pcall(function() btn:Destroy() end)
         end,
         Destruir = function()
             if pulseTween then pulseTween:Cancel() end
@@ -5269,700 +5483,712 @@ function AlanLuna:BotonExterno(cfg)
     }
     return ExtObj
 end
+LouisHub.BotonExterno = LouisHub.FloatingButton
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 20: VENTANA PRINCIPAL & NAVEGACION CATEGORY/TAB/SUBTAB
+--  SECTION 20: MAIN WINDOW & CATEGORY/TAB/SUBTAB NAVIGATION
 -- ══════════════════════════════════════════════════════════════
-local function anchoTexto(texto, tamano)
+local function getTextWidth(text, size)
     return TextService:GetTextSize(
-        texto or "", tamano or 11, Enum.Font.Gotham, Vector2.new(1000, 20)
+        text or "", size or 11, Enum.Font.Gotham, Vector2.new(1000, 20)
     ).X
 end
 
-function AlanLuna:CrearVentana(config)
+function LouisHub:CreateWindow(config)
     config = config or {}
-    local titulo       = config.Titulo or config.Name or "AlanLuna"
-    local subtitulo    = (config.Subtitulo or config.Subtitle or "by AlanbeikersFF & Nebula Softworks") .. "  •  v" .. AlanLuna.Version
-    local anchoX       = config.TamanoX or 620
-    local anchoY       = config.TamanoY or 380
-    local teclaUI      = config.TeclaToggle or config.Bind or Enum.KeyCode.RightControl
-    local modoHorizontal = config.Orientacion == "horizontal"
+    local title     = config.Title or config.Titulo or config.Name or "LouisHub"
+    local subtitle  = (config.Subtitle or config.Subtitulo or "by LouisHub") .. "  •  v" .. LouisHub.Version
+    local sizeX     = config.SizeX or config.TamanoX or 620
+    local sizeY     = config.SizeY or config.TamanoY or 380
+    local toggleKey = config.ToggleKey or config.TeclaToggle or config.Bind or Enum.KeyCode.RightControl
+    local isHorizontal = (config.Orientation or config.Orientacion) == "horizontal"
 
-    limpiarInstanciaPrevia()
-    _G.AlanLuna_Instancia = {
-        Conexiones = {},
-        Hilos = {},
-        Dibujos = {},
-        Instancias = {},
-        Ventana = nil,
-        Titulo = titulo,
+    cleanupPreviousInstance()
+    _G.LouisHub_Instance = {
+        Connections = {},
+        Threads     = {},
+        Drawings    = {},
+        Instances   = {},
+        Window      = nil,
+        Title       = title,
     }
+    _G.AlanLuna_Instancia = _G.LouisHub_Instance
 
-    local padreGui = obtenerPadreGui()
+    local parentGui = getGuiParent()
     local sg = Instance.new("ScreenGui")
-    sg.Name           = "AlanLuna_ScreenGui"
+    sg.Name           = "LouisHub_ScreenGui"
     sg.ResetOnSpawn   = false
     sg.IgnoreGuiInset = true
     sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    sg.Parent         = padreGui
-    protegerGui(sg)
-    AlanLuna:RegistrarInstancia(sg)
+    sg.Parent         = parentGui
+    protectGui(sg)
+    LouisHub:RegisterInstance(sg)
 
-    asegurarContenedorNotificaciones()
-    AlanLuna._guiConfirmar = sg
+    ensureNotificationContainer()
+    LouisHub._guiConfirm = sg
 
     local main = Utils.Frame({
-        Padre = sg,
+        Parent = sg,
         Size = UDim2.new(0, 0, 0, 0),
-        Posicion = UDim2.new(0.5, 0, 0.5, 0),
-        Ancla = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        Anchor = Vector2.new(0.5, 0.5),
         Color = Theme.Panel,
-        Radio = 10,
-        Recortar = true,
-        Borde = true,
-        ColorBorde = Theme.Border,
-        GrosorBorde = 1.5,
-        ClaveTemaBorde = "Border",
-        Transparencia = 0.25,
+        Radius = 10,
+        Clips = true,
+        Border = true,
+        BorderColor = Theme.Border,
+        BorderThickness = 1.5,
+        BorderThemeKey = "Border",
+        Transparency = 0.25,
     })
     main.Active = true
-    AlanLuna:Registrar(main, "BackgroundColor3", "Panel")
+    LouisHub:Register(main, "BackgroundColor3", "Panel")
 
     local blurData = BlurModule(main)
 
-    local sombraPantalla = Utils.Frame({
-        Padre = sg,
+    local screenShadow = Utils.Frame({
+        Parent = sg,
         Size = UDim2.new(1, 0, 1, 0),
-        Posicion = UDim2.new(0, 0, 0, 0),
+        Position = UDim2.new(0, 0, 0, 0),
         Color = Color3.new(0, 0, 0),
-        Transparencia = 1,
-        Radio = false,
-        Borde = false,
+        Transparency = 1,
+        Radius = false,
+        Border = false,
     })
-    sombraPantalla.ZIndex = -10
-    Utils.Tween(sombraPantalla, {BackgroundTransparency = 0.94}, AlanLuna.Motion.Modal)
+    screenShadow.ZIndex = -10
+    Utils.Tween(screenShadow, {BackgroundTransparency = 0.94}, LouisHub.Motion.Modal)
 
-    AlanLuna:RegistrarConexion(main:GetPropertyChangedSignal("Visible"):Connect(function()
-        sombraPantalla.Visible = main.Visible
+    LouisHub:RegisterConnection(main:GetPropertyChangedSignal("Visible"):Connect(function()
+        screenShadow.Visible = main.Visible
     end))
 
-    local POSICION_ORIGINAL_VENTANA = UDim2.new(0.5, 0, 0.5, 0)
+    local ORIGINAL_WINDOW_POS = UDim2.new(0.5, 0, 0.5, 0)
     Utils.Tween(main, {
-        Size = UDim2.new(0, anchoX, 0, anchoY),
-        Position = POSICION_ORIGINAL_VENTANA,
-    }, AlanLuna.Motion.Modal, AlanLuna.Motion.EasePop)
+        Size = UDim2.new(0, sizeX, 0, sizeY),
+        Position = ORIGINAL_WINDOW_POS,
+    }, LouisHub.Motion.Modal, LouisHub.Motion.EasePop)
 
-    local escalaUI = Instance.new("UIScale")
-    escalaUI.Scale = 1
-    escalaUI.Parent = main
+    local uiScale = Instance.new("UIScale")
+    uiScale.Scale = 1
+    uiScale.Parent = main
 
-    local escalaManual = 1
-    local anchoXBase, anchoYBase = anchoX, anchoY
-    local factorAncho, factorAlto = 1, 1
+    local manualScale = 1
+    local baseSizeX, baseSizeY = sizeX, sizeY
+    local scaleFactorX, scaleFactorY = 1, 1
 
-    local function actualizarTamanoVentana()
-        local nuevoAncho = anchoXBase * factorAncho
-        local nuevoAlto  = anchoYBase * factorAlto
-        local duracion = EventManager:HayArrastreActivo() and AlanLuna.Motion.Directo or AlanLuna.Motion.Page
-        Utils.Tween(main, {
-            Size     = UDim2.new(0, nuevoAncho, 0, nuevoAlto),
-            Position = UDim2.new(0.5, 0, 0.5, 0),
-        }, duracion, AlanLuna.Motion.EaseEntrar)
+    local function recalculateScale()
+        local cam = Workspace.CurrentCamera
+        if not cam then return end
+        local sz = cam.ViewportSize
+        if sz.X <= 0 or sz.Y <= 0 then return end
+
+        local isMobile = sz.X < 700 or sz.Y < 500
+        local pctW = isMobile and 0.95 or 0.82
+        local pctH = isMobile and 0.88 or 0.82
+
+        local curW = baseSizeX * scaleFactorX
+        local curH = baseSizeY * scaleFactorY
+
+        local scaleByW = (sz.X * pctW) / curW
+        local scaleByH = (sz.Y * pctH) / curH
+        local autoScale = math.min(scaleByW, scaleByH, 1.15)
+        autoScale = math.max(autoScale, 0.45)
+
+        local limitScale = math.min((sz.X * 0.98) / curW, (sz.Y * 0.90) / curH)
+        local finalScale = math.max(0.3, math.min(autoScale * manualScale, limitScale))
+        local duration = EventManager:IsDragging() and LouisHub.Motion.Instant or LouisHub.Motion.Page
+        Utils.Tween(uiScale, {Scale = finalScale}, duration, LouisHub.Motion.EaseEnter)
     end
 
-    local function recalcularEscala()
-        local camara = Workspace.CurrentCamera
-        if not camara then return end
-        local tam = camara.ViewportSize
-        if tam.X <= 0 or tam.Y <= 0 then return end
+    recalculateScale()
 
-        local esMovil = tam.X < 700 or tam.Y < 500
-        local pctAncho = esMovil and 0.95 or 0.82
-        local pctAlto  = esMovil and 0.88 or 0.82
-
-        local anchoActual = anchoXBase * factorAncho
-        local altoActual  = anchoYBase * factorAlto
-
-        local escalaPorAncho = (tam.X * pctAncho) / anchoActual
-        local escalaPorAlto  = (tam.Y * pctAlto)  / altoActual
-        local escalaAuto = math.min(escalaPorAncho, escalaPorAlto, 1.15)
-        escalaAuto = math.max(escalaAuto, 0.45)
-
-        local limiteEscala = math.min((tam.X * 0.98) / anchoActual, (tam.Y * 0.90) / altoActual)
-        local escalaFinal = math.max(0.3, math.min(escalaAuto * escalaManual, limiteEscala))
-        local duracion = EventManager:HayArrastreActivo() and AlanLuna.Motion.Directo or AlanLuna.Motion.Page
-        Utils.Tween(escalaUI, {Scale = escalaFinal}, duracion, AlanLuna.Motion.EaseEntrar)
-    end
-
-    recalcularEscala()
-
-    local conexionViewport = nil
-    local function engancharCamara()
-        if conexionViewport then
-            AlanLuna:DesconectarYLimpiar(conexionViewport)
-            conexionViewport = nil
+    local connViewport = nil
+    local function hookCamera()
+        if connViewport then
+            LouisHub:DisconnectAndClean(connViewport)
+            connViewport = nil
         end
-        local camaraActual = Workspace.CurrentCamera
-        if camaraActual then
-            conexionViewport = AlanLuna:RegistrarConexion(
-                camaraActual:GetPropertyChangedSignal("ViewportSize"):Connect(recalcularEscala)
+        local curCam = Workspace.CurrentCamera
+        if curCam then
+            connViewport = LouisHub:RegisterConnection(
+                curCam:GetPropertyChangedSignal("ViewportSize"):Connect(recalculateScale)
             )
         end
     end
-    engancharCamara()
-    AlanLuna:RegistrarConexion(
+    hookCamera()
+    LouisHub:RegisterConnection(
         Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
-            engancharCamara()
-            recalcularEscala()
+            hookCamera()
+            recalculateScale()
         end)
     )
 
-    -- ── PILL MINIMIZAR ──────────────────────────────────────────
-    local textoPill = "⚡ " .. titulo
-    local anchoPill = math.clamp(anchoTexto(textoPill, 12) + 40, 130, 260)
+    -- ── RESTORE PILL MINIMIZER ───────────────────────────────────
+    local pillText = "⚡ " .. title
+    local pillWidth = math.clamp(getTextWidth(pillText, 12) + 40, 130, 260)
 
-    local pillRestaurar = Utils.BotonBase({
-        Padre = sg,
-        Size = UDim2.new(0, anchoPill, 0, 28),
-        Posicion = UDim2.new(0.5, 0, 0, 25),
-        Ancla = Vector2.new(0.5, 0.5),
+    local pillRestore = Utils.BaseButton({
+        Parent = sg,
+        Size = UDim2.new(0, pillWidth, 0, 28),
+        Position = UDim2.new(0.5, 0, 0, 25),
+        Anchor = Vector2.new(0.5, 0.5),
         Color = Theme.Panel,
-        Transparencia = 0.2,
-        Radio = 14,
-        Borde = true,
-        ColorBorde = Theme.Accent,
-        GrosorBorde = 1,
+        Transparency = 0.2,
+        Radius = 14,
+        Border = true,
+        BorderColor = Theme.Accent,
+        BorderThickness = 1,
     })
-    pillRestaurar.Visible = false
-    pillRestaurar.ZIndex  = 50
-    pillRestaurar.Active  = true
-    AlanLuna:Registrar(pillRestaurar, "BackgroundColor3", "Panel")
+    pillRestore.Visible = false
+    pillRestore.ZIndex  = 50
+    pillRestore.Active  = true
+    LouisHub:Register(pillRestore, "BackgroundColor3", "Panel")
 
-    local blurPill = BlurModule(pillRestaurar)
+    local blurPill = BlurModule(pillRestore)
 
-    Utils.Texto({
-        Padre = pillRestaurar, Texto = textoPill,
-        Size = UDim2.new(1, -12, 1, 0), Posicion = UDim2.new(0, 6, 0, 0),
-        Alineacion = Enum.TextXAlignment.Center, Truncar = true,
-        Fuente = Enum.Font.GothamBold, Tamano = 11,
+    Utils.Text({
+        Parent = pillRestore, Text = pillText,
+        Size = UDim2.new(1, -12, 1, 0), Position = UDim2.new(0, 6, 0, 0),
+        Alignment = Enum.TextXAlignment.Center, Truncate = true,
+        Font = Enum.Font.GothamBold, TextSize = 11,
     })
 
-    local ventanaAbierta = true
-    local animandoVentana = false
-    local idOperacionVentana = 0
+    local isWindowOpen = true
+    local isWindowAnimating = false
+    local windowOpId = 0
 
-    local function alternarVentana(abrir)
-        if animandoVentana or abrir == ventanaAbierta then return end
-        animandoVentana = true
-        ventanaAbierta = abrir
-        local idOperacion = idOperacionVentana + 1
-        idOperacionVentana = idOperacion
-        local function esOperacionVigente() return idOperacionVentana == idOperacion end
+    local function toggleWindow(open)
+        if isWindowAnimating or open == isWindowOpen then return end
+        isWindowAnimating = true
+        isWindowOpen = open
+        local currentOpId = windowOpId + 1
+        windowOpId = currentOpId
+        local function isOpActive() return windowOpId == currentOpId end
 
-        if abrir then
-            local tamanoObjetivo = UDim2.new(0, anchoXBase * factorAncho, 0, anchoYBase * factorAlto)
-            Utils.Tween(pillRestaurar, {Size = UDim2.new(0, 0, 0, 0)}, AlanLuna.Motion.Expand, AlanLuna.Motion.EaseSalir)
+        if open then
+            local targetSize = UDim2.new(0, baseSizeX * scaleFactorX, 0, baseSizeY * scaleFactorY)
+            Utils.Tween(pillRestore, {Size = UDim2.new(0, 0, 0, 0)}, LouisHub.Motion.Expand, LouisHub.Motion.EaseExit)
 
             main.Visible = true
             main.Size = UDim2.new(0, 0, 0, 0)
-            main.Position = POSICION_ORIGINAL_VENTANA
-            Utils.Tween(main, {Size = tamanoObjetivo}, AlanLuna.Motion.Modal, AlanLuna.Motion.EasePop)
+            main.Position = ORIGINAL_WINDOW_POS
+            Utils.Tween(main, {Size = targetSize}, LouisHub.Motion.Modal, LouisHub.Motion.EasePop)
 
             task.spawn(function()
-                task.wait(AlanLuna.Motion.Expand)
-                if esOperacionVigente() then
-                    pillRestaurar.Visible = false
-                    pillRestaurar.Size = UDim2.new(0, anchoPill, 0, 28)
+                task.wait(LouisHub.Motion.Expand)
+                if isOpActive() then
+                    pillRestore.Visible = false
+                    pillRestore.Size = UDim2.new(0, pillWidth, 0, 28)
                 end
-                task.wait(math.max(0, AlanLuna.Motion.Modal - AlanLuna.Motion.Expand))
-                if esOperacionVigente() then
-                    main.Size = tamanoObjetivo
-                    animandoVentana = false
+                task.wait(math.max(0, LouisHub.Motion.Modal - LouisHub.Motion.Expand))
+                if isOpActive() then
+                    main.Size = targetSize
+                    isWindowAnimating = false
                 end
             end)
         else
-            Utils.Tween(main, {Size = UDim2.new(0, 0, 0, 0)}, AlanLuna.Motion.Expand, AlanLuna.Motion.EaseSalir)
+            Utils.Tween(main, {Size = UDim2.new(0, 0, 0, 0)}, LouisHub.Motion.Expand, LouisHub.Motion.EaseExit)
             task.spawn(function()
-                task.wait(AlanLuna.Motion.Expand + 0.04)
-                if not esOperacionVigente() then return end
+                task.wait(LouisHub.Motion.Expand + 0.04)
+                if not isOpActive() then return end
                 main.Visible = false
                 main.Size = UDim2.new(0, 0, 0, 0)
-                pillRestaurar.Size = UDim2.new(0, 0, 0, 0)
-                pillRestaurar.Visible = true
-                Utils.Tween(pillRestaurar, {Size = UDim2.new(0, anchoPill, 0, 28)}, AlanLuna.Motion.Modal, AlanLuna.Motion.EasePop)
-                task.wait(AlanLuna.Motion.Modal + 0.01)
-                if esOperacionVigente() then
-                    pillRestaurar.Size = UDim2.new(0, anchoPill, 0, 28)
-                    animandoVentana = false
+                pillRestore.Size = UDim2.new(0, 0, 0, 0)
+                pillRestore.Visible = true
+                Utils.Tween(pillRestore, {Size = UDim2.new(0, pillWidth, 0, 28)}, LouisHub.Motion.Modal, LouisHub.Motion.EasePop)
+                task.wait(LouisHub.Motion.Modal + 0.01)
+                if isOpActive() then
+                    pillRestore.Size = UDim2.new(0, pillWidth, 0, 28)
+                    isWindowAnimating = false
                 end
             end)
         end
     end
 
-    pillRestaurar.MouseButton1Click:Connect(function() alternarVentana(true) end)
+    pillRestore.MouseButton1Click:Connect(function() toggleWindow(true) end)
 
     -- ── HEADER / TOPBAR ─────────────────────────────────────────
-    local barraTitulo = Utils.Frame({
-        Padre = main, Size = UDim2.new(1, 0, 0, 32),
-        Color = Theme.Background, Radio = 10, Transparencia = 0.35,
-        Borde = false,
+    local titleBar = Utils.Frame({
+        Parent = main, Size = UDim2.new(1, 0, 0, 32),
+        Color = Theme.Background, Radius = 10, Transparency = 0.35,
+        Border = false,
     })
-    barraTitulo.Active = true
-    AlanLuna:Registrar(barraTitulo, "BackgroundColor3", "Background")
+    titleBar.Active = true
+    LouisHub:Register(titleBar, "BackgroundColor3", "Background")
 
-    local tapa = Utils.Frame({
-        Padre = barraTitulo, Size = UDim2.new(1, 0, 0, 8),
-        Posicion = UDim2.new(0, 0, 1, -8),
-        Color = Theme.Background, Radio = false, Borde = false,
-        Transparencia = 0.35,
+    local titleCover = Utils.Frame({
+        Parent = titleBar, Size = UDim2.new(1, 0, 0, 8),
+        Position = UDim2.new(0, 0, 1, -8),
+        Color = Theme.Background, Radius = false, Border = false,
+        Transparency = 0.35,
     })
-    AlanLuna:Registrar(tapa, "BackgroundColor3", "Background")
+    LouisHub:Register(titleCover, "BackgroundColor3", "Background")
 
-    local lineaAcento = Utils.Frame({
-        Padre = main, Size = UDim2.new(1, -20, 0, 2),
-        Posicion = UDim2.new(0, 10, 0, 31), Color = Theme.Accent, Radio = false,
-        Borde = false, Transparencia = 0.1,
+    local accentLine = Utils.Frame({
+        Parent = main, Size = UDim2.new(1, -20, 0, 2),
+        Position = UDim2.new(0, 10, 0, 31), Color = Theme.Accent, Radius = false,
+        Border = false, Transparency = 0.1,
     })
-    lineaAcento.ZIndex = barraTitulo.ZIndex + 2
-    AlanLuna:Registrar(lineaAcento, "BackgroundColor3", "Accent")
-    Utils.GradienteAcento(lineaAcento)
+    accentLine.ZIndex = titleBar.ZIndex + 2
+    LouisHub:Register(accentLine, "BackgroundColor3", "Accent")
+    Utils.AccentGradient(accentLine)
 
-    Utils.Arrastrable(barraTitulo, main, AlanLuna.EventManager)
+    Utils.Draggable(titleBar, main, LouisHub.EventManager)
 
-    local lblTitulo = Utils.Texto({
-        Padre = barraTitulo, Texto = titulo,
-        Posicion = UDim2.new(0, 10, 0, 2), Size = UDim2.new(0.5, 0, 0, 16),
-        Fuente = Enum.Font.GothamBold, Tamano = 13, Color = Theme.TextDark,
-        Categoria = "titulo", Truncar = true,
+    local lblTitle = Utils.Text({
+        Parent = titleBar, Text = title,
+        Position = UDim2.new(0, 10, 0, 2), Size = UDim2.new(0.5, 0, 0, 16),
+        Font = Enum.Font.GothamBold, TextSize = 13, Color = Theme.TextDark,
+        Category = "title", Truncate = true,
     })
-    AlanLuna:Registrar(lblTitulo, "TextColor3", "TextDark")
+    LouisHub:Register(lblTitle, "TextColor3", "TextDark")
 
-    local lblSub = Utils.Texto({
-        Padre = barraTitulo, Texto = subtitulo,
-        Posicion = UDim2.new(0, 10, 0, 17), Size = UDim2.new(0.5, 0, 0, 12),
-        Tamano = 10, Color = Theme.TextDark, TextoTransparencia = 0.25,
-        Categoria = "titulo", Truncar = true,
+    local lblSub = Utils.Text({
+        Parent = titleBar, Text = subtitle,
+        Position = UDim2.new(0, 10, 0, 17), Size = UDim2.new(0.5, 0, 0, 12),
+        TextSize = 10, Color = Theme.TextDark, TextTransparency = 0.25,
+        Category = "title", Truncate = true,
     })
-    AlanLuna:Registrar(lblSub, "TextColor3", "TextDark")
+    LouisHub:Register(lblSub, "TextColor3", "TextDark")
 
-    local btnCerrar = Utils.BotonBase({
-        Padre = barraTitulo, Size = UDim2.new(0, 24, 0, 20),
-        Posicion = UDim2.new(1, -16, 0.5, 0), Ancla = Vector2.new(0.5, 0.5),
-        Color = Color3.fromRGB(180, 50, 50), Transparencia = 1, Radio = 5,
+    local btnClose = Utils.BaseButton({
+        Parent = titleBar, Size = UDim2.new(0, 24, 0, 20),
+        Position = UDim2.new(1, -16, 0.5, 0), Anchor = Vector2.new(0.5, 0.5),
+        Color = Color3.fromRGB(180, 50, 50), Transparency = 1, Radius = 5,
     })
-    local icoCerrar = Utils.Texto({
-        Padre = btnCerrar, Texto = "✕",
-        Size = UDim2.new(1, 0, 1, 0), Posicion = UDim2.new(0, 0, 0, 0),
-        Alineacion = Enum.TextXAlignment.Center, Tamano = 12, Fuente = Enum.Font.GothamBold,
+    local icoClose = Utils.Text({
+        Parent = btnClose, Text = "✕",
+        Size = UDim2.new(1, 0, 1, 0), Position = UDim2.new(0, 0, 0, 0),
+        Alignment = Enum.TextXAlignment.Center, TextSize = 12, Font = Enum.Font.GothamBold,
     })
-    btnCerrar.MouseButton1Down:Connect(function()
-        Utils.Tween(btnCerrar, {BackgroundTransparency = 0.75}, AlanLuna.Motion.FlashIn)
+    btnClose.MouseButton1Down:Connect(function()
+        Utils.Tween(btnClose, {BackgroundTransparency = 0.75}, LouisHub.Motion.FlashIn)
     end)
-    btnCerrar.MouseButton1Up:Connect(function()
-        Utils.Tween(btnCerrar, {BackgroundTransparency = 1}, AlanLuna.Motion.Hover)
+    btnClose.MouseButton1Up:Connect(function()
+        Utils.Tween(btnClose, {BackgroundTransparency = 1}, LouisHub.Motion.Hover)
     end)
 
-    local function mostrarConfirmacionDestruir()
-        AlanLuna:Confirmar({
-            Titulo    = "⚠️ ¿Cerrar interfaz?",
-            Contenido = "¿Estás seguro de que deseas destruir la interfaz? Todas las conexiones y overlays se limpiarán por completo.",
-            Icono     = "warning",
-            Botones   = {
-                { Texto = "Cancelar", Variante = "neutral" },
+    local function showConfirmDestroy()
+        LouisHub:Confirm({
+            Title    = "⚠️ Close Interface?",
+            Titulo   = "⚠️ Close Interface?",
+            Content  = "Are you sure you want to destroy this interface? All active overlays and connections will be terminated.",
+            Contenido= "Are you sure you want to destroy this interface? All active overlays and connections will be terminated.",
+            Icon     = "warning",
+            Icono    = "warning",
+            Buttons  = {
+                { Text = "Cancel", Variant = "neutral" },
                 {
-                    Texto = "Eliminar", Variante = "danger",
+                    Text = "Destroy", Variant = "danger",
                     Callback = function()
-                        AlanLuna:Destroy()
+                        LouisHub:Destroy()
                     end
                 }
             }
         })
     end
-    Utils.ClickConfiable(btnCerrar, mostrarConfirmacionDestruir)
+    Utils.ReliableClick(btnClose, showConfirmDestroy)
 
-    local btnMin = Utils.BotonBase({
-        Padre = barraTitulo, Size = UDim2.new(0, 24, 0, 20),
-        Posicion = UDim2.new(1, -44, 0.5, 0), Ancla = Vector2.new(0.5, 0.5),
-        Color = Theme.BackgroundDark, Transparencia = 1, Radio = 5,
+    local btnMin = Utils.BaseButton({
+        Parent = titleBar, Size = UDim2.new(0, 24, 0, 20),
+        Position = UDim2.new(1, -44, 0.5, 0), Anchor = Vector2.new(0.5, 0.5),
+        Color = Theme.BackgroundDark, Transparency = 1, Radius = 5,
     })
-    Utils.Texto({
-        Padre = btnMin, Texto = "—",
-        Size = UDim2.new(1, 0, 1, 0), Posicion = UDim2.new(0, 0, 0, 0),
-        Alineacion = Enum.TextXAlignment.Center, Fuente = Enum.Font.GothamBold,
-        Tamano = 13, Color = Theme.TextDark,
+    Utils.Text({
+        Parent = btnMin, Text = "—",
+        Size = UDim2.new(1, 0, 1, 0), Position = UDim2.new(0, 0, 0, 0),
+        Alignment = Enum.TextXAlignment.Center, Font = Enum.Font.GothamBold,
+        TextSize = 13, Color = Theme.TextDark,
     })
     btnMin.MouseButton1Down:Connect(function()
-        Utils.Tween(btnMin, {BackgroundTransparency = 0.7}, AlanLuna.Motion.FlashIn)
+        Utils.Tween(btnMin, {BackgroundTransparency = 0.7}, LouisHub.Motion.FlashIn)
     end)
     btnMin.MouseButton1Up:Connect(function()
-        Utils.Tween(btnMin, {BackgroundTransparency = 1}, AlanLuna.Motion.Hover)
+        Utils.Tween(btnMin, {BackgroundTransparency = 1}, LouisHub.Motion.Hover)
     end)
-    Utils.ClickConfiable(btnMin, function() alternarVentana(false) end)
+    Utils.ReliableClick(btnMin, function() toggleWindow(false) end)
 
     -- ── BREADCRUMB & CONTENT CONTAINERS ─────────────────────────
-    local barraLat = Instance.new("ScrollingFrame")
-    barraLat.Size                = UDim2.new(0, 155, 1, -33)
-    barraLat.Position            = UDim2.new(0, 0, 0, 33)
-    barraLat.BackgroundColor3    = Theme.PanelClaro
-    barraLat.BackgroundTransparency = 0.4
-    barraLat.BorderSizePixel     = 0
-    barraLat.Visible             = not modoHorizontal
-    barraLat.ScrollingDirection  = Enum.ScrollingDirection.Y
-    barraLat.ScrollBarThickness  = 3
-    barraLat.ScrollBarImageColor3 = Theme.Accent
-    barraLat.CanvasSize          = UDim2.new(0, 0, 0, 0)
-    barraLat.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    barraLat.Parent              = main
-    AlanLuna:Registrar(barraLat, "BackgroundColor3", "PanelClaro")
+    local sideBar = Instance.new("ScrollingFrame")
+    sideBar.Size                = UDim2.new(0, 155, 1, -33)
+    sideBar.Position            = UDim2.new(0, 0, 0, 33)
+    sideBar.BackgroundColor3    = Theme.PanelLight or Theme.PanelClaro
+    sideBar.BackgroundTransparency = 0.4
+    sideBar.BorderSizePixel     = 0
+    sideBar.Visible             = not isHorizontal
+    sideBar.ScrollingDirection  = Enum.ScrollingDirection.Y
+    sideBar.ScrollBarThickness  = 3
+    sideBar.ScrollBarImageColor3 = Theme.Accent
+    sideBar.CanvasSize          = UDim2.new(0, 0, 0, 0)
+    sideBar.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    sideBar.Parent              = main
+    LouisHub:Register(sideBar, "BackgroundColor3", "PanelLight")
 
     local layoutTabs = Instance.new("UIListLayout")
     layoutTabs.Padding   = UDim.new(0, 3)
     layoutTabs.SortOrder = Enum.SortOrder.LayoutOrder
-    layoutTabs.Parent    = barraLat
+    layoutTabs.Parent    = sideBar
 
     local padTabs = Instance.new("UIPadding")
     padTabs.PaddingTop   = UDim.new(0, 6)
     padTabs.PaddingLeft  = UDim.new(0, 5)
     padTabs.PaddingRight = UDim.new(0, 5)
-    padTabs.Parent       = barraLat
+    padTabs.Parent       = sideBar
 
-    local barraHoriz = Instance.new("ScrollingFrame")
-    barraHoriz.Size                = UDim2.new(1, 0, 0, 34)
-    barraHoriz.Position            = UDim2.new(0, 0, 0, 33)
-    barraHoriz.BackgroundColor3    = Theme.PanelClaro
-    barraHoriz.BackgroundTransparency = 0.4
-    barraHoriz.BorderSizePixel     = 0
-    barraHoriz.Visible             = modoHorizontal
-    barraHoriz.ScrollingDirection  = Enum.ScrollingDirection.X
-    barraHoriz.ScrollBarThickness  = 3
-    barraHoriz.ScrollBarImageColor3 = Theme.Accent
-    barraHoriz.CanvasSize          = UDim2.new(0, 0, 0, 0)
-    barraHoriz.AutomaticCanvasSize = Enum.AutomaticSize.X
-    barraHoriz.Parent              = main
-    AlanLuna:Registrar(barraHoriz, "BackgroundColor3", "PanelClaro")
+    local horizBar = Instance.new("ScrollingFrame")
+    horizBar.Size                = UDim2.new(1, 0, 0, 34)
+    horizBar.Position            = UDim2.new(0, 0, 0, 33)
+    horizBar.BackgroundColor3    = Theme.PanelLight or Theme.PanelClaro
+    horizBar.BackgroundTransparency = 0.4
+    horizBar.BorderSizePixel     = 0
+    horizBar.Visible             = isHorizontal
+    horizBar.ScrollingDirection  = Enum.ScrollingDirection.X
+    horizBar.ScrollBarThickness  = 3
+    horizBar.ScrollBarImageColor3 = Theme.Accent
+    horizBar.CanvasSize          = UDim2.new(0, 0, 0, 0)
+    horizBar.AutomaticCanvasSize = Enum.AutomaticSize.X
+    horizBar.Parent              = main
+    LouisHub:Register(horizBar, "BackgroundColor3", "PanelLight")
 
     local layoutHoriz = Instance.new("UIListLayout")
     layoutHoriz.FillDirection     = Enum.FillDirection.Horizontal
     layoutHoriz.Padding           = UDim.new(0, 4)
     layoutHoriz.SortOrder         = Enum.SortOrder.LayoutOrder
     layoutHoriz.VerticalAlignment = Enum.VerticalAlignment.Center
-    layoutHoriz.Parent            = barraHoriz
+    layoutHoriz.Parent            = horizBar
 
     local padHoriz = Instance.new("UIPadding")
-    padHoriz.PaddingLeft, padHoriz.PaddingRight   = UDim.new(0, 6), UDim.new(0, 6)
-    padHoriz.PaddingTop, padHoriz.PaddingBottom   = UDim.new(0, 3), UDim.new(0, 3)
-    padHoriz.Parent                               = barraHoriz
+    padHoriz.PaddingLeft, padHoriz.PaddingRight = UDim.new(0, 6), UDim.new(0, 6)
+    padHoriz.PaddingTop, padHoriz.PaddingBottom = UDim.new(0, 3), UDim.new(0, 3)
+    padHoriz.Parent                             = horizBar
 
-    local function posContenedor()
-        if modoHorizontal then
+    local function getPageContainerLayout()
+        if isHorizontal then
             return UDim2.new(0, 0, 0, 68), UDim2.new(1, 0, 1, -68)
         else
             return UDim2.new(0, 155, 0, 33), UDim2.new(1, -155, 1, -33)
         end
     end
 
-    local posP, sizeP = posContenedor()
-    local contenedorPaginas = Utils.Frame({
-        Padre = main, Size = sizeP, Posicion = posP,
-        Transparencia = 1, Radio = false, Borde = false,
+    local posP, sizeP = getPageContainerLayout()
+    local pageContainer = Utils.Frame({
+        Parent = main, Size = sizeP, Position = posP,
+        Transparency = 1, Radius = false, Border = false,
     })
 
-    local breadcrumbActivo = true
+    local isBreadcrumbActive = true
     local breadcrumbFrame = Utils.Frame({
-        Padre = contenedorPaginas, Size = UDim2.new(1, -16, 0, 20),
-        Posicion = UDim2.new(0, 8, 0, 4), Transparencia = 1,
-        Radio = false, Borde = false, Orden = 0,
+        Parent = pageContainer, Size = UDim2.new(1, -16, 0, 20),
+        Position = UDim2.new(0, 8, 0, 4), Transparency = 1,
+        Radius = false, Border = false, Order = 0,
     })
-    local lblBreadcrumb = Utils.Texto({
-        Padre = breadcrumbFrame, Texto = "",
-        Size = UDim2.new(1, 0, 1, 0), Posicion = UDim2.new(0, 0, 0, 0),
-        Tamano = 10, Color = Theme.TextDark, TextoTransparencia = 0.35,
-        Fuente = Enum.Font.GothamMedium,
+    local lblBreadcrumb = Utils.Text({
+        Parent = breadcrumbFrame, Text = "",
+        Size = UDim2.new(1, 0, 1, 0), Position = UDim2.new(0, 0, 0, 0),
+        TextSize = 10, Color = Theme.TextDark, TextTransparency = 0.35,
+        Font = Enum.Font.GothamMedium,
     })
 
-    AlanLuna:RegistrarConexion(
-        UserInputService.InputBegan:Connect(function(input, procesado)
-            if not procesado and input.KeyCode == teclaUI then
-                alternarVentana(not ventanaAbierta)
+    LouisHub:RegisterConnection(
+        UserInputService.InputBegan:Connect(function(input, processed)
+            if not processed and input.KeyCode == toggleKey then
+                toggleWindow(not isWindowOpen)
             end
         end)
     )
 
-    -- ── HIERARKI DATA STRUCTURES ────────────────────────────────
-    local Ventana = {
-        Categorias = {},
-        Tabs       = {},
-        _main      = main,
-        NombreConfig = config.NombreConfig or "autosave",
-        Bind       = teclaUI,
-        State      = true,
+    -- ── HIERARCHY DATA STRUCTURES ───────────────────────────────
+    local Window = {
+        Categories   = {},
+        Categorias   = {},
+        Tabs         = {},
+        _main        = main,
+        NombreConfig = config.ConfigName or config.NombreConfig or "autosave",
+        Bind         = toggleKey,
+        State        = true,
     }
+    Window.Categorias = Window.Categories
 
-    function Ventana:Toggle()
-        alternarVentana(not ventanaAbierta)
+    function Window:Toggle()
+        toggleWindow(not isWindowOpen)
     end
 
-    function Ventana:SetState(state)
-        alternarVentana(state == true)
+    function Window:SetState(state)
+        toggleWindow(state == true)
     end
 
-    function Ventana:Destroy()
-        AlanLuna:Destroy()
+    function Window:Destroy()
+        LouisHub:Destroy()
     end
+    Window.Destruir = Window.Destroy
 
-    local catOrden = 0
-    local primeraTabGlobal = true
-    local categoriaActivaNombre = nil
-    local tabActivaNombre = nil
-    local subTabActivaNombre = nil
+    local catOrder = 0
+    local isFirstGlobalTab = true
+    local activeCategoryName = nil
+    local activeTabName = nil
+    local activeSubTabName = nil
 
-    local function actualizarBreadcrumb()
-        if not breadcrumbActivo then
+    local function refreshBreadcrumb()
+        if not isBreadcrumbActive then
             breadcrumbFrame.Visible = false
             return
         end
         breadcrumbFrame.Visible = true
-        local str = (categoriaActivaNombre or "") .. " › " .. (tabActivaNombre or "")
-        if subTabActivaNombre and subTabActivaNombre ~= "Main" then
-            str = str .. " › " .. subTabActivaNombre
+        local str = (activeCategoryName or "") .. " › " .. (activeTabName or "")
+        if activeSubTabName and activeSubTabName ~= "Main" then
+            str = str .. " › " .. activeSubTabName
         end
         lblBreadcrumb.Text = str
     end
 
-    function Ventana:Breadcrumb(activo)
-        breadcrumbActivo = (activo ~= false)
-        actualizarBreadcrumb()
-        return breadcrumbActivo
+    function Window:Breadcrumb(active)
+        isBreadcrumbActive = (active ~= false)
+        refreshBreadcrumb()
+        return isBreadcrumbActive
     end
 
-    function Ventana:CategoriaActual() return categoriaActivaNombre end
-    function Ventana:TabActual() return tabActivaNombre end
-    function Ventana:SubTabActual() return subTabActivaNombre end
+    function Window:CurrentCategory() return activeCategoryName end
+    Window.CategoriaActual = Window.CurrentCategory
 
-    -- ── SEARCH ENGINE GLOBAL ────────────────────────────────────
-    local function filtrarBusqueda(texto)
-        texto = (texto or ""):lower()
-        local buscandoActivo = texto ~= ""
+    function Window:CurrentTab() return activeTabName end
+    Window.TabActual = Window.CurrentTab
 
-        for _, entrada in ipairs(seccionesRegistradas) do
-            if entrada.colapsable then
-                if buscandoActivo then
-                    if entrada.colapsadaAntesDeBuscar == nil then
-                        entrada.colapsadaAntesDeBuscar = entrada.colapsada
+    function Window:CurrentSubTab() return activeSubTabName end
+    Window.SubTabActual = Window.CurrentSubTab
+
+    -- ── SEARCH ENGINE ───────────────────────────────────────────
+    local function filterSearch(text)
+        text = (text or ""):lower()
+        local isSearching = text ~= ""
+
+        for _, entry in ipairs(registeredSections) do
+            if entry.collapsible then
+                if isSearching then
+                    if entry.collapsedBeforeSearch == nil then
+                        entry.collapsedBeforeSearch = entry.collapsed
                     end
-                    if entrada.colapsada then entrada.AplicarColapsada(false) end
+                    if entry.collapsed then entry.ApplyCollapsed(false) end
                 else
-                    if entrada.colapsadaAntesDeBuscar ~= nil then
-                        entrada.AplicarColapsada(entrada.colapsadaAntesDeBuscar)
-                        entrada.colapsadaAntesDeBuscar = nil
+                    if entry.collapsedBeforeSearch ~= nil then
+                        entry.ApplyCollapsed(entry.collapsedBeforeSearch)
+                        entry.collapsedBeforeSearch = nil
                     end
                 end
             end
         end
 
-        for _, entrada in ipairs(indiceBusqueda) do
-            local coincide = (texto == "") or (entrada.texto:find(texto, 1, true) ~= nil)
-            entrada.fila.Visible = coincide and cumpleVisibilidadCondicional(entrada.fila)
+        for _, entry in ipairs(searchIndex) do
+            local matches = (text == "") or (entry.text:find(text, 1, true) ~= nil)
+            entry.row.Visible = matches and checkConditionalVisibility(entry.row)
         end
 
-        local primerMatchTab = nil
-        for _, cat in pairs(Ventana.Categorias) do
-            local catTieneMatch = false
+        local firstMatchedTab = nil
+        for _, cat in pairs(Window.Categories) do
+            local catMatched = false
             for _, t in pairs(cat.Tabs) do
-                local tabTieneMatch = false
+                local tabMatched = false
                 for _, sub in pairs(t.SubTabs) do
-                    for _, s in ipairs(sub.Secciones) do
-                        local secMatch = false
-                        for _, hijo in ipairs(s.contenedor:GetChildren()) do
-                            if hijo:IsA("GuiObject") and hijo.Visible then
-                                secMatch = true
+                    for _, s in ipairs(sub.Sections or sub.Secciones) do
+                        local secMatched = false
+                        for _, child in ipairs(s.contenedor:GetChildren()) do
+                            if child:IsA("GuiObject") and child.Visible then
+                                secMatched = true
                                 break
                             end
                         end
-                        s.marco.Visible = (texto == "") or secMatch
-                        if secMatch then tabTieneMatch = true end
+                        s.marco.Visible = (text == "") or secMatched
+                        if secMatched then tabMatched = true end
                     end
                 end
-                t.BotonLat.Visible = (texto == "") or tabTieneMatch
-                if tabTieneMatch then
-                    catTieneMatch = true
-                    if not primerMatchTab then primerMatchTab = t end
+                t.BotonLat.Visible = (text == "") or tabMatched
+                if tabMatched then
+                    catMatched = true
+                    if not firstMatchedTab then firstMatchedTab = t end
                 end
             end
             if cat.HeaderLat then
-                cat.HeaderLat.Visible = (texto == "") or catTieneMatch
-                if buscandoActivo and catTieneMatch and cat.Colapsada then
-                    cat:AlternarColapso(false)
+                cat.HeaderLat.Visible = (text == "") or catMatched
+                if isSearching and catMatched and cat.Collapsed then
+                    cat:ToggleCollapse(false)
                 end
             end
         end
 
-        if buscandoActivo and primerMatchTab then
-            primerMatchTab:Seleccionar()
+        if isSearching and firstMatchedTab then
+            firstMatchedTab:Select()
         end
     end
 
-    function Ventana:Buscar(texto)
-        filtrarBusqueda(texto)
+    function Window:Search(text)
+        filterSearch(text)
     end
+    Window.Buscar = Window.Search
 
-    if config.Buscador ~= false then
-        local busquedaId = 0
-        local function conectarBuscador(caja)
-            caja:GetPropertyChangedSignal("Text"):Connect(function()
-                busquedaId = busquedaId + 1
-                local idActual = busquedaId
-                local txt = caja.Text
+    if config.SearchBox ~= false and config.Buscador ~= false then
+        local searchId = 0
+        local function hookSearchBox(box)
+            box:GetPropertyChangedSignal("Text"):Connect(function()
+                searchId = searchId + 1
+                local curId = searchId
+                local txt = box.Text
                 task.delay(0.12, function()
-                    if idActual == busquedaId then filtrarBusqueda(txt) end
+                    if curId == searchId then filterSearch(txt) end
                 end)
             end)
         end
 
-        local function crearCajaBuscador()
-            local caja = Instance.new("TextBox")
-            caja.BackgroundColor3 = Theme.Entrada
-            caja.BackgroundTransparency = 0.4
-            caja.PlaceholderText  = "🔍 Buscar..."
-            caja.Text             = ""
-            caja.TextColor3       = Theme.Text
-            caja.Font             = Enum.Font.Gotham
-            caja.TextSize         = 10
-            caja.ClearTextOnFocus = false
-            caja.BorderSizePixel  = 0
-            Utils.Corner(caja, 5)
-            AlanLuna:Registrar(caja, "BackgroundColor3", "Entrada")
-            AlanLuna:Registrar(caja, "TextColor3", "Text")
-            conectarBuscador(caja)
-            return caja
+        local function createSearchTextBox()
+            local box = Instance.new("TextBox")
+            box.BackgroundColor3 = Theme.Input or Theme.Entrada
+            box.BackgroundTransparency = 0.4
+            box.PlaceholderText  = "🔍 Search..."
+            box.Text             = ""
+            box.TextColor3       = Theme.Text
+            box.Font             = Enum.Font.Gotham
+            box.TextSize         = 10
+            box.ClearTextOnFocus = false
+            box.BorderSizePixel  = 0
+            Utils.Corner(box, 5)
+            LouisHub:Register(box, "BackgroundColor3", "Input")
+            LouisHub:Register(box, "TextColor3", "Text")
+            hookSearchBox(box)
+            return box
         end
 
-        local buscadorBox = crearCajaBuscador()
-        buscadorBox.Size        = UDim2.new(1, 0, 0, 20)
-        buscadorBox.LayoutOrder = 0
-        buscadorBox.Parent      = barraLat
+        local searchBoxSide = createSearchTextBox()
+        searchBoxSide.Size        = UDim2.new(1, 0, 0, 20)
+        searchBoxSide.LayoutOrder = 0
+        searchBoxSide.Parent      = sideBar
 
-        local buscadorBoxHoriz = crearCajaBuscador()
-        buscadorBoxHoriz.Size     = UDim2.new(0, 130, 0, 22)
-        buscadorBoxHoriz.Position = UDim2.new(1, -145, 0, 40)
-        buscadorBoxHoriz.ZIndex   = 10
-        buscadorBoxHoriz.Visible  = modoHorizontal
-        buscadorBoxHoriz.Parent   = main
-        Ventana._buscadorBoxHoriz = buscadorBoxHoriz
+        local searchBoxHoriz = createSearchTextBox()
+        searchBoxHoriz.Size     = UDim2.new(0, 130, 0, 22)
+        searchBoxHoriz.Position = UDim2.new(1, -145, 0, 40)
+        searchBoxHoriz.ZIndex   = 10
+        searchBoxHoriz.Visible  = isHorizontal
+        searchBoxHoriz.Parent   = main
+        Window._searchBoxHoriz = searchBoxHoriz
     end
 
-    -- ── CREAR CATEGORIA ENGINE ──────────────────────────────────
-    function Ventana:CrearCategoria(catCfg)
-        if type(catCfg) == "string" then catCfg = { Nombre = catCfg } end
+    -- ── CREATE CATEGORY ENGINE ──────────────────────────────────
+    function Window:CreateCategory(catCfg)
+        if type(catCfg) == "string" then catCfg = { Name = catCfg } end
         catCfg = catCfg or {}
-        local nombreCat = catCfg.Nombre or "General"
-        if self.Categorias[nombreCat] then return self.Categorias[nombreCat] end
+        local catName = catCfg.Name or catCfg.Nombre or "General"
+        if self.Categories[catName] then return self.Categories[catName] end
 
-        catOrden = catOrden + 1
-        local esSistema = (nombreCat == "System")
-        local colapsada = (catCfg.Colapsada == true) and not esSistema
+        catOrder = catOrder + 1
+        local isSystem = (catName == "System")
+        local isCollapsed = (catCfg.Collapsed == true or catCfg.Colapsada == true) and not isSystem
 
-        local headerLat = Utils.Frame({
-            Padre = barraLat, Size = UDim2.new(1, 0, 0, 22),
-            Color = Theme.Panel, Transparencia = 1, Orden = esSistema and 9999 or (catOrden * 100),
-            Radio = false, Borde = false,
+        local headerSide = Utils.Frame({
+            Parent = sideBar, Size = UDim2.new(1, 0, 0, 22),
+            Color = Theme.Panel, Transparency = 1, Order = isSystem and 9999 or (catOrder * 100),
+            Radius = false, Border = false,
         })
 
-        local btnHeader = Utils.BotonBase({
-            Padre = headerLat, Size = UDim2.new(1, 0, 1, 0),
-            Transparencia = 1, Radio = false,
+        local btnHeader = Utils.BaseButton({
+            Parent = headerSide, Size = UDim2.new(1, 0, 1, 0),
+            Transparency = 1, Radius = false,
         })
 
-        local icoFlecha = Instance.new("ImageLabel")
-        icoFlecha.BackgroundTransparency = 1
-        icoFlecha.Image = "rbxassetid://83472139709682"
-        icoFlecha.Size = UDim2.new(0, 8, 0, 8)
-        icoFlecha.AnchorPoint = Vector2.new(0.5, 0.5)
-        icoFlecha.Position = UDim2.new(0, 8, 0.5, 0)
-        icoFlecha.Rotation = colapsada and -90 or 0
-        icoFlecha.Visible = not esSistema
-        icoFlecha.Parent = headerLat
-        AlanLuna:Registrar(icoFlecha, "ImageColor3", "TextDark")
+        local arrowIcon = Instance.new("ImageLabel")
+        arrowIcon.BackgroundTransparency = 1
+        arrowIcon.Image = "rbxassetid://83472139709682"
+        arrowIcon.Size = UDim2.new(0, 8, 0, 8)
+        arrowIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+        arrowIcon.Position = UDim2.new(0, 8, 0.5, 0)
+        arrowIcon.Rotation = isCollapsed and -90 or 0
+        arrowIcon.Visible = not isSystem
+        arrowIcon.Parent = headerSide
+        LouisHub:Register(arrowIcon, "ImageColor3", "TextDark")
 
-        local lblCat = Utils.Texto({
-            Padre = headerLat,
-            Texto = (catCfg.Icono and (catCfg.Icono .. " ") or "") .. string.upper(nombreCat),
+        local icoParam = catCfg.Icon or catCfg.Icono
+        local lblCat = Utils.Text({
+            Parent = headerSide,
+            Text = (icoParam and (icoParam .. " ") or "") .. string.upper(catName),
             Size = UDim2.new(1, -20, 1, 0),
-            Posicion = UDim2.new(0, esSistema and 6 or 16, 0, 0),
-            Fuente = Enum.Font.GothamBold,
-            Tamano = 9,
+            Position = UDim2.new(0, isSystem and 6 or 16, 0, 0),
+            Font = Enum.Font.GothamBold,
+            TextSize = 9,
             Color = catCfg.Color or Theme.AccentLight,
-            Truncar = true,
+            Truncate = true,
         })
-        if not catCfg.Color then AlanLuna:Registrar(lblCat, "TextColor3", "AccentLight") end
+        if not catCfg.Color then LouisHub:Register(lblCat, "TextColor3", "AccentLight") end
 
-        local contenedorTabsCat = Instance.new("Frame")
-        contenedorTabsCat.Name = "TabsContainer_" .. nombreCat
-        contenedorTabsCat.BackgroundTransparency = 1
-        contenedorTabsCat.Size = UDim2.new(1, 0, 0, 0)
-        contenedorTabsCat.AutomaticSize = Enum.AutomaticSize.Y
-        contenedorTabsCat.LayoutOrder = esSistema and 10000 or ((catOrden * 100) + 1)
-        contenedorTabsCat.Visible = not colapsada
-        contenedorTabsCat.Parent = barraLat
+        local tabsContainer = Instance.new("Frame")
+        tabsContainer.Name = "TabsContainer_" .. catName
+        tabsContainer.BackgroundTransparency = 1
+        tabsContainer.Size = UDim2.new(1, 0, 0, 0)
+        tabsContainer.AutomaticSize = Enum.AutomaticSize.Y
+        tabsContainer.LayoutOrder = isSystem and 10000 or ((catOrder * 100) + 1)
+        tabsContainer.Visible = not isCollapsed
+        tabsContainer.Parent = sideBar
 
         local catList = Instance.new("UIListLayout")
         catList.Padding = UDim.new(0, 2)
         catList.SortOrder = Enum.SortOrder.LayoutOrder
-        catList.Parent = contenedorTabsCat
+        catList.Parent = tabsContainer
 
-        local CategoriaObj = {
-            Nombre     = nombreCat,
-            Colapsada  = colapsada,
-            Tabs       = {},
-            HeaderLat  = headerLat,
-            Contenedor = contenedorTabsCat,
+        local CategoryObj = {
+            Name        = catName,
+            Nombre      = catName,
+            Collapsed   = isCollapsed,
+            Colapsada   = isCollapsed,
+            Tabs        = {},
+            HeaderLat   = headerSide,
+            Container   = tabsContainer,
+            Contenedor  = tabsContainer,
         }
 
-        function CategoriaObj:AlternarColapso(forzar)
-            if esSistema then return end
-            if forzar ~= nil then
-                self.Colapsada = (forzar == true)
+        function CategoryObj:ToggleCollapse(forceState)
+            if isSystem then return end
+            if forceState ~= nil then
+                self.Collapsed = (forceState == true)
             else
-                self.Colapsada = not self.Colapsada
+                self.Collapsed = not self.Collapsed
             end
-            contenedorTabsCat.Visible = not self.Colapsada
-            Utils.Tween(icoFlecha, {Rotation = self.Colapsada and -90 or 0}, 0.2)
+            self.Colapsada = self.Collapsed
+            tabsContainer.Visible = not self.Collapsed
+            Utils.Tween(arrowIcon, {Rotation = self.Collapsed and -90 or 0}, 0.2)
         end
+        CategoryObj.AlternarColapso = CategoryObj.ToggleCollapse
 
-        if not esSistema then
-            Utils.ClickConfiable(btnHeader, function()
-                CategoriaObj:AlternarColapso()
+        if not isSystem then
+            Utils.ReliableClick(btnHeader, function()
+                CategoryObj:ToggleCollapse()
             end)
         end
 
-        function CategoriaObj:CrearTab(tabCfg)
-            if type(tabCfg) == "string" then tabCfg = { Nombre = tabCfg } end
+        function CategoryObj:CreateTab(tabCfg, iconParamOverride)
+            if type(tabCfg) == "string" then
+                tabCfg = { Name = tabCfg, Nombre = tabCfg, Icon = iconParamOverride, Icono = iconParamOverride }
+            end
             tabCfg = tabCfg or {}
-            local nombreTab = tabCfg.Nombre or "Tab"
-            local iconoTab = tabCfg.Icono or "▪"
+            local tabName = tabCfg.Name or tabCfg.Nombre or "Tab"
+            local tabIcon = tabCfg.Icon or tabCfg.Icono or "▪"
             local showTitle = tabCfg.ShowTitle ~= false
 
-            local ordenTabInterno = #self.Contenedor:GetChildren()
+            local internalOrder = #self.Container:GetChildren()
 
-            local botonLat = Utils.BotonBase({
-                Padre = self.Contenedor, Size = UDim2.new(1, 0, 0, 26),
-                Color = Theme.Fila, Transparencia = 0.5,
-                Orden = ordenTabInterno, Radio = 6,
+            local btnSide = Utils.BaseButton({
+                Parent = self.Container, Size = UDim2.new(1, 0, 0, 26),
+                Color = Theme.Row, Transparency = 0.5,
+                Order = internalOrder, Radius = 6,
             })
-            local hitboxTabLat = Utils.HitboxAmpliado(botonLat, 6)
-            Utils.Hover(hitboxTabLat, botonLat)
-            AlanLuna:Registrar(botonLat, "BackgroundColor3", "Fila")
+            local hitboxSide = Utils.ExpandedHitbox(btnSide, 6)
+            Utils.Hover(hitboxSide, btnSide)
+            LouisHub:Register(btnSide, "BackgroundColor3", "Row")
 
-            local indicadorLat = Utils.Frame({
-                Padre = botonLat, Size = UDim2.new(0, 2.5, 1, -6),
-                Posicion = UDim2.new(0, 0, 0, 3),
-                Color = Theme.Accent, Radio = 2, Borde = false,
+            local indicatorSide = Utils.Frame({
+                Parent = btnSide, Size = UDim2.new(0, 2.5, 1, -6),
+                Position = UDim2.new(0, 0, 0, 3),
+                Color = Theme.Accent, Radius = 2, Border = false,
             })
-            indicadorLat.BackgroundTransparency = 1
-            AlanLuna:Registrar(indicadorLat, "BackgroundColor3", "Accent")
+            indicatorSide.BackgroundTransparency = 1
+            LouisHub:Register(indicatorSide, "BackgroundColor3", "Accent")
 
-            local icAsset = GetIcon(iconoTab, "Material")
-            local iconoObj
+            local icAsset = GetIcon(tabIcon, "Material")
+            local iconObj
             if icAsset then
                 local img = Instance.new("ImageLabel")
                 img.BackgroundTransparency = 1
@@ -5975,69 +6201,69 @@ function AlanLuna:CrearVentana(config)
                 else
                     img.Image = icAsset
                 end
-                img.Parent = botonLat
-                iconoObj = img
+                img.Parent = btnSide
+                iconObj = img
             else
-                local txtIco = Utils.Texto({
-                    Padre = botonLat, Texto = iconoTab,
-                    Size = UDim2.new(0, 18, 1, 0), Posicion = UDim2.new(0, 4, 0, 0),
-                    Alineacion = Enum.TextXAlignment.Center, Tamano = 11,
+                local txtIco = Utils.Text({
+                    Parent = btnSide, Text = tabIcon,
+                    Size = UDim2.new(0, 18, 1, 0), Position = UDim2.new(0, 4, 0, 0),
+                    Alignment = Enum.TextXAlignment.Center, TextSize = 11,
                 })
-                iconoObj = txtIco
+                iconObj = txtIco
             end
 
-            local lblTab = Utils.Texto({
-                Padre = botonLat, Texto = nombreTab,
-                Size = UDim2.new(1, -26, 1, 0), Posicion = UDim2.new(0, 24, 0, 0),
-                Fuente = Enum.Font.GothamMedium, Tamano = 10.5,
-                Categoria = "tabs", Truncar = true,
+            local lblTab = Utils.Text({
+                Parent = btnSide, Text = tabName,
+                Size = UDim2.new(1, -26, 1, 0), Position = UDim2.new(0, 24, 0, 0),
+                Font = Enum.Font.GothamMedium, TextSize = 10.5,
+                Category = "tabs", Truncate = true,
             })
 
-            local botonHoriz = Utils.BotonBase({
-                Padre = barraHoriz, Size = UDim2.new(0, 85, 0, 24),
-                Color = Theme.Fila, Transparencia = 0.5,
-                Orden = ordenTabInterno, Radio = 6,
+            local btnHoriz = Utils.BaseButton({
+                Parent = horizBar, Size = UDim2.new(0, 85, 0, 24),
+                Color = Theme.Row, Transparency = 0.5,
+                Order = internalOrder, Radius = 6,
             })
-            botonHoriz.AutomaticSize = Enum.AutomaticSize.X
+            btnHoriz.AutomaticSize = Enum.AutomaticSize.X
             local padH = Instance.new("UIPadding")
             padH.PaddingLeft, padH.PaddingRight = UDim.new(0, 6), UDim.new(0, 6)
-            padH.Parent = botonHoriz
+            padH.Parent = btnHoriz
 
-            local indicadorHoriz = Utils.Frame({
-                Padre = botonHoriz, Size = UDim2.new(1, -6, 0, 2),
-                Posicion = UDim2.new(0, 3, 1, -2), Color = Theme.Accent,
-                Radio = 1, Borde = false,
+            local indicatorHoriz = Utils.Frame({
+                Parent = btnHoriz, Size = UDim2.new(1, -6, 0, 2),
+                Position = UDim2.new(0, 3, 1, -2), Color = Theme.Accent,
+                Radius = 1, Border = false,
             })
-            indicadorHoriz.BackgroundTransparency = 1
-            AlanLuna:Registrar(indicadorHoriz, "BackgroundColor3", "Accent")
+            indicatorHoriz.BackgroundTransparency = 1
+            LouisHub:Register(indicatorHoriz, "BackgroundColor3", "Accent")
 
-            local lblH = Utils.Texto({
-                Padre = botonHoriz, Texto = nombreTab,
-                Size = UDim2.new(1, 0, 1, 0), Alineacion = Enum.TextXAlignment.Center,
-                Tamano = 10, Fuente = Enum.Font.GothamMedium, Categoria = "tabs",
+            local lblH = Utils.Text({
+                Parent = btnHoriz, Text = tabName,
+                Size = UDim2.new(1, 0, 1, 0), Alignment = Enum.TextXAlignment.Center,
+                TextSize = 10, Font = Enum.Font.GothamMedium, Category = "tabs",
             })
 
-            local paginaTab = Instance.new("Frame")
-            paginaTab.Name = "TabPage_" .. nombreTab
-            paginaTab.Size = UDim2.new(1, 0, 1, -24)
-            paginaTab.Position = UDim2.new(0, 0, 0, 24)
-            paginaTab.BackgroundTransparency = 1
-            paginaTab.Visible = false
-            paginaTab.Parent = contenedorPaginas
+            local tabPage = Instance.new("Frame")
+            tabPage.Name = "TabPage_" .. tabName
+            tabPage.Size = UDim2.new(1, 0, 1, -24)
+            tabPage.Position = UDim2.new(0, 0, 0, 24)
+            tabPage.BackgroundTransparency = 1
+            tabPage.Visible = false
+            tabPage.Parent = pageContainer
 
             if showTitle then
-                local tLbl = Utils.Texto({
-                    Padre = paginaTab, Texto = nombreTab,
-                    Size = UDim2.new(1, -20, 0, 20), Posicion = UDim2.new(0, 10, 0, 0),
-                    Fuente = Enum.Font.GothamBold, Tamano = 14, Color = Theme.Highlight,
+                local tLbl = Utils.Text({
+                    Parent = tabPage, Text = tabName,
+                    Size = UDim2.new(1, -20, 0, 20), Position = UDim2.new(0, 10, 0, 0),
+                    Font = Enum.Font.GothamBold, TextSize = 14, Color = Theme.Highlight,
                 })
-                AlanLuna:Registrar(tLbl, "TextColor3", "Highlight")
+                LouisHub:Register(tLbl, "TextColor3", "Highlight")
             end
 
             local subTabBar = Utils.Frame({
-                Padre = paginaTab, Size = UDim2.new(1, -16, 0, 24),
-                Posicion = UDim2.new(0, 8, 0, showTitle and 22 or 2),
-                Transparencia = 1, Radio = false, Borde = false,
+                Parent = tabPage, Size = UDim2.new(1, -16, 0, 24),
+                Position = UDim2.new(0, 8, 0, showTitle and 22 or 2),
+                Transparency = 1, Radius = false, Border = false,
             })
             subTabBar.Visible = false
 
@@ -6047,124 +6273,137 @@ function AlanLuna:CrearVentana(config)
             subLayout.Parent = subTabBar
 
             local subTabContainer = Utils.Frame({
-                Padre = paginaTab,
+                Parent = tabPage,
                 Size = UDim2.new(1, 0, 1, showTitle and -48 or -28),
-                Posicion = UDim2.new(0, 0, 0, showTitle and 48 or 28),
-                Transparencia = 1, Radio = false, Borde = false,
+                Position = UDim2.new(0, 0, 0, showTitle and 48 or 28),
+                Transparency = 1, Radius = false, Border = false,
             })
 
             local TabObj = {
-                Nombre         = nombreTab,
-                Categoria      = nombreCat,
-                Boton          = botonLat,
-                BotonLat       = botonLat,
-                BotonHoriz     = botonHoriz,
-                IndicadorLat   = indicadorLat,
-                IndicadorHoriz = indicadorHoriz,
-                Pagina         = paginaTab,
+                Name           = tabName,
+                Nombre         = tabName,
+                Category       = catName,
+                Categoria      = catName,
+                Button         = btnSide,
+                Boton          = btnSide,
+                BotonLat       = btnSide,
+                BotonHoriz     = btnHoriz,
+                IndicadorLat   = indicatorSide,
+                IndicadorHoriz = indicatorHoriz,
+                Page           = tabPage,
+                Pagina         = tabPage,
                 SubTabBar      = subTabBar,
-                SubTabContainer = subTabContainer,
+                SubTabContainer= subTabContainer,
                 SubTabs        = {},
+                SubTabsOrder   = {},
                 SubTabsOrden   = {},
             }
+            TabObj.SubTabsOrden = TabObj.SubTabsOrder
 
-            function TabObj:Seleccionar()
-                for _, catIter in pairs(Ventana.Categorias) do
+            function TabObj:Select()
+                for _, catIter in pairs(Window.Categories) do
                     for _, tIter in pairs(catIter.Tabs) do
-                        tIter.Pagina.Visible = false
+                        tIter.Page.Visible = false
                         Utils.Tween(tIter.IndicadorLat,   {BackgroundTransparency = 1}, 0.2)
                         Utils.Tween(tIter.IndicadorHoriz, {BackgroundTransparency = 1}, 0.2)
                     end
                 end
-                self.Pagina.Visible = true
+                self.Page.Visible = true
                 Utils.Tween(self.IndicadorLat,   {BackgroundTransparency = 0}, 0.2)
                 Utils.Tween(self.IndicadorHoriz, {BackgroundTransparency = 0}, 0.2)
 
-                categoriaActivaNombre = self.Categoria
-                tabActivaNombre = self.Nombre
+                activeCategoryName = self.Category
+                activeTabName = self.Name
 
-                if #self.SubTabsOrden > 0 then
-                    local activoSub = self.SubTabs[subTabActivaNombre] or self.SubTabsOrden[1]
-                    if activoSub then activoSub:Seleccionar() end
+                if #self.SubTabsOrder > 0 then
+                    local activeSub = self.SubTabs[activeSubTabName] or self.SubTabsOrder[1]
+                    if activeSub then activeSub:Select() end
                 else
-                    subTabActivaNombre = nil
+                    activeSubTabName = nil
                 end
-                actualizarBreadcrumb()
-                AlanLuna.Eventos.TabCambiada:Fire(self.Categoria, self.Nombre)
+                refreshBreadcrumb()
+                LouisHub.Events.TabChanged:Fire(self.Category, self.Name)
             end
+            TabObj.Seleccionar = TabObj.Select
 
-            Utils.ClickConfiable(hitboxTabLat, function() TabObj:Seleccionar() end, botonLat)
-            Utils.ClickConfiable(botonHoriz, function() TabObj:Seleccionar() end)
+            Utils.ReliableClick(hitboxSide, function() TabObj:Select() end, btnSide)
+            Utils.ReliableClick(btnHoriz, function() TabObj:Select() end)
 
-            -- ── CREAR SUBTAB ENGINE ─────────────────────────────────
-            function TabObj:CrearSubTab(subCfg)
-                if type(subCfg) == "string" then subCfg = { Nombre = subCfg } end
+            -- ── CREATE SUBTAB ENGINE ─────────────────────────────────
+            function TabObj:CreateSubTab(subCfg)
+                if type(subCfg) == "string" then subCfg = { Name = subCfg } end
                 subCfg = subCfg or {}
-                local subNombre = subCfg.Nombre or "Main"
-                if self.SubTabs[subNombre] then return self.SubTabs[subNombre] end
+                local subName = subCfg.Name or subCfg.Nombre or "Main"
+                if self.SubTabs[subName] then return self.SubTabs[subName] end
 
-                local subBtn = Utils.BotonBase({
-                    Padre = self.SubTabBar, Size = UDim2.new(0, 70, 1, 0),
-                    Color = Theme.Fila, Transparencia = 0.5, Radio = 5,
+                local subBtn = Utils.BaseButton({
+                    Parent = self.SubTabBar, Size = UDim2.new(0, 70, 1, 0),
+                    Color = Theme.Row, Transparency = 0.5, Radius = 5,
                 })
                 subBtn.AutomaticSize = Enum.AutomaticSize.X
                 local sPad = Instance.new("UIPadding")
                 sPad.PaddingLeft, sPad.PaddingRight = UDim.new(0, 8), UDim.new(0, 8)
                 sPad.Parent = subBtn
 
-                local sLbl = Utils.Texto({
-                    Padre = subBtn, Texto = subNombre,
-                    Size = UDim2.new(1, 0, 1, 0), Alineacion = Enum.TextXAlignment.Center,
-                    Tamano = 10, Fuente = Enum.Font.GothamMedium,
+                local sLbl = Utils.Text({
+                    Parent = subBtn, Text = subName,
+                    Size = UDim2.new(1, 0, 1, 0), Alignment = Enum.TextXAlignment.Center,
+                    TextSize = 10, Font = Enum.Font.GothamMedium,
                 })
 
-                local subPagina = Instance.new("ScrollingFrame")
-                subPagina.Name = "SubPage_" .. subNombre
-                subPagina.Size = UDim2.new(1, 0, 1, 0)
-                subPagina.BackgroundTransparency = 1
-                subPagina.BorderSizePixel = 0
-                subPagina.ScrollBarThickness = 3
-                subPagina.ScrollBarImageColor3 = Theme.Accent
-                subPagina.CanvasSize = UDim2.new(0, 0, 0, 0)
-                subPagina.AutomaticCanvasSize = Enum.AutomaticSize.Y
-                subPagina.Visible = (#self.SubTabsOrden == 0)
-                subPagina.Parent = self.SubTabContainer
+                local subPage = Instance.new("ScrollingFrame")
+                subPage.Name = "SubPage_" .. subName
+                subPage.Size = UDim2.new(1, 0, 1, 0)
+                subPage.BackgroundTransparency = 1
+                subPage.BorderSizePixel = 0
+                subPage.ScrollBarThickness = 3
+                subPage.ScrollBarImageColor3 = Theme.Accent
+                subPage.CanvasSize = UDim2.new(0, 0, 0, 0)
+                subPage.AutomaticCanvasSize = Enum.AutomaticSize.Y
+                subPage.Visible = (#self.SubTabsOrder == 0)
+                subPage.Parent = self.SubTabContainer
 
                 local pLayout = Instance.new("UIListLayout")
                 pLayout.Padding   = UDim.new(0, 10)
                 pLayout.SortOrder = Enum.SortOrder.LayoutOrder
-                pLayout.Parent    = subPagina
+                pLayout.Parent    = subPage
 
                 local pPad = Instance.new("UIPadding")
                 pPad.PaddingTop, pPad.PaddingBottom = UDim.new(0, 6), UDim.new(0, 10)
                 pPad.PaddingLeft, pPad.PaddingRight = UDim.new(0, 8), UDim.new(0, 8)
-                pPad.Parent = subPagina
+                pPad.Parent = subPage
 
                 local SubTabObj = {
-                    Nombre    = subNombre,
+                    Name      = subName,
+                    Nombre    = subName,
+                    Button    = subBtn,
                     Boton     = subBtn,
-                    Pagina    = subPagina,
+                    Page      = subPage,
+                    Pagina    = subPage,
+                    Sections  = {},
                     Secciones = {},
                 }
+                SubTabObj.Secciones = SubTabObj.Sections
 
-                function SubTabObj:Seleccionar()
+                function SubTabObj:Select()
                     for _, s in pairs(TabObj.SubTabs) do
-                        s.Pagina.Visible = false
-                        Utils.Tween(s.Boton, {BackgroundColor3 = Theme.Fila}, 0.2)
+                        s.Page.Visible = false
+                        Utils.Tween(s.Button, {BackgroundColor3 = Theme.Row}, 0.2)
                     end
-                    self.Pagina.Visible = true
-                    Utils.Tween(self.Boton, {BackgroundColor3 = Theme.Accent}, 0.2)
-                    subTabActivaNombre = self.Nombre
-                    actualizarBreadcrumb()
-                    AlanLuna.Eventos.SubTabCambiada:Fire(TabObj.Categoria, TabObj.Nombre, self.Nombre)
+                    self.Page.Visible = true
+                    Utils.Tween(self.Button, {BackgroundColor3 = Theme.Accent}, 0.2)
+                    activeSubTabName = self.Name
+                    refreshBreadcrumb()
+                    LouisHub.Events.SubTabChanged:Fire(TabObj.Category, TabObj.Name, self.Name)
                 end
+                SubTabObj.Seleccionar = SubTabObj.Select
 
-                Utils.ClickConfiable(subBtn, function() SubTabObj:Seleccionar() end)
+                Utils.ReliableClick(subBtn, function() SubTabObj:Select() end)
 
-                table.insert(self.SubTabsOrden, SubTabObj)
-                self.SubTabs[subNombre] = SubTabObj
+                table.insert(self.SubTabsOrder, SubTabObj)
+                self.SubTabs[subName] = SubTabObj
 
-                if #self.SubTabsOrden >= 2 then
+                if #self.SubTabsOrder >= 2 then
                     self.SubTabBar.Visible = true
                     self.SubTabContainer.Position = UDim2.new(0, 0, 0, showTitle and 48 or 28)
                     self.SubTabContainer.Size = UDim2.new(1, 0, 1, showTitle and -48 or -28)
@@ -6174,82 +6413,82 @@ function AlanLuna:CrearVentana(config)
                     self.SubTabContainer.Size = UDim2.new(1, 0, 1, showTitle and -24 or -4)
                 end
 
-                -- ── CREAR SECCION ENGINE (2-COLUMN SUPPORT) ─────────────
-                function SubTabObj:CrearSeccion(secNombre, secCfg)
+                -- ── CREATE SECTION ENGINE (2-COLUMN SUPPORT) ─────────────
+                function SubTabObj:CreateSection(secName, secCfg)
                     secCfg = secCfg or {}
-                    local numColumnas = secCfg.Columnas or 1
-                    local colapsable  = secCfg.Colapsable ~= false
-                    local colapsadaPorDefecto = colapsable and (secCfg.ColapsadaPorDefecto == true)
+                    local numColumns = secCfg.Columns or secCfg.Columnas or 1
+                    local collapsible = (secCfg.Collapsible ~= false and secCfg.Colapsable ~= false)
+                    local collapsedByDefault = collapsible and (secCfg.CollapsedByDefault == true or secCfg.ColapsadaPorDefecto == true)
 
-                    local marco = Utils.Frame({
-                        Padre = subPagina, Size = UDim2.new(1, 0, 0, 0),
-                        Color = Theme.Panel, Radio = 6, Borde = true,
-                        ColorBorde = Theme.Border, ClaveTemaBorde = "Border",
-                        Transparencia = 0.35,
+                    local frame = Utils.Frame({
+                        Parent = subPage, Size = UDim2.new(1, 0, 0, 0),
+                        Color = Theme.Panel, Radius = 6, Border = true,
+                        BorderColor = Theme.Border, BorderThemeKey = "Border",
+                        Transparency = 0.35,
                     })
-                    marco.AutomaticSize = Enum.AutomaticSize.Y
+                    frame.AutomaticSize = Enum.AutomaticSize.Y
 
-                    local btnHeader, flecha, lblSec
-                    if colapsable then
-                        btnHeader = Utils.BotonBase({
-                            Padre = marco, Size = UDim2.new(1, 0, 0, 24),
-                            Transparencia = 1, Radio = false,
+                    local btnHeader, arrow, lblSec
+                    if collapsible then
+                        btnHeader = Utils.BaseButton({
+                            Parent = frame, Size = UDim2.new(1, 0, 0, 24),
+                            Transparency = 1, Radius = false,
                         })
-                        Utils.Hover(btnHeader, marco, nil, nil, function() return Theme.Panel end)
+                        Utils.Hover(btnHeader, frame, nil, nil, function() return Theme.Panel end)
 
-                        flecha = Instance.new("ImageLabel")
-                        flecha.BackgroundTransparency = 1
-                        flecha.Image = "rbxassetid://83472139709682"
-                        flecha.Size = UDim2.new(0, 10, 0, 10)
-                        flecha.AnchorPoint = Vector2.new(0.5, 0.5)
-                        flecha.Position = UDim2.new(0, 10, 0.5, 0)
-                        flecha.Rotation = colapsadaPorDefecto and -90 or 0
-                        flecha.Parent = btnHeader
-                        AlanLuna:Registrar(flecha, "ImageColor3", "AccentLight")
+                        arrow = Instance.new("ImageLabel")
+                        arrow.BackgroundTransparency = 1
+                        arrow.Image = "rbxassetid://83472139709682"
+                        arrow.Size = UDim2.new(0, 10, 0, 10)
+                        arrow.AnchorPoint = Vector2.new(0.5, 0.5)
+                        arrow.Position = UDim2.new(0, 10, 0.5, 0)
+                        arrow.Rotation = collapsedByDefault and -90 or 0
+                        arrow.Parent = btnHeader
+                        LouisHub:Register(arrow, "ImageColor3", "AccentLight")
 
-                        lblSec = Utils.Texto({
-                            Padre = btnHeader, Texto = secNombre or "Sección",
-                            Size = UDim2.new(1, -24, 1, 0), Posicion = UDim2.new(0, 20, 0, 0),
-                            Fuente = Enum.Font.GothamBold, Tamano = 11, Color = Theme.AccentLight,
+                        lblSec = Utils.Text({
+                            Parent = btnHeader, Text = secName or "Section",
+                            Size = UDim2.new(1, -24, 1, 0), Position = UDim2.new(0, 20, 0, 0),
+                            Font = Enum.Font.GothamBold, TextSize = 11, Color = Theme.AccentLight,
                         })
-                        AlanLuna:Registrar(lblSec, "TextColor3", "AccentLight")
+                        LouisHub:Register(lblSec, "TextColor3", "AccentLight")
                     else
-                        lblSec = Utils.Texto({
-                            Padre = marco, Texto = secNombre or "Sección",
-                            Size = UDim2.new(1, -12, 0, 20), Posicion = UDim2.new(0, 8, 0, 2),
-                            Fuente = Enum.Font.GothamBold, Tamano = 11, Color = Theme.AccentLight,
+                        lblSec = Utils.Text({
+                            Parent = frame, Text = secName or "Section",
+                            Size = UDim2.new(1, -12, 0, 20), Position = UDim2.new(0, 8, 0, 2),
+                            Font = Enum.Font.GothamBold, TextSize = 11, Color = Theme.AccentLight,
                         })
-                        AlanLuna:Registrar(lblSec, "TextColor3", "AccentLight")
+                        LouisHub:Register(lblSec, "TextColor3", "AccentLight")
                     end
 
-                    local contenedorCuerpo = Utils.Frame({
-                        Padre = marco, Size = UDim2.new(1, 0, 0, 0),
-                        Posicion = UDim2.new(0, 0, 0, 24), Transparencia = 1,
-                        Radio = false, Borde = false,
+                    local bodyContainer = Utils.Frame({
+                        Parent = frame, Size = UDim2.new(1, 0, 0, 0),
+                        Position = UDim2.new(0, 0, 0, 24), Transparency = 1,
+                        Radius = false, Border = false,
                     })
-                    contenedorCuerpo.AutomaticSize = Enum.AutomaticSize.Y
-                    contenedorCuerpo.Visible = not colapsadaPorDefecto
+                    bodyContainer.AutomaticSize = Enum.AutomaticSize.Y
+                    bodyContainer.Visible = not collapsedByDefault
 
                     local col1, col2 = nil, nil
-                    if numColumnas == 2 then
-                        local filaCols = Instance.new("Frame")
-                        filaCols.BackgroundTransparency = 1
-                        filaCols.Size = UDim2.new(1, 0, 0, 0)
-                        filaCols.AutomaticSize = Enum.AutomaticSize.Y
-                        filaCols.Parent = contenedorCuerpo
+                    if numColumns == 2 then
+                        local rowCols = Instance.new("Frame")
+                        rowCols.BackgroundTransparency = 1
+                        rowCols.Size = UDim2.new(1, 0, 0, 0)
+                        rowCols.AutomaticSize = Enum.AutomaticSize.Y
+                        rowCols.Parent = bodyContainer
 
                         local padCols = Instance.new("UIPadding")
                         padCols.PaddingLeft, padCols.PaddingRight = UDim.new(0, 6), UDim.new(0, 6)
                         padCols.PaddingTop, padCols.PaddingBottom = UDim.new(0, 6), UDim.new(0, 6)
-                        padCols.Parent = filaCols
+                        padCols.Parent = rowCols
 
                         col1 = Instance.new("Frame")
-                        col1.Name = "Columna1"
+                        col1.Name = "Column1"
                         col1.BackgroundTransparency = 1
                         col1.Size = UDim2.new(0.5, -4, 0, 0)
                         col1.Position = UDim2.new(0, 0, 0, 0)
                         col1.AutomaticSize = Enum.AutomaticSize.Y
-                        col1.Parent = filaCols
+                        col1.Parent = rowCols
 
                         local l1 = Instance.new("UIListLayout")
                         l1.Padding = UDim.new(0, 5)
@@ -6257,12 +6496,12 @@ function AlanLuna:CrearVentana(config)
                         l1.Parent = col1
 
                         col2 = Instance.new("Frame")
-                        col2.Name = "Columna2"
+                        col2.Name = "Column2"
                         col2.BackgroundTransparency = 1
                         col2.Size = UDim2.new(0.5, -4, 0, 0)
                         col2.Position = UDim2.new(0.5, 4, 0, 0)
                         col2.AutomaticSize = Enum.AutomaticSize.Y
-                        col2.Parent = filaCols
+                        col2.Parent = rowCols
 
                         local l2 = Instance.new("UIListLayout")
                         l2.Padding = UDim.new(0, 5)
@@ -6272,758 +6511,801 @@ function AlanLuna:CrearVentana(config)
                         local padC = Instance.new("UIPadding")
                         padC.PaddingLeft, padC.PaddingRight = UDim.new(0, 6), UDim.new(0, 6)
                         padC.PaddingTop, padC.PaddingBottom = UDim.new(0, 6), UDim.new(0, 6)
-                        padC.Parent = contenedorCuerpo
+                        padC.Parent = bodyContainer
 
                         local lC = Instance.new("UIListLayout")
                         lC.Padding = UDim.new(0, 5)
                         lC.SortOrder = Enum.SortOrder.LayoutOrder
-                        lC.Parent = contenedorCuerpo
+                        lC.Parent = bodyContainer
                     end
 
-                    local entradaSec = {
-                        marco = marco,
-                        contenedor = contenedorCuerpo,
-                        flecha = flecha,
-                        colapsable = colapsable,
-                        colapsada = colapsadaPorDefecto,
+                    local secEntry = {
+                        marco       = frame,
+                        frame       = frame,
+                        contenedor  = bodyContainer,
+                        container   = bodyContainer,
+                        flecha      = arrow,
+                        arrow       = arrow,
+                        collapsible = collapsible,
+                        colapsable  = collapsible,
+                        collapsed   = collapsedByDefault,
+                        colapsada   = collapsedByDefault,
                     }
 
-                    local function aplicarColapsada(v, animar)
-                        entradaSec.colapsada = v
-                        if flecha then
-                            if animar then Utils.Tween(flecha, {Rotation = v and -90 or 0}, 0.2)
-                            else flecha.Rotation = v and -90 or 0 end
+                    local function applyCollapsed(v, animate)
+                        secEntry.collapsed = v
+                        secEntry.colapsada = v
+                        if arrow then
+                            if animate then Utils.Tween(arrow, {Rotation = v and -90 or 0}, 0.2)
+                            else arrow.Rotation = v and -90 or 0 end
                         end
-                        if not animar then
-                            contenedorCuerpo.Visible = not v
+                        if not animate then
+                            bodyContainer.Visible = not v
                             return
                         end
                         if v then
-                            Utils.Tween(contenedorCuerpo, {Size = UDim2.new(1, 0, 0, 0)}, 0.25, AlanLuna.Motion.EaseSalir)
+                            Utils.Tween(bodyContainer, {Size = UDim2.new(1, 0, 0, 0)}, 0.25, LouisHub.Motion.EaseExit)
                             task.delay(0.25, function()
-                                if entradaSec.colapsada then contenedorCuerpo.Visible = false end
+                                if secEntry.collapsed then bodyContainer.Visible = false end
                             end)
                         else
-                            contenedorCuerpo.Visible = true
-                            Utils.Tween(contenedorCuerpo, {Size = UDim2.new(1, 0, 0, contenedorCuerpo.AbsoluteSize.Y)}, 0.25, AlanLuna.Motion.EaseEntrar)
+                            bodyContainer.Visible = true
+                            Utils.Tween(bodyContainer, {Size = UDim2.new(1, 0, 0, bodyContainer.AbsoluteSize.Y)}, 0.25, LouisHub.Motion.EaseEnter)
                         end
                     end
-                    entradaSec.AplicarColapsada = aplicarColapsada
+                    secEntry.ApplyCollapsed = applyCollapsed
+                    secEntry.AplicarColapsada = applyCollapsed
 
-                    if colapsable and btnHeader then
-                        Utils.ClickConfiable(btnHeader, function()
-                            aplicarColapsada(not entradaSec.colapsada, true)
+                    if collapsible and btnHeader then
+                        Utils.ReliableClick(btnHeader, function()
+                            applyCollapsed(not secEntry.collapsed, true)
                         end)
                     end
 
-                    table.insert(SubTabObj.Secciones, entradaSec)
-                    table.insert(seccionesRegistradas, entradaSec)
+                    table.insert(SubTabObj.Sections, secEntry)
+                    table.insert(registeredSections, secEntry)
 
-                    local Seccion = {
-                        marco = marco,
-                        contenedor = contenedorCuerpo,
-                        _col1 = col1,
-                        _col2 = col2,
-                        _contadorItems = 0,
+                    local Section = {
+                        marco      = frame,
+                        frame      = frame,
+                        contenedor = bodyContainer,
+                        container  = bodyContainer,
+                        _col1      = col1,
+                        _col2      = col2,
+                        _itemCounter = 0,
                     }
 
-                    local CONTROLES_ANCHOS = {
+                    local WIDE_CONTROLS = {
                         Slider = true, RangeSlider = true, Input = true,
                         ColorPicker = true, TagInput = true, Dropdown = true,
-                        Parrafo = true, Imagen = true,
+                        Paragraph = true, Parrafo = true, Image = true, Imagen = true,
                     }
 
-                    function Seccion:_ObtenerContenedorDestino(tipoControl, cfgCtrl)
-                        if numColumnas ~= 2 then return contenedorCuerpo end
-                        if cfgCtrl and cfgCtrl.Columna == 1 then return col1 end
-                        if cfgCtrl and cfgCtrl.Columna == 2 then return col2 end
+                    function Section:_GetTargetContainer(ctrlType, cfgCtrl)
+                        if numColumns ~= 2 then return bodyContainer end
+                        if cfgCtrl and (cfgCtrl.Column == 1 or cfgCtrl.Columna == 1) then return col1 end
+                        if cfgCtrl and (cfgCtrl.Column == 2 or cfgCtrl.Columna == 2) then return col2 end
 
-                        if CONTROLES_ANCHOS[tipoControl] and not (cfgCtrl and cfgCtrl.Columna) then
-                            return contenedorCuerpo
+                        if WIDE_CONTROLS[ctrlType] and not (cfgCtrl and (cfgCtrl.Column or cfgCtrl.Columna)) then
+                            return bodyContainer
                         end
 
-                        self._contadorItems = self._contadorItems + 1
-                        return (self._contadorItems % 2 == 1) and col1 or col2
+                        self._itemCounter = self._itemCounter + 1
+                        return (self._itemCounter % 2 == 1) and col1 or col2
                     end
+                    Section._ObtenerContenedorDestino = Section._GetTargetContainer
 
-                    return Seccion
+                    return Section
                 end
+                SubTabObj.CrearSeccion = SubTabObj.CreateSection
 
-                function TabObj:CrearSeccion(secNombre, secCfg)
-                    local subMain = self.SubTabs["Main"] or self:CrearSubTab("Main")
-                    return subMain:CrearSeccion(secNombre, secCfg)
+                function TabObj:CreateSection(secName, secCfg)
+                    local subMain = self.SubTabs["Main"] or self:CreateSubTab("Main")
+                    return subMain:CreateSection(secName, secCfg)
                 end
+                TabObj.CrearSeccion = TabObj.CreateSection
 
                 return SubTabObj
             end
+            CategoryObj.CrearSubTab = CategoryObj.CreateSubTab
 
-            table.insert(Ventana.Tabs, TabObj)
-            self.Tabs[nombreTab] = TabObj
+            table.insert(Window.Tabs, TabObj)
+            self.Tabs[tabName] = TabObj
 
-            if primeraTabGlobal and not esSistema then
-                TabObj:Seleccionar()
-                primeraTabGlobal = false
+            if isFirstGlobalTab and not isSystem then
+                TabObj:Select()
+                isFirstGlobalTab = false
             end
 
             return TabObj
         end
+        CategoryObj.CrearTab = CategoryObj.CreateTab
 
-        self.Categorias[nombreCat] = CategoriaObj
-        return CategoriaObj
+        self.Categories[catName] = CategoryObj
+        return CategoryObj
     end
+    Window.CrearCategoria = Window.CreateCategory
 
-    function Ventana:CrearTab(tabCfg, icono)
+    function Window:CreateTab(tabCfg, iconParamOverride)
         if type(tabCfg) == "string" then
-            tabCfg = { Nombre = tabCfg, Icono = icono }
+            tabCfg = { Name = tabCfg, Nombre = tabCfg, Icon = iconParamOverride, Icono = iconParamOverride }
+        elseif type(tabCfg) == "table" then
+            tabCfg.Nombre = tabCfg.Nombre or tabCfg.Name
+            tabCfg.Icono  = tabCfg.Icono or tabCfg.Icon
+            tabCfg.Name   = tabCfg.Name or tabCfg.Nombre
+            tabCfg.Icon   = tabCfg.Icon or tabCfg.Icono
         end
-        local catGeneral = self.Categorias["General"] or self:CrearCategoria("General")
-        return catGeneral:CrearTab(tabCfg)
+        local catGeneral = self.Categories["General"] or self:CreateCategory("General")
+        return catGeneral:CreateTab(tabCfg)
     end
+    Window.CrearTab = Window.CreateTab
 
-    if config.AutoGuardar ~= false and fsDisponible() then
-        ventanaActivaGuardado = Ventana
+    if config.AutoSave ~= false and config.AutoGuardar ~= false and isFilesystemAvailable() then
+        activeSaveWindow = Window
         task.defer(function()
-            pcall(function() AlanLuna.SaveManager:CargarSilencioso(Ventana.NombreConfig) end)
-            pcall(function() AlanLuna.SaveManager:CargarUI("preinstalada") end)
-            pcall(function() AlanLuna:LoadAutoloadConfig() end)
+            pcall(function() LouisHub.SaveManager:LoadSilent(Window.NombreConfig) end)
+            pcall(function() LouisHub.SaveManager:LoadUI("preinstalled") end)
+            pcall(function() LouisHub:LoadAutoloadConfig() end)
         end)
 
         sg.Destroying:Connect(function()
-            loopAutoguardadoActivo = false
-            pcall(function() AlanLuna.SaveManager:GuardarSilencioso(Ventana.NombreConfig) end)
+            isAutosaveLoopActive = false
+            pcall(function() LouisHub.SaveManager:SaveSilent(Window.NombreConfig) end)
         end)
-        iniciarLoopAutoguardado()
+        startAutosaveLoop()
     end
 
-    _G.AlanLuna_Instancia.Ventana = Ventana
-    return Ventana
+    _G.LouisHub_Instance.Window = Window
+    return Window
 end
+LouisHub.CrearVentana = LouisHub.CreateWindow
 
-function AlanLuna:CreateWindow(cfg)
-    return self:CrearVentana(cfg)
-end
-
-function AlanLuna:CrearVentanaConSeguridad(config)
+function LouisHub:CreateWindowSafely(config)
     config = config or {}
-    local instanciaActiva = _G.AlanLuna_Instancia
-    local ventanaActual = instanciaActiva and instanciaActiva.Ventana
+    local active = _G.LouisHub_Instance
+    local currentWin = active and (active.Window or active.Ventana)
 
-    if not (ventanaActual and ventanaActual._main and ventanaActual._main.Parent) then
-        return AlanLuna:CrearVentana(config)
+    if not (currentWin and currentWin._main and currentWin._main.Parent) then
+        return LouisHub:CreateWindow(config)
     end
 
-    local tituloActual = instanciaActiva.Titulo or "Interfaz actual"
-    local tituloNuevo  = config.Titulo or config.Name or "Nuevo script"
+    local currentTitle = active.Title or active.Titulo or "Current Interface"
+    local newTitle     = config.Title or config.Titulo or config.Name or "New Script"
 
-    AlanLuna:Confirmar({
-        Titulo    = "⚠️ Script activo detectado",
-        Contenido = string.format("Ya hay una ventana abierta (\"%s\"). ¿Deseas reemplazarla por \"%s\"?", tituloActual, tituloNuevo),
-        Icono     = "warning",
-        Botones   = {
-            { Texto = "Cancelar", Variante = "neutral" },
+    LouisHub:Confirm({
+        Title   = "⚠️ Active Script Detected",
+        Titulo  = "⚠️ Active Script Detected",
+        Content = string.format("Another window is currently active (\"%s\"). Would you like to terminate and replace it with \"%s\"?", currentTitle, newTitle),
+        Contenido = string.format("Another window is currently active (\"%s\"). Would you like to terminate and replace it with \"%s\"?", currentTitle, newTitle),
+        Icon    = "warning",
+        Buttons = {
+            { Text = "Cancel", Variant = "neutral" },
             {
-                Texto = "Reemplazar",
-                Variante = "primary",
+                Text = "Replace",
+                Variant = "primary",
                 Callback = function()
-                    if ventanaActual.Destroy then
-                        pcall(function() ventanaActual:Destroy() end)
+                    if currentWin.Destroy then
+                        pcall(function() currentWin:Destroy() end)
                     else
-                        AlanLuna:Destroy()
+                        LouisHub:Destroy()
                     end
                     task.defer(function()
-                        AlanLuna:CrearVentana(config)
+                        LouisHub:CreateWindow(config)
                     end)
                 end
             },
         }
     })
 
-    return ventanaActual
+    return currentWin
 end
+LouisHub.CrearVentanaConSeguridad = LouisHub.CreateWindowSafely
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 21: CONTROL HELPERS (ARRASTRE, RANGOS & PANELES)
+--  SECTION 21: CONTROL HELPERS (DRAGGABLES, SLIDERS & EXPANDABLES)
 -- ══════════════════════════════════════════════════════════════
-local function crearBarraArrastrable(cfg)
-    local rangoDiff = math.max(cfg.Max - cfg.Min, 0.0001)
+local function createDraggableBar(cfg)
+    local minVal = cfg.Min or 0
+    local maxVal = cfg.Max or 100
+    local rangeDiff = math.max(maxVal - minVal, 0.0001)
 
-    local fondo = Utils.Frame({
-        Padre = cfg.Padre, Size = cfg.Size, Posicion = cfg.Posicion,
-        Color = Theme.Entrada, Radio = 4, Transparencia = 0.4,
+    local background = Utils.Frame({
+        Parent = cfg.Parent or cfg.Padre, Size = cfg.Size, Position = cfg.Position or cfg.Posicion,
+        Color = Theme.Input, Radius = 4, Transparency = 0.4,
     })
-    AlanLuna:Registrar(fondo, "BackgroundColor3", "Entrada")
+    LouisHub:Register(background, "BackgroundColor3", "Input")
 
-    local aroArrastre = Utils.Stroke(fondo, Theme.AccentLight, 1.5, 1)
-    AlanLuna:Registrar(aroArrastre, "Color", "AccentLight")
+    local dragRing = Utils.Stroke(background, Theme.AccentLight, 1.5, 1)
+    LouisHub:Register(dragRing, "Color", "AccentLight")
 
-    local function marcarArrastre(activo)
-        Utils.Tween(aroArrastre, {Transparency = activo and 0 or 1}, AlanLuna.Motion.Hover)
+    local function markDrag(active)
+        Utils.Tween(dragRing, {Transparency = active and 0 or 1}, LouisHub.Motion.Hover)
     end
 
-    local relleno = Utils.Frame({
-        Padre = fondo,
-        Size = UDim2.new(math.clamp((cfg.Valor - cfg.Min) / rangoDiff, 0, 1), 0, 1, 0),
-        Color = Theme.Accent, Radio = 4, Transparencia = 0,
-        Borde = false,
+    local curVal = cfg.Value or cfg.Valor or minVal
+    local fill = Utils.Frame({
+        Parent = background,
+        Size = UDim2.new(math.clamp((curVal - minVal) / rangeDiff, 0, 1), 0, 1, 0),
+        Color = Theme.Accent, Radius = 4, Transparency = 0,
+        Border = false,
     })
-    AlanLuna:Registrar(relleno, "BackgroundColor3", "Accent")
-    Utils.GradienteAcento(relleno, 0)
+    LouisHub:Register(fill, "BackgroundColor3", "Accent")
+    Utils.AccentGradient(fill, 0)
 
-    if cfg.Pasos and cfg.Incremento and cfg.Incremento > 0 then
-        local totalPasos = math.floor(rangoDiff / cfg.Incremento + 0.5)
-        if totalPasos >= 2 and totalPasos <= 40 then
-            for i = 1, totalPasos - 1 do
-                local rel = i / totalPasos
-                local marca = Utils.Frame({
-                    Padre = fondo, Size = UDim2.new(0, 1.5, 1, 0),
-                    Posicion = UDim2.new(rel, -1, 0, 0),
-                    Color = Theme.Border, Transparencia = 0.4, Radio = false, Borde = false,
+    local stepVal = cfg.Step or cfg.Increment or cfg.Incremento
+    if (cfg.Steps or cfg.Pasos) and stepVal and stepVal > 0 then
+        local totalSteps = math.floor(rangeDiff / stepVal + 0.5)
+        if totalSteps >= 2 and totalSteps <= 40 then
+            for i = 1, totalSteps - 1 do
+                local rel = i / totalSteps
+                local tickMark = Utils.Frame({
+                    Parent = background, Size = UDim2.new(0, 1.5, 1, 0),
+                    Position = UDim2.new(rel, -1, 0, 0),
+                    Color = Theme.Border, Transparency = 0.4, Radius = false, Border = false,
                 })
-                marca.ZIndex = 2
-                AlanLuna:Registrar(marca, "BackgroundColor3", "Border")
+                tickMark.ZIndex = 2
+                LouisHub:Register(tickMark, "BackgroundColor3", "Border")
             end
         end
     end
 
-    local function fijarVisual(valor)
-        local rel = math.clamp((valor - cfg.Min) / rangoDiff, 0, 1)
-        local duracion = EventManager:HayArrastreActivo() and AlanLuna.Motion.Directo or AlanLuna.Motion.Page
-        Utils.Tween(relleno, {Size = UDim2.new(rel, 0, 1, 0)}, duracion, AlanLuna.Motion.EaseEntrar)
+    local function setVisual(val)
+        local rel = math.clamp((val - minVal) / rangeDiff, 0, 1)
+        local duration = EventManager:IsDragging() and LouisHub.Motion.Instant or LouisHub.Motion.Page
+        Utils.Tween(fill, {Size = UDim2.new(rel, 0, 1, 0)}, duration, LouisHub.Motion.EaseEnter)
     end
 
-    local function calcularYAplicar(input)
-        local anchoTotal = math.max(fondo.AbsoluteSize.X, 1)
-        local rel = math.clamp((input.Position.X - fondo.AbsolutePosition.X) / anchoTotal, 0, 1)
-        local v = cfg.Min + rel * rangoDiff
-        Utils.Tween(relleno, {Size = UDim2.new(rel, 0, 1, 0)}, AlanLuna.Motion.Directo)
-        cfg.OnCambio(v)
+    local function calculateAndApply(input)
+        local totalWidth = math.max(background.AbsoluteSize.X, 1)
+        local rel = math.clamp((input.Position.X - background.AbsolutePosition.X) / totalWidth, 0, 1)
+        local v = minVal + rel * rangeDiff
+        Utils.Tween(fill, {Size = UDim2.new(rel, 0, 1, 0)}, LouisHub.Motion.Instant)
+        if cfg.OnChange then cfg.OnChange(v) elseif cfg.OnCambio then cfg.OnCambio(v) end
     end
 
-    local objetoInput = fondo
-    if cfg.AltoHitbox and cfg.AltoHitbox > 0 then
-        local offsetY = cfg.OffsetHitboxY or 0
+    local inputTarget = background
+    local hitboxH = cfg.HitboxHeight or cfg.AltoHitbox
+    if hitboxH and hitboxH > 0 then
+        local offsetY = cfg.HitboxOffsetY or cfg.OffsetHitboxY or 0
         local hitbox = Utils.Frame({
-            Padre = cfg.Padre,
-            Size = UDim2.new(cfg.Size.X.Scale, cfg.Size.X.Offset, 0, cfg.AltoHitbox),
-            Posicion = UDim2.new(
-                cfg.Posicion.X.Scale, cfg.Posicion.X.Offset,
-                cfg.Posicion.Y.Scale, cfg.Posicion.Y.Offset - (cfg.AltoHitbox - cfg.Size.Y.Offset) / 2 + offsetY
+            Parent = cfg.Parent or cfg.Padre,
+            Size = UDim2.new(cfg.Size.X.Scale, cfg.Size.X.Offset, 0, hitboxH),
+            Position = UDim2.new(
+                cfg.Size.X.Scale, cfg.Position and cfg.Position.X.Offset or (cfg.Posicion and cfg.Posicion.X.Offset or 0),
+                cfg.Size.Y.Scale, (cfg.Position and cfg.Position.Y.Offset or (cfg.Posicion and cfg.Posicion.Y.Offset or 0)) - (hitboxH - cfg.Size.Y.Offset) / 2 + offsetY
             ),
-            Transparencia = 1, Radio = false, Borde = false,
+            Transparency = 1, Radius = false, Border = false,
         })
-        hitbox.ZIndex = fondo.ZIndex + 1
-        objetoInput = hitbox
+        hitbox.ZIndex = background.ZIndex + 1
+        inputTarget = hitbox
     end
 
-    objetoInput.InputBegan:Connect(function(input)
+    inputTarget.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            if EventManager:HayArrastreActivo() then return end
+            if EventManager:IsDragging() then return end
 
-            calcularYAplicar(input)
+            calculateAndApply(input)
 
-            local UMBRAL_GESTO = 10
-            local inicio = Vector2.new(input.Position.X, input.Position.Y)
-            local decidido = false
-            local esArrastre = false
+            local GESTURE_THRESHOLD = 10
+            local startPos = Vector2.new(input.Position.X, input.Position.Y)
+            local isDecided = false
+            local isDragging = false
 
-            local scrollAncestro = fondo:FindFirstAncestorWhichIsA("ScrollingFrame")
-            local scrollEstabaActivo = scrollAncestro and scrollAncestro.ScrollingEnabled
+            local ancestorScroll = background:FindFirstAncestorWhichIsA("ScrollingFrame")
+            local scrollWasEnabled = ancestorScroll and ancestorScroll.ScrollingEnabled
 
-            local function candidato(inputMovido)
-                if not decidido then
-                    local actual = Vector2.new(inputMovido.Position.X, inputMovido.Position.Y)
-                    local delta = actual - inicio
-                    if delta.Magnitude < UMBRAL_GESTO then return end
-                    decidido = true
+            local function candidate(movedInput)
+                if not isDecided then
+                    local curPos = Vector2.new(movedInput.Position.X, movedInput.Position.Y)
+                    local delta = curPos - startPos
+                    if delta.Magnitude < GESTURE_THRESHOLD then return end
+                    isDecided = true
                     if math.abs(delta.X) > math.abs(delta.Y) then
-                        esArrastre = true
-                        if scrollAncestro then scrollAncestro.ScrollingEnabled = false end
-                        marcarArrastre(true)
+                        isDragging = true
+                        if ancestorScroll then ancestorScroll.ScrollingEnabled = false end
+                        markDrag(true)
                     else
-                        EventManager:DetenerArrastre()
+                        EventManager:StopDrag()
                         return
                     end
                 end
-                if esArrastre then
-                    calcularYAplicar(inputMovido)
+                if isDragging then
+                    calculateAndApply(movedInput)
                 end
             end
 
-            EventManager:Arrastrar(candidato, function()
-                if esArrastre then marcarArrastre(false) end
-                if scrollAncestro then scrollAncestro.ScrollingEnabled = scrollEstabaActivo end
+            EventManager:StartDrag(candidate, function()
+                if isDragging then markDrag(false) end
+                if ancestorScroll then ancestorScroll.ScrollingEnabled = scrollWasEnabled end
             end)
         end
     end)
 
-    return fondo, relleno, fijarVisual, (objetoInput ~= fondo) and objetoInput or nil
+    return background, fill, setVisual, (inputTarget ~= background) and inputTarget or nil
 end
+local crearBarraArrastrable = createDraggableBar
 
-local function crearBarraArrastrableRango(cfg)
-    local rangoDiff = math.max(cfg.Max - cfg.Min, 0.0001)
+local function createDraggableRangeBar(cfg)
+    local minVal = cfg.Min or 0
+    local maxVal = cfg.Max or 100
+    local rangeDiff = math.max(maxVal - minVal, 0.0001)
 
-    local fondo = Utils.Frame({
-        Padre = cfg.Padre, Size = cfg.Size, Posicion = cfg.Posicion,
-        Color = Theme.Entrada, Radio = 4, Transparencia = 0.4,
+    local background = Utils.Frame({
+        Parent = cfg.Parent or cfg.Padre, Size = cfg.Size, Position = cfg.Position or cfg.Posicion,
+        Color = Theme.Input, Radius = 4, Transparency = 0.4,
     })
-    AlanLuna:Registrar(fondo, "BackgroundColor3", "Entrada")
+    LouisHub:Register(background, "BackgroundColor3", "Input")
 
     local function relX(v)
-        return math.clamp((v - cfg.Min) / rangoDiff, 0, 1)
+        return math.clamp((v - minVal) / rangeDiff, 0, 1)
     end
 
-    local relleno = Utils.Frame({
-        Padre = fondo,
-        Posicion = UDim2.new(relX(cfg.ValorMin), 0, 0, 0),
-        Size = UDim2.new(relX(cfg.ValorMax) - relX(cfg.ValorMin), 0, 1, 0),
-        Color = Theme.Accent, Radio = 4, Transparencia = 0,
-        Borde = false,
+    local curMin = cfg.MinValue or cfg.ValorMin or minVal
+    local curMax = cfg.MaxValue or cfg.ValorMax or maxVal
+
+    local fill = Utils.Frame({
+        Parent = background,
+        Position = UDim2.new(relX(curMin), 0, 0, 0),
+        Size = UDim2.new(relX(curMax) - relX(curMin), 0, 1, 0),
+        Color = Theme.Accent, Radius = 4, Transparency = 0,
+        Border = false,
     })
-    AlanLuna:Registrar(relleno, "BackgroundColor3", "Accent")
-    Utils.GradienteAcento(relleno, 0)
+    LouisHub:Register(fill, "BackgroundColor3", "Accent")
+    Utils.AccentGradient(fill, 0)
 
-    local DIAMETRO_MANIJA = cfg.DiametroManija or 14
-    local function crearManija()
-        local m = Utils.Frame({
-            Padre = fondo,
-            Size = UDim2.new(0, DIAMETRO_MANIJA, 0, DIAMETRO_MANIJA),
-            Ancla = Vector2.new(0.5, 0.5),
-            Color = Theme.Highlight, Radio = 999, Transparencia = 0,
+    local HANDLE_DIAMETER = cfg.HandleDiameter or cfg.DiametroManija or 14
+    local function createHandle()
+        local h = Utils.Frame({
+            Parent = background,
+            Size = UDim2.new(0, HANDLE_DIAMETER, 0, HANDLE_DIAMETER),
+            Anchor = Vector2.new(0.5, 0.5),
+            Color = Theme.Highlight, Radius = 999, Transparency = 0,
         })
-        m.ZIndex = 3
-        AlanLuna:Registrar(m, "BackgroundColor3", "Highlight")
-        local aro = Utils.Stroke(m, Theme.AccentLight, 1.5, 1)
-        AlanLuna:Registrar(aro, "Color", "AccentLight")
-        return m, aro
+        h.ZIndex = 3
+        LouisHub:Register(h, "BackgroundColor3", "Highlight")
+        local ring = Utils.Stroke(h, Theme.AccentLight, 1.5, 1)
+        LouisHub:Register(ring, "Color", "AccentLight")
+        return h, ring
     end
-    local manijaMin, aroMin = crearManija()
-    local manijaMax, aroMax = crearManija()
+    local handleMin, ringMin = createHandle()
+    local handleMax, ringMax = createHandle()
 
-    local function posicionarManija(manija, v)
-        manija.Position = UDim2.new(relX(v), 0, 0.5, 0)
+    local function positionHandle(handle, v)
+        handle.Position = UDim2.new(relX(v), 0, 0.5, 0)
     end
-    posicionarManija(manijaMin, cfg.ValorMin)
-    posicionarManija(manijaMax, cfg.ValorMax)
+    positionHandle(handleMin, curMin)
+    positionHandle(handleMax, curMax)
 
-    local function marcarArrastre(aro, activo)
-        Utils.Tween(aro, {Transparency = activo and 0 or 1}, AlanLuna.Motion.Hover)
-    end
-
-    local function fijarVisual(vMin, vMax)
-        posicionarManija(manijaMin, vMin)
-        posicionarManija(manijaMax, vMax)
-        relleno.Position = UDim2.new(relX(vMin), 0, 0, 0)
-        relleno.Size = UDim2.new(relX(vMax) - relX(vMin), 0, 1, 0)
+    local function markHandleDrag(ring, active)
+        Utils.Tween(ring, {Transparency = active and 0 or 1}, LouisHub.Motion.Hover)
     end
 
-    local function calcularValor(input)
-        local anchoTotal = math.max(fondo.AbsoluteSize.X, 1)
-        local rel = math.clamp((input.Position.X - fondo.AbsolutePosition.X) / anchoTotal, 0, 1)
-        return cfg.Min + rel * rangoDiff
+    local function setVisual(vMin, vMax)
+        positionHandle(handleMin, vMin)
+        positionHandle(handleMax, vMax)
+        fill.Position = UDim2.new(relX(vMin), 0, 0, 0)
+        fill.Size = UDim2.new(relX(vMax) - relX(vMin), 0, 1, 0)
     end
 
-    fondo.InputBegan:Connect(function(input)
+    local function calculateValue(input)
+        local totalWidth = math.max(background.AbsoluteSize.X, 1)
+        local rel = math.clamp((input.Position.X - background.AbsolutePosition.X) / totalWidth, 0, 1)
+        return minVal + rel * rangeDiff
+    end
+
+    background.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            if EventManager:HayArrastreActivo() then return end
+            if EventManager:IsDragging() then return end
 
-            local UMBRAL_GESTO = 10
-            local inicio = Vector2.new(input.Position.X, input.Position.Y)
-            local decidido = false
-            local esArrastre = false
-            local moviendoMin = nil
+            local GESTURE_THRESHOLD = 10
+            local startPos = Vector2.new(input.Position.X, input.Position.Y)
+            local isDecided = false
+            local isDragging = false
+            local isMovingMin = nil
 
-            local scrollAncestro = fondo:FindFirstAncestorWhichIsA("ScrollingFrame")
-            local scrollEstabaActivo = scrollAncestro and scrollAncestro.ScrollingEnabled
+            local getMinFn = cfg.GetMin or cfg.ObtenerMin
+            local getMaxFn = cfg.GetMax or cfg.ObtenerMax
+            local changeFn = cfg.OnChange or cfg.OnCambio
 
-            local function elegirManija(inputInicial)
-                local vToque = calcularValor(inputInicial)
-                local vMin, vMax = cfg.ObtenerMin(), cfg.ObtenerMax()
-                local distMin, distMax = math.abs(vToque - vMin), math.abs(vToque - vMax)
+            local scrollAncestor = background:FindFirstAncestorWhichIsA("ScrollingFrame")
+            local scrollWasEnabled = scrollAncestor and scrollAncestor.ScrollingEnabled
+
+            local function pickHandle(initInput)
+                local touchVal = calculateValue(initInput)
+                local vMin, vMax = getMinFn(), getMaxFn()
+                local distMin, distMax = math.abs(touchVal - vMin), math.abs(touchVal - vMax)
                 if distMin < distMax then
-                    moviendoMin = true
+                    isMovingMin = true
                 elseif distMax < distMin then
-                    moviendoMin = false
+                    isMovingMin = false
                 else
-                    moviendoMin = vToque <= vMin
+                    isMovingMin = touchVal <= vMin
                 end
             end
 
-            elegirManija(input)
-            local vInicial = calcularValor(input)
-            local curMin, curMax = cfg.ObtenerMin(), cfg.ObtenerMax()
-            if moviendoMin then
-                vInicial = math.min(vInicial, curMax)
-                posicionarManija(manijaMin, vInicial)
-                cfg.OnCambio(vInicial, curMax)
+            pickHandle(input)
+            local vInitial = calculateValue(input)
+            local currentMin, currentMax = getMinFn(), getMaxFn()
+            if isMovingMin then
+                vInitial = math.min(vInitial, currentMax)
+                positionHandle(handleMin, vInitial)
+                if changeFn then changeFn(vInitial, currentMax) end
             else
-                vInicial = math.max(vInicial, curMin)
-                posicionarManija(manijaMax, vInicial)
-                cfg.OnCambio(curMin, vInicial)
+                vInitial = math.max(vInitial, currentMin)
+                positionHandle(handleMax, vInitial)
+                if changeFn then changeFn(currentMin, vInitial) end
             end
-            local rMin, rMax = cfg.ObtenerMin(), cfg.ObtenerMax()
-            relleno.Position = UDim2.new(relX(rMin), 0, 0, 0)
-            relleno.Size = UDim2.new(relX(rMax) - relX(rMin), 0, 1, 0)
+            local rMin, rMax = getMinFn(), getMaxFn()
+            fill.Position = UDim2.new(relX(rMin), 0, 0, 0)
+            fill.Size = UDim2.new(relX(rMax) - relX(rMin), 0, 1, 0)
 
-            local function candidato(inputMovido)
-                if not decidido then
-                    local actual = Vector2.new(inputMovido.Position.X, inputMovido.Position.Y)
-                    local delta = actual - inicio
-                    if delta.Magnitude < UMBRAL_GESTO then return end
-                    decidido = true
+            local function candidate(movedInput)
+                if not isDecided then
+                    local curPos = Vector2.new(movedInput.Position.X, movedInput.Position.Y)
+                    local delta = curPos - startPos
+                    if delta.Magnitude < GESTURE_THRESHOLD then return end
+                    isDecided = true
                     if math.abs(delta.X) > math.abs(delta.Y) then
-                        esArrastre = true
-                        if scrollAncestro then scrollAncestro.ScrollingEnabled = false end
-                        marcarArrastre(moviendoMin and aroMin or aroMax, true)
+                        isDragging = true
+                        if scrollAncestor then scrollAncestor.ScrollingEnabled = false end
+                        markHandleDrag(isMovingMin and ringMin or ringMax, true)
                     else
-                        EventManager:DetenerArrastre()
+                        EventManager:StopDrag()
                         return
                     end
                 end
-                if not esArrastre then return end
+                if not isDragging then return end
 
-                local v = calcularValor(inputMovido)
-                local vMin, vMax = cfg.ObtenerMin(), cfg.ObtenerMax()
-                if moviendoMin then
+                local v = calculateValue(movedInput)
+                local vMin, vMax = getMinFn(), getMaxFn()
+                if isMovingMin then
                     v = math.min(v, vMax)
-                    posicionarManija(manijaMin, v)
-                    cfg.OnCambio(v, vMax)
+                    positionHandle(handleMin, v)
+                    if changeFn then changeFn(v, vMax) end
                 else
                     v = math.max(v, vMin)
-                    posicionarManija(manijaMax, v)
-                    cfg.OnCambio(vMin, v)
+                    positionHandle(handleMax, v)
+                    if changeFn then changeFn(vMin, v) end
                 end
-                local vMinReal, vMaxReal = cfg.ObtenerMin(), cfg.ObtenerMax()
-                relleno.Position = UDim2.new(relX(vMinReal), 0, 0, 0)
-                relleno.Size = UDim2.new(relX(vMaxReal) - relX(vMinReal), 0, 1, 0)
+                local vMinReal, vMaxReal = getMinFn(), getMaxFn()
+                fill.Position = UDim2.new(relX(vMinReal), 0, 0, 0)
+                fill.Size = UDim2.new(relX(vMaxReal) - relX(vMinReal), 0, 1, 0)
             end
 
-            EventManager:Arrastrar(candidato, function()
-                if esArrastre then
-                    marcarArrastre(moviendoMin and aroMin or aroMax, false)
+            EventManager:StartDrag(candidate, function()
+                if isDragging then
+                    markHandleDrag(isMovingMin and ringMin or ringMax, false)
                 end
-                if scrollAncestro then scrollAncestro.ScrollingEnabled = scrollEstabaActivo end
+                if scrollAncestor then scrollAncestor.ScrollingEnabled = scrollWasEnabled end
             end)
         end
     end)
 
-    return fondo, fijarVisual
+    return background, setVisual
 end
+local crearBarraArrastrableRango = createDraggableRangeBar
 
-local function hacerExpandible(marco, altoCerrado, obtenerAltoAbierto, alCerrarCallback)
-    local abierto = false
-    local conexionesCierre = {}
+local function makeExpandable(frame, closedHeight, getOpenHeight, onCloseCallback)
+    local isOpen = false
+    local closeConnections = {}
 
-    local function estaFuera(input)
-        local pos = marco.AbsolutePosition
-        local tam = marco.AbsoluteSize
+    local function isOutside(input)
+        local pos = frame.AbsolutePosition
+        local sz = frame.AbsoluteSize
         local x, y = input.Position.X, input.Position.Y
-        return x < pos.X or x > pos.X + tam.X or y < pos.Y or y > pos.Y + tam.Y
+        return x < pos.X or x > pos.X + sz.X or y < pos.Y or y > pos.Y + sz.Y
     end
 
-    local function limpiarConexionesCierre()
-        for _, conexion in ipairs(conexionesCierre) do
-            AlanLuna:DesconectarYLimpiar(conexion)
+    local function cleanCloseConnections()
+        for _, conn in ipairs(closeConnections) do
+            LouisHub:DisconnectAndClean(conn)
         end
-        conexionesCierre = {}
+        closeConnections = {}
     end
 
-    local function alternar()
-        abierto = not abierto
-        local alto = abierto and obtenerAltoAbierto() or altoCerrado
-        Utils.Tween(marco, {Size = UDim2.new(1, 0, 0, alto)}, AlanLuna.Motion.Expand)
+    local function toggle()
+        isOpen = not isOpen
+        local h = isOpen and getOpenHeight() or closedHeight
+        Utils.Tween(frame, {Size = UDim2.new(1, 0, 0, h)}, LouisHub.Motion.Expand)
 
-        limpiarConexionesCierre()
+        cleanCloseConnections()
 
-        if abierto then
-            local UMBRAL_MOVIMIENTO = AlanLuna.Capacidades.EsTactil and 18 or 10
-            local inicio = nil
-            table.insert(conexionesCierre, AlanLuna:RegistrarConexion(
+        if isOpen then
+            local MOVE_THRESHOLD = LouisHub.Capabilities.IsTouch and 18 or 10
+            local startData = nil
+            table.insert(closeConnections, LouisHub:RegisterConnection(
                 UserInputService.InputBegan:Connect(function(input)
                     if input.UserInputType ~= Enum.UserInputType.MouseButton1 and
                        input.UserInputType ~= Enum.UserInputType.Touch then return end
-                    if marco.Parent and estaFuera(input) then
-                        inicio = {
-                            tipo = input.UserInputType,
+                    if frame.Parent and isOutside(input) then
+                        startData = {
+                            inputType = input.UserInputType,
                             pos = Vector2.new(input.Position.X, input.Position.Y),
                         }
                     else
-                        inicio = nil
+                        startData = nil
                     end
                 end)
             ))
-            table.insert(conexionesCierre, AlanLuna:RegistrarConexion(
+            table.insert(closeConnections, LouisHub:RegisterConnection(
                 UserInputService.InputEnded:Connect(function(input)
-                    if not inicio or input.UserInputType ~= inicio.tipo then return end
-                    local movio = (Vector2.new(input.Position.X, input.Position.Y) - inicio.pos).Magnitude > UMBRAL_MOVIMIENTO
-                    inicio = nil
-                    if movio then return end
-                    if marco.Parent and abierto then
-                        alternar()
-                        if alCerrarCallback then pcall(alCerrarCallback) end
+                    if not startData or input.UserInputType ~= startData.inputType then return end
+                    local moved = (Vector2.new(input.Position.X, input.Position.Y) - startData.pos).Magnitude > MOVE_THRESHOLD
+                    startData = nil
+                    if moved then return end
+                    if frame.Parent and isOpen then
+                        toggle()
+                        if onCloseCallback then pcall(onCloseCallback) end
                     end
                 end)
             ))
         else
-            if alCerrarCallback then pcall(alCerrarCallback) end
+            if onCloseCallback then pcall(onCloseCallback) end
         end
 
-        return abierto
+        return isOpen
     end
-    return alternar
+    return toggle
 end
+local hacerExpandible = makeExpandable
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 22: TOOLTIP ENGINE (OVERLAY & GESTURES)
+--  SECTION 22: TOOLTIP ENGINE (GLASS OVERLAY & TOUCH GESTURES)
 -- ══════════════════════════════════════════════════════════════
-local overlayGui, panelAyuda, lblAyuda, conexionCierreGlobal
+local overlayGui, helpPanel, lblHelp, globalCloseConnection
 
-local function obtenerOverlayTooltip()
+local function getTooltipOverlay()
     if overlayGui and overlayGui.Parent then return overlayGui end
 
     overlayGui = Instance.new("ScreenGui")
-    overlayGui.Name = "AlanLuna_TooltipOverlay"
+    overlayGui.Name = "LouisHub_TooltipOverlay"
     overlayGui.ResetOnSpawn = false
     overlayGui.IgnoreGuiInset = true
     overlayGui.DisplayOrder = 9999999
-    pcall(function() overlayGui.Parent = obtenerPadreGui() end)
-    protegerGui(overlayGui)
-    AlanLuna:RegistrarInstancia(overlayGui)
+    pcall(function() overlayGui.Parent = getGuiParent() end)
+    protectGui(overlayGui)
+    LouisHub:RegisterInstance(overlayGui)
 
-    panelAyuda = Instance.new("Frame")
-    panelAyuda.Name = "PanelAyuda"
-    panelAyuda.BackgroundColor3 = Theme.Panel
-    panelAyuda.BackgroundTransparency = 0.2
-    panelAyuda.BorderSizePixel = 0
-    panelAyuda.Visible = false
-    panelAyuda.ZIndex = 1000
-    panelAyuda.Size = UDim2.new(0, 190, 0, 0)
-    panelAyuda.AutomaticSize = Enum.AutomaticSize.Y
-    panelAyuda.Parent = overlayGui
-    AlanLuna:Registrar(panelAyuda, "BackgroundColor3", "Panel")
-    Utils.Corner(panelAyuda, 6)
-    local strokeTooltip = Utils.Stroke(panelAyuda, Theme.Accent, 1, 0.3)
-    AlanLuna:Registrar(strokeTooltip, "Color", "Accent")
+    helpPanel = Instance.new("Frame")
+    helpPanel.Name = "HelpPanel"
+    helpPanel.BackgroundColor3 = Theme.Panel
+    helpPanel.BackgroundTransparency = 0.2
+    helpPanel.BorderSizePixel = 0
+    helpPanel.Visible = false
+    helpPanel.ZIndex = 1000
+    helpPanel.Size = UDim2.new(0, 190, 0, 0)
+    helpPanel.AutomaticSize = Enum.AutomaticSize.Y
+    helpPanel.Parent = overlayGui
+    LouisHub:Register(helpPanel, "BackgroundColor3", "Panel")
+    Utils.Corner(helpPanel, 6)
+    local strokeTooltip = Utils.Stroke(helpPanel, Theme.Accent, 1, 0.3)
+    LouisHub:Register(strokeTooltip, "Color", "Accent")
 
-    local blurTip = BlurModule(panelAyuda)
+    local blurTip = BlurModule(helpPanel)
 
     local pad = Instance.new("UIPadding")
     pad.PaddingLeft, pad.PaddingRight   = UDim.new(0, 8), UDim.new(0, 8)
     pad.PaddingTop,  pad.PaddingBottom  = UDim.new(0, 6), UDim.new(0, 6)
-    pad.Parent = panelAyuda
+    pad.Parent = helpPanel
 
-    lblAyuda = Utils.Texto({
-        Padre = panelAyuda, Texto = "",
+    lblHelp = Utils.Text({
+        Parent = helpPanel, Text = "",
         Size = UDim2.new(1, 0, 0, 0),
-        Tamano = 10.5, Ajustar = true,
+        TextSize = 10.5, Wrapped = true,
     })
-    lblAyuda.AutomaticSize = Enum.AutomaticSize.Y
-    lblAyuda.ZIndex = 1001
-    AlanLuna:Registrar(lblAyuda, "TextColor3", "Text")
+    lblHelp.AutomaticSize = Enum.AutomaticSize.Y
+    lblHelp.ZIndex = 1001
+    LouisHub:Register(lblHelp, "TextColor3", "Text")
 
     return overlayGui
 end
 
-local function cerrarTooltipGlobal()
-    if panelAyuda then panelAyuda.Visible = false end
-    if conexionCierreGlobal then
-        AlanLuna:DesconectarYLimpiar(conexionCierreGlobal)
-        conexionCierreGlobal = nil
+local function closeGlobalTooltip()
+    if helpPanel then helpPanel.Visible = false end
+    if globalCloseConnection then
+        LouisHub:DisconnectAndClean(globalCloseConnection)
+        globalCloseConnection = nil
     end
 end
 
-local function mostrarTooltipEn(elementoRef, textoAyuda)
-    obtenerOverlayTooltip()
+local function showTooltipAt(refElement, helpText)
+    getTooltipOverlay()
 
-    if panelAyuda.Visible and lblAyuda.Text == textoAyuda then
-        cerrarTooltipGlobal()
+    if helpPanel.Visible and lblHelp.Text == helpText then
+        closeGlobalTooltip()
         return
     end
 
-    cerrarTooltipGlobal()
+    closeGlobalTooltip()
 
-    lblAyuda.Text = textoAyuda
-    panelAyuda.Size = UDim2.new(0, 190, 0, 0)
+    lblHelp.Text = helpText
+    helpPanel.Size = UDim2.new(0, 190, 0, 0)
 
-    local pos = elementoRef.AbsolutePosition
-    local tam = elementoRef.AbsoluteSize
+    local pos = refElement.AbsolutePosition
+    local sz = refElement.AbsoluteSize
     local x = pos.X
-    local y = pos.Y + tam.Y + 4
-    local anchoPantalla = overlayGui.AbsoluteSize.X
-    if anchoPantalla > 0 then
-        x = math.min(x, anchoPantalla - 198)
+    local y = pos.Y + sz.Y + 4
+    local screenWidth = overlayGui.AbsoluteSize.X
+    if screenWidth > 0 then
+        x = math.min(x, screenWidth - 198)
     end
-    panelAyuda.Position = UDim2.new(0, math.max(4, x), 0, y)
-    panelAyuda.Visible = true
+    helpPanel.Position = UDim2.new(0, math.max(4, x), 0, y)
+    helpPanel.Visible = true
 
-    local escalaTip = panelAyuda:FindFirstChild("__AlanLuna_TooltipScale")
-    if not escalaTip then
-        escalaTip = Instance.new("UIScale")
-        escalaTip.Name = "__AlanLuna_TooltipScale"
-        escalaTip.Parent = panelAyuda
+    local scaleTip = helpPanel:FindFirstChild("__LouisHub_TooltipScale")
+    if not scaleTip then
+        scaleTip = Instance.new("UIScale")
+        scaleTip.Name = "__LouisHub_TooltipScale"
+        scaleTip.Parent = helpPanel
     end
-    escalaTip.Scale = 0.92
-    Utils.Tween(escalaTip, {Scale = 1}, AlanLuna.Motion.Expand, AlanLuna.Motion.EasePop)
+    scaleTip.Scale = 0.92
+    Utils.Tween(scaleTip, {Scale = 1}, LouisHub.Motion.Expand, LouisHub.Motion.EasePop)
 
-    conexionCierreGlobal = AlanLuna:RegistrarConexion(
+    globalCloseConnection = LouisHub:RegisterConnection(
         UserInputService.InputBegan:Connect(function(input)
             if input.UserInputType ~= Enum.UserInputType.MouseButton1 and
                input.UserInputType ~= Enum.UserInputType.Touch then return end
-            cerrarTooltipGlobal()
+            closeGlobalTooltip()
         end)
     )
 end
 
-local function agregarTooltip(fila, posicion, textoAyuda)
-    if not textoAyuda then return end
+local function addTooltip(row, position, helpText)
+    if not helpText then return end
 
-    local btnInfo = Utils.BotonBase({
-        Padre = fila, Size = UDim2.new(0, 18, 0, 18),
-        Posicion = posicion, Color = Theme.AccentLight,
-        Transparencia = 0.2, Radio = 9,
+    local btnInfo = Utils.BaseButton({
+        Parent = row, Size = UDim2.new(0, 18, 0, 18),
+        Position = position, Color = Theme.AccentLight,
+        Transparency = 0.2, Radius = 9,
     })
     btnInfo.ZIndex = 5
-    AlanLuna:Registrar(btnInfo, "BackgroundColor3", "AccentLight")
+    LouisHub:Register(btnInfo, "BackgroundColor3", "AccentLight")
 
-    local lblSigno = Utils.Texto({
-        Padre = btnInfo, Texto = "?",
-        Alineacion = Enum.TextXAlignment.Center,
-        Fuente = Enum.Font.GothamBold, Tamano = 11,
+    local lblMark = Utils.Text({
+        Parent = btnInfo, Text = "?",
+        Alignment = Enum.TextXAlignment.Center,
+        Font = Enum.Font.GothamBold, TextSize = 11,
         Color = Theme.TextDark,
     })
-    AlanLuna:Registrar(lblSigno, "TextColor3", "TextDark")
+    LouisHub:Register(lblMark, "TextColor3", "TextDark")
 
     btnInfo.MouseButton1Click:Connect(function()
-        mostrarTooltipEn(btnInfo, textoAyuda)
+        showTooltipAt(btnInfo, helpText)
     end)
 
     return btnInfo
 end
+local agregarTooltip = addTooltip
 
-local function agregarTooltipTexto(fila, textoLabel, textoAyuda, lblInstancia, offsetDerecho)
-    if not textoAyuda then return end
-    if not (lblInstancia and lblInstancia.Size) then
-        agregarTooltip(fila, UDim2.new(0, 160, 0, 4), textoAyuda)
+local function addTextTooltip(row, labelText, helpText, lblInstance, rightOffset)
+    if not helpText then return end
+    if not (lblInstance and lblInstance.Size) then
+        addTooltip(row, UDim2.new(0, 160, 0, 4), helpText)
         return
     end
 
-    local TAM_INFO = 18
-    local RESERVA  = TAM_INFO + 10
-    local sx = lblInstancia.Size.X.Scale
-    local ox = offsetDerecho or lblInstancia.Size.X.Offset
-    local px = lblInstancia.Position.X.Offset
-    lblInstancia.Size = UDim2.new(sx, ox - RESERVA - px,
-        lblInstancia.Size.Y.Scale, lblInstancia.Size.Y.Offset)
+    local INFO_SIZE = 18
+    local RESERVE   = INFO_SIZE + 10
+    local sx = lblInstance.Size.X.Scale
+    local ox = rightOffset or lblInstance.Size.X.Offset
+    local px = lblInstance.Position.X.Offset
+    lblInstance.Size = UDim2.new(sx, ox - RESERVE - px,
+        lblInstance.Size.Y.Scale, lblInstance.Size.Y.Offset)
 
-    local xInfo = ox - TAM_INFO - 4
-    local btnInfo = agregarTooltip(fila, UDim2.new(sx, xInfo, 0.5, 0), textoAyuda)
+    local xInfo = ox - INFO_SIZE - 4
+    local btnInfo = addTooltip(row, UDim2.new(sx, xInfo, 0.5, 0), helpText)
     btnInfo.AnchorPoint = Vector2.new(0, 0.5)
 
-    local function centrarY()
-        if not (btnInfo.Parent and lblInstancia.Parent and fila.Parent) then return end
-        if lblInstancia.AbsoluteSize.Y <= 0 then return end
-        local e = Utils.FactorEscalaUI(fila)
-        local cy = (lblInstancia.AbsolutePosition.Y - fila.AbsolutePosition.Y
-            + lblInstancia.AbsoluteSize.Y / 2) / e
+    local function centerY()
+        if not (btnInfo.Parent and lblInstance.Parent and row.Parent) then return end
+        if lblInstance.AbsoluteSize.Y <= 0 then return end
+        local e = Utils.UIScaleFactor(row)
+        local cy = (lblInstance.AbsolutePosition.Y - row.AbsolutePosition.Y
+            + lblInstance.AbsoluteSize.Y / 2) / e
         btnInfo.Position = UDim2.new(sx, xInfo, 0, math.floor(cy + 0.5))
     end
-    AlanLuna:RegistrarConexion(lblInstancia:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-        centrarY(); task.defer(centrarY)
+    LouisHub:RegisterConnection(lblInstance:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+        centerY(); task.defer(centerY)
     end))
-    AlanLuna:RegistrarConexion(fila:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-        centrarY(); task.defer(centrarY)
+    LouisHub:RegisterConnection(row:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+        centerY(); task.defer(centerY)
     end))
-    task.defer(centrarY)
+    task.defer(centerY)
 
-    fila.Active = true
-    local UMBRAL_MOVIMIENTO = AlanLuna.Capacidades.EsTactil and 18 or 10
-    local TIEMPO_MANTENER = 0.45
-    local toqueActual = nil
+    row.Active = true
+    local MOVE_THRESHOLD = LouisHub.Capabilities.IsTouch and 18 or 10
+    local HOLD_TIME = 0.45
+    local currentTouch = nil
 
-    local function abrirSiNoEstaAbierto()
-        if panelAyuda and panelAyuda.Visible and lblAyuda and lblAyuda.Text == textoAyuda then return end
-        pcall(mostrarTooltipEn, fila, textoAyuda)
+    local function openIfNotOpen()
+        if helpPanel and helpPanel.Visible and lblHelp and lblHelp.Text == helpText then return end
+        pcall(showTooltipAt, row, helpText)
     end
 
-    fila.InputBegan:Connect(function(input)
+    row.InputBegan:Connect(function(input)
         if input.UserInputType ~= Enum.UserInputType.MouseButton1
         and input.UserInputType ~= Enum.UserInputType.Touch then return end
-        toqueActual = input
-        local posInicial = Vector2.new(input.Position.X, input.Position.Y)
-        local inicio = os.clock()
+        currentTouch = input
+        local initPos = Vector2.new(input.Position.X, input.Position.Y)
+        local startTime = os.clock()
         task.spawn(function()
-            while toqueActual == input do
-                if not (fila and fila.Parent) then return end
+            while currentTouch == input do
+                if not (row and row.Parent) then return end
                 if input.UserInputState == Enum.UserInputState.End then return end
-                local pos = Vector2.new(input.Position.X, input.Position.Y)
-                if (pos - posInicial).Magnitude > UMBRAL_MOVIMIENTO then return end
-                if os.clock() - inicio >= TIEMPO_MANTENER then
-                    toqueActual = nil
-                    abrirSiNoEstaAbierto()
+                local curPos = Vector2.new(input.Position.X, input.Position.Y)
+                if (curPos - initPos).Magnitude > MOVE_THRESHOLD then return end
+                if os.clock() - startTime >= HOLD_TIME then
+                    currentTouch = nil
+                    openIfNotOpen()
                     return
                 end
                 task.wait(0.05)
             end
         end)
     end)
-    fila.InputEnded:Connect(function(input)
+    row.InputEnded:Connect(function(input)
         if input.UserInputType ~= Enum.UserInputType.MouseButton1
         and input.UserInputType ~= Enum.UserInputType.Touch then return end
-        toqueActual = nil
+        currentTouch = nil
     end)
     pcall(function()
-        fila.TouchLongPress:Connect(function(_, estado)
-            if estado == Enum.UserInputState.Begin then abrirSiNoEstaAbierto() end
+        row.TouchLongPress:Connect(function(_, state)
+            if state == Enum.UserInputState.Begin then openIfNotOpen() end
         end)
     end)
 
     return btnInfo
 end
+local agregarTooltipTexto = addTextTooltip
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 23: INYECCION DE CONTROLES EN SECCION & LAYOUT 2-COL
+--  SECTION 23: CONTROL INJECTION & LUNA COMPATIBILITY ADAPTER
 -- ══════════════════════════════════════════════════════════════
-local function aplicarMetodosControles(Seccion)
-    local orden = 0
-    local function siguienteOrden() orden = orden + 1; return orden end
+local function applyControlMethods(Section)
+    local order = 0
+    local function nextOrder() order = order + 1; return order end
 
-    local function crearCabecera(alto, texto, anchoLabel, offsetX, modo, contDestino)
-        local fila = Utils.Fila(contDestino, alto, siguienteOrden(), Theme.Fila)
-        AlanLuna:Registrar(fila, "BackgroundColor3", "Fila")
-        Utils.Hover(fila, fila)
-        if modo ~= "fijo" then
-            local lblD = Utils.Texto({
-                Padre = fila, Texto = texto,
-                Size = UDim2.new(anchoLabel or 1, offsetX or -46, 1, 0),
-                Tamano = 11, Ajustar = true,
+    local function createHeader(height, text, labelWidth, offsetX, mode, targetContainer)
+        local row = Utils.Row(targetContainer, height, nextOrder(), Theme.Row)
+        LouisHub:Register(row, "BackgroundColor3", "Row")
+        Utils.Hover(row, row)
+        if mode ~= "fixed" and mode ~= "fijo" then
+            local lblD = Utils.Text({
+                Parent = row, Text = text,
+                Size = UDim2.new(labelWidth or 1, offsetX or -46, 1, 0),
+                TextSize = 11, Wrapped = true,
             })
-            if modo ~= "manual" then Utils.HacerFilaDinamica(fila, lblD, alto, 5) end
-            return fila, lblD
+            if mode ~= "manual" then Utils.MakeDynamicRow(row, lblD, height, 5) end
+            return row, lblD
         end
-        local lbl = Utils.Texto({
-            Padre = fila, Texto = texto,
-            Size = UDim2.new(anchoLabel or 1, offsetX or -46, 1, 0),
-            Tamano = 11, Truncar = true,
+        local lbl = Utils.Text({
+            Parent = row, Text = text,
+            Size = UDim2.new(labelWidth or 1, offsetX or -46, 1, 0),
+            TextSize = 11, Truncate = true,
         })
-        return fila, lbl
+        return row, lbl
     end
 
-    local function crearControlBooleano(tipoNombre, cfg, crearVisual)
+    local function createBooleanControl(typeName, cfg, createVisual)
         cfg = cfg or {}
-        validarCallback(tipoNombre, cfg)
-        local flag  = cfg.Flag or cfg.Texto or cfg.Name or (tipoNombre .. "_" .. tostring(math.random(1e5, 1e6)))
-        local valor = false
+        validateCallback(typeName, cfg)
+        local flag  = cfg.Flag or cfg.Text or cfg.Texto or cfg.Name or (typeName .. "_" .. tostring(math.random(1e5, 1e6)))
+        local value = false
         if cfg.CurrentValue ~= nil then
-            valor = cfg.CurrentValue
+            value = cfg.CurrentValue
+        elseif cfg.Default ~= nil then
+            value = cfg.Default
         elseif cfg.Defecto ~= nil then
-            valor = cfg.Defecto
+            value = cfg.Defecto
         end
-        AlanLuna.Flags[flag] = valor
+        LouisHub.Flags[flag] = value
 
-        local destino = Seccion:_ObtenerContenedorDestino(tipoNombre, cfg)
-        local fila, lbl = crearCabecera(26, cfg.Texto or cfg.Name or tipoNombre, 1, -48, nil, destino)
+        local targetCont = Section:_GetTargetContainer(typeName, cfg)
+        local row, lbl = createHeader(26, cfg.Text or cfg.Texto or cfg.Name or typeName, 1, -48, nil, targetCont)
 
-        if cfg.Icono then
-            local icData = GetIcon(cfg.Icono, "Material")
+        local icoParam = cfg.Icon or cfg.Icono
+        if icoParam then
+            local icData = GetIcon(icoParam, "Material")
             if icData then
                 local icImg = Instance.new("ImageLabel")
                 icImg.BackgroundTransparency = 1
@@ -7036,80 +7318,80 @@ local function aplicarMetodosControles(Seccion)
                 else
                     icImg.Image = icData
                 end
-                icImg.Parent = fila
+                icImg.Parent = row
                 lbl.Position = UDim2.new(0, 24, 0, 0)
                 lbl.Size = UDim2.new(lbl.Size.X.Scale, lbl.Size.X.Offset - 18, 1, 0)
             end
         end
 
-        agregarTooltipTexto(fila, cfg.Texto or cfg.Name or tipoNombre, cfg.Tooltip or cfg.Description, lbl)
-        registrarBuscable(fila, cfg.Texto or cfg.Name or tipoNombre, cfg.VisibleSi)
+        addTextTooltip(row, cfg.Text or cfg.Texto or cfg.Name or typeName, cfg.Tooltip or cfg.Description, lbl)
+        registerSearchable(row, cfg.Text or cfg.Texto or cfg.Name or typeName, cfg.VisibleIf or cfg.VisibleSi)
 
-        local visual = crearVisual(fila, function() return valor end)
+        local visual = createVisual(row, function() return value end)
 
-        local function actualizar(v, disparar)
+        local function updateVal(v, fire)
             if type(v) ~= "boolean" then return end
-            valor = v
-            AlanLuna.Flags[flag] = v
-            visual.actualizarVisual(v)
+            value = v
+            LouisHub.Flags[flag] = v
+            visual.updateVisual(v)
 
-            if v == true and cfg.Desactivar then
-                for _, otraFlag in ipairs(cfg.Desactivar) do
-                    local ctrl = AlanLuna.Elementos[otraFlag]
+            local disableList = cfg.Disable or cfg.Desactivar
+            if v == true and disableList then
+                for _, otherFlag in ipairs(disableList) do
+                    local ctrl = LouisHub.Elements[otherFlag]
                     if ctrl and ctrl.Get() == true then ctrl.Set(false, true) end
                 end
             end
 
-            if disparar and cfg.Callback then
-                ejecutarConFallback(cfg.Callback, cfg.Texto or cfg.Name or "control", v)
+            if fire and cfg.Callback then
+                executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "control", v)
             end
         end
 
-        local hitbox = Utils.HitboxAmpliado(visual.clicable, 8)
-        Utils.ClickConfiable(hitbox, function() actualizar(not valor, true) end, visual.clicable)
+        local hitbox = Utils.ExpandedHitbox(visual.clickable, 8)
+        Utils.ReliableClick(hitbox, function() updateVal(not value, true) end, visual.clickable)
 
-        if cfg.Tecla then
-            AlanLuna:RegistrarConexion(UserInputService.InputBegan:Connect(function(input, procesado)
-                if procesado then return end
-                if input.KeyCode == cfg.Tecla then actualizar(not valor, true) end
+        local keyParam = cfg.Key or cfg.Tecla
+        if keyParam then
+            LouisHub:RegisterConnection(UserInputService.InputBegan:Connect(function(input, processed)
+                if processed then return end
+                if input.KeyCode == keyParam then updateVal(not value, true) end
             end))
         end
 
         local elemObj = {
-            Set = function(v, dispararCallback) actualizar(v, dispararCallback or false) end,
-            Get = function() return valor end,
-            UpdateState = function(_, v) actualizar(v, true) end,
-            CurrentValue = valor,
+            Set = function(v, fireCallback) updateVal(v, fireCallback or false) end,
+            SetState = function(selfElem, v) updateVal(v, true) end,
+            SetValue = function(selfElem, v) updateVal(v, true) end,
+            UpdateState = function(selfElem, v) updateVal(v, true) end,
+            Get = function() return value end,
+            CurrentValue = value,
         }
 
-        AlanLuna.Elementos[flag] = elemObj
-        AlanLuna.Options[flag] = elemObj
+        LouisHub.Elements[flag] = elemObj
+        LouisHub.Options[flag]  = elemObj
 
-        if cfg.Callback then ejecutarConFallback(cfg.Callback, cfg.Texto or cfg.Name or "control", valor) end
-        return {
-            Set = function(...) actualizar(normalizarArgSet(...), true) end,
-            Get = function() return valor end,
-            UpdateState = function(_, v) actualizar(v, true) end,
-            CurrentValue = valor,
-        }
+        if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "control", value) end
+        return elemObj
     end
 
-    function Seccion:Boton(cfg)
+    function Section:Button(cfg)
         cfg = cfg or {}
-        validarCallback("Botón", cfg)
-        local destino = self:_ObtenerContenedorDestino("Boton", cfg)
-        local fila = Utils.BotonBase({
-            Padre = destino, Size = UDim2.new(1, 0, 0, 26),
-            Color = Theme.Fila, Transparencia = 0.5,
-            Orden = siguienteOrden(), Radio = 6,
+        validateCallback("Button", cfg)
+        local targetCont = self:_GetTargetContainer("Button", cfg)
+        local row = Utils.BaseButton({
+            Parent = targetCont, Size = UDim2.new(1, 0, 0, 26),
+            Color = Theme.Row, Transparency = 0.5,
+            Order = nextOrder(), Radius = 6,
         })
-        AlanLuna:Registrar(fila, "BackgroundColor3", "Fila")
-        Utils.Hover(fila, fila)
+        LouisHub:Register(row, "BackgroundColor3", "Row")
+        Utils.Hover(row, row)
 
-        local textoConIcono = cfg.Texto or cfg.Name or "Botón"
-        local icAsset = cfg.Icono and GetIcon(cfg.Icono, "Material")
-        if not icAsset and cfg.Icono and type(cfg.Icono) == "string" then
-            textoConIcono = cfg.Icono .. " " .. textoConIcono
+        local textWithIcon = cfg.Text or cfg.Texto or cfg.Name or "Button"
+        local icoParam = cfg.Icon or cfg.Icono
+        local icAsset = icoParam and GetIcon(icoParam, "Material")
+        if not icAsset and icoParam and type(icoParam) == "string" then
+            textWithIcon = icoParam .. " " .. textWithIcon
         end
 
         if icAsset then
@@ -7124,810 +7406,802 @@ local function aplicarMetodosControles(Seccion)
             else
                 icImg.Image = icAsset
             end
-            icImg.Parent = fila
+            icImg.Parent = row
         end
 
-        local lblBoton = Utils.Texto({
-            Padre = fila, Texto = textoConIcono, RichText = cfg.RichText,
+        local lblButton = Utils.Text({
+            Parent = row, Text = textWithIcon, RichText = cfg.RichText,
             Size = UDim2.new(1, icAsset and -24 or -10, 1, 0),
-            Posicion = UDim2.new(0, icAsset and 22 or 6, 0, 0),
-            Tamano = 11,
+            Position = UDim2.new(0, icAsset and 22 or 6, 0, 0),
+            TextSize = 11,
         })
 
-        agregarTooltipTexto(fila, cfg.Texto or cfg.Name or "Botón", cfg.Tooltip or cfg.Description, lblBoton)
-        registrarBuscable(fila, cfg.Texto or cfg.Name or "Botón", cfg.VisibleSi)
+        addTextTooltip(row, cfg.Text or cfg.Texto or cfg.Name or "Button", cfg.Tooltip or cfg.Description, lblButton)
+        registerSearchable(row, cfg.Text or cfg.Texto or cfg.Name or "Button", cfg.VisibleIf or cfg.VisibleSi)
 
-        local spinner, hiloGiro
-        local function activarSpinner(activo)
-            if activo and not spinner then
-                spinner = Utils.Texto({
-                    Padre = fila, Texto = "◐",
-                    Size = UDim2.new(0, 16, 1, 0), Posicion = UDim2.new(1, -22, 0, 0),
-                    Alineacion = Enum.TextXAlignment.Center, Tamano = 12, Color = Theme.AccentLight,
+        local spinner, spinThread
+        local function activateSpinner(active)
+            if active and not spinner then
+                spinner = Utils.Text({
+                    Parent = row, Text = "◐",
+                    Size = UDim2.new(0, 16, 1, 0), Position = UDim2.new(1, -22, 0, 0),
+                    Alignment = Enum.TextXAlignment.Center, TextSize = 12, Color = Theme.AccentLight,
                 })
-                AlanLuna:Registrar(spinner, "TextColor3", "AccentLight")
+                LouisHub:Register(spinner, "TextColor3", "AccentLight")
             end
             if not spinner then return end
-            spinner.Visible = activo
-            if activo then
-                hiloGiro = AlanLuna:RegistrarHilo(task.spawn(function()
+            spinner.Visible = active
+            if active then
+                spinThread = LouisHub:RegisterThread(task.spawn(function()
                     while spinner and spinner.Visible do
-                        Utils.Tween(spinner, {Rotation = spinner.Rotation + 360}, AlanLuna.Motion.Spin, AlanLuna.Motion.EaseLineal)
-                        task.wait(AlanLuna.Motion.Spin)
+                        Utils.Tween(spinner, {Rotation = spinner.Rotation + 360}, LouisHub.Motion.Spin, LouisHub.Motion.EaseLinear)
+                        task.wait(LouisHub.Motion.Spin)
                     end
                 end))
             end
         end
 
         local flashId = 0
-        local enCurso = false
-        Utils.ClickConfiable(fila, function()
-            if cfg.Async and enCurso then return end
+        local inProgress = false
+        Utils.ReliableClick(row, function()
+            if cfg.Async and inProgress then return end
             flashId = flashId + 1
-            local idActual = flashId
-            Utils.Tween(fila, {BackgroundColor3 = Theme.Accent, BackgroundTransparency = 0.2}, AlanLuna.Motion.FlashIn)
+            local curId = flashId
+            Utils.Tween(row, {BackgroundColor3 = Theme.Accent, BackgroundTransparency = 0.2}, LouisHub.Motion.FlashIn)
             task.delay(0.12, function()
-                if idActual == flashId and fila and fila.Parent then
-                    Utils.Tween(fila, {BackgroundColor3 = Theme.Fila, BackgroundTransparency = 0.5}, AlanLuna.Motion.Expand)
+                if curId == flashId and row and row.Parent then
+                    Utils.Tween(row, {BackgroundColor3 = Theme.Row, BackgroundTransparency = 0.5}, LouisHub.Motion.Expand)
                 end
             end)
             if cfg.Callback then
                 if cfg.Async then
-                    enCurso = true
-                    activarSpinner(true)
+                    inProgress = true
+                    activateSpinner(true)
                     task.spawn(function()
-                        ejecutarConFallback(cfg.Callback, cfg.Texto or cfg.Name or "control")
-                        enCurso = false
-                        if fila and fila.Parent then activarSpinner(false) end
+                        executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "control")
+                        inProgress = false
+                        if row and row.Parent then activateSpinner(false) end
                     end)
                 else
-                    ejecutarConFallback(cfg.Callback, cfg.Texto or cfg.Name or "control")
+                    executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "control")
                 end
             end
         end)
 
-        return fila
+        return row
     end
+    Section.Boton = Section.Button
 
-    function Seccion:Toggle(cfg)
-        return crearControlBooleano("Toggle", cfg, function(fila, obtenerValor)
-            local perilla = Utils.BotonBase({
-                Padre = fila, Size = UDim2.new(0, 36, 0, 18),
-                Posicion = UDim2.new(1, -42, 0.5, -9),
-                Color = obtenerValor() and Theme.Accent or Theme.Apagado,
-                Transparencia = 0.2, Radio = 9,
+    function Section:Toggle(cfg)
+        return createBooleanControl("Toggle", cfg, function(row, getVal)
+            local knob = Utils.BaseButton({
+                Parent = row, Size = UDim2.new(0, 36, 0, 18),
+                Position = UDim2.new(1, -42, 0.5, -9),
+                Color = getVal() and Theme.Accent or Theme.Muted,
+                Transparency = 0.2, Radius = 9,
             })
-            AlanLuna:Registrar(perilla, "BackgroundColor3", function()
-                return obtenerValor() and Theme.Accent or Theme.Apagado
+            LouisHub:Register(knob, "BackgroundColor3", function()
+                return getVal() and Theme.Accent or Theme.Muted
             end)
 
-            local pGrad = Utils.GradienteAcento(perilla)
-            pGrad.Enabled = obtenerValor()
+            local pGrad = Utils.AccentGradient(knob)
+            pGrad.Enabled = getVal()
 
-            local circulo = Utils.Frame({
-                Padre = perilla, Size = UDim2.new(0, 14, 0, 14),
-                Posicion = obtenerValor() and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7),
-                Color = Theme.Text, Radio = 7, Borde = false, Transparencia = 0,
+            local circle = Utils.Frame({
+                Parent = knob, Size = UDim2.new(0, 14, 0, 14),
+                Position = getVal() and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7),
+                Color = Theme.Text, Radius = 7, Border = false, Transparency = 0,
             })
-            AlanLuna:Registrar(circulo, "BackgroundColor3", "Text")
+            LouisHub:Register(circle, "BackgroundColor3", "Text")
 
             return {
-                clicable = perilla,
-                actualizarVisual = function(v)
+                clickable = knob,
+                updateVisual = function(v)
                     pGrad.Enabled = v
-                    Utils.Tween(perilla, {BackgroundColor3 = v and Theme.Accent or Theme.Apagado}, AlanLuna.Motion.Expand)
-                    Utils.Tween(circulo, {
+                    Utils.Tween(knob, {BackgroundColor3 = v and Theme.Accent or Theme.Muted}, LouisHub.Motion.Expand)
+                    Utils.Tween(circle, {
                         Position = v and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
-                    }, AlanLuna.Motion.Page, AlanLuna.Motion.EasePop)
+                    }, LouisHub.Motion.Page, LouisHub.Motion.EasePop)
                 end,
             }
         end)
     end
 
-    function Seccion:Casilla(cfg)
-        return crearControlBooleano("Casilla", cfg, function(fila, obtenerValor)
-            local caja = Utils.BotonBase({
-                Padre = fila, Size = UDim2.new(0, 18, 0, 18),
-                Posicion = UDim2.new(1, -26, 0.5, -9),
-                Color = obtenerValor() and Theme.Accent or Theme.Entrada,
-                Transparencia = 0.3, Radio = 4,
+    function Section:Checkbox(cfg)
+        return createBooleanControl("Checkbox", cfg, function(row, getVal)
+            local box = Utils.BaseButton({
+                Parent = row, Size = UDim2.new(0, 18, 0, 18),
+                Position = UDim2.new(1, -26, 0.5, -9),
+                Color = getVal() and Theme.Accent or Theme.Input,
+                Transparency = 0.3, Radius = 4,
             })
-            AlanLuna:Registrar(caja, "BackgroundColor3", function()
-                return obtenerValor() and Theme.Accent or Theme.Entrada
+            LouisHub:Register(box, "BackgroundColor3", function()
+                return getVal() and Theme.Accent or Theme.Input
             end)
-            local strokeCasilla = Utils.Stroke(caja, Theme.Border, 1, 0.3)
-            AlanLuna:Registrar(strokeCasilla, "Color", "Border")
+            local strokeBox = Utils.Stroke(box, Theme.Border, 1, 0.3)
+            LouisHub:Register(strokeBox, "Color", "Border")
 
             local check = Utils.Frame({
-                Padre = caja, Size = UDim2.new(1, 0, 1, 0), Color = Theme.Text, Transparencia = 1, Borde = false,
+                Parent = box, Size = UDim2.new(1, 0, 1, 0), Color = Theme.Text, Transparency = 1, Border = false,
             })
-            local trazoCorto = Utils.Frame({
-                Padre = check, Size = UDim2.new(0, 5, 0, 2),
-                Posicion = UDim2.new(0.5, -5, 0.5, 1), Color = Theme.Text,
-                Transparencia = obtenerValor() and 0 or 1, Radio = 1, Borde = false,
+            local strokeShort = Utils.Frame({
+                Parent = check, Size = UDim2.new(0, 5, 0, 2),
+                Position = UDim2.new(0.5, -5, 0.5, 1), Color = Theme.Text,
+                Transparency = getVal() and 0 or 1, Radius = 1, Border = false,
             })
-            trazoCorto.Rotation = 45
-            local trazoLargo = Utils.Frame({
-                Padre = check, Size = UDim2.new(0, 10, 0, 2),
-                Posicion = UDim2.new(0.5, -2, 0.5, -3), Color = Theme.Text,
-                Transparencia = obtenerValor() and 0 or 1, Radio = 1, Borde = false,
+            strokeShort.Rotation = 45
+            local strokeLong = Utils.Frame({
+                Parent = check, Size = UDim2.new(0, 10, 0, 2),
+                Position = UDim2.new(0.5, -2, 0.5, -3), Color = Theme.Text,
+                Transparency = getVal() and 0 or 1, Radius = 1, Border = false,
             })
-            trazoLargo.Rotation = -45
-            AlanLuna:Registrar(trazoCorto, "BackgroundColor3", "Text")
-            AlanLuna:Registrar(trazoLargo, "BackgroundColor3", "Text")
+            strokeLong.Rotation = -45
+            LouisHub:Register(strokeShort, "BackgroundColor3", "Text")
+            LouisHub:Register(strokeLong, "BackgroundColor3", "Text")
 
             return {
-                clicable = caja,
-                actualizarVisual = function(v)
-                    Utils.Tween(caja, {BackgroundColor3 = v and Theme.Accent or Theme.Entrada}, AlanLuna.Motion.Hover)
-                    Utils.Tween(trazoCorto, {BackgroundTransparency = v and 0 or 1}, AlanLuna.Motion.Hover)
-                    Utils.Tween(trazoLargo, {BackgroundTransparency = v and 0 or 1}, AlanLuna.Motion.Hover)
+                clickable = box,
+                updateVisual = function(v)
+                    Utils.Tween(box, {BackgroundColor3 = v and Theme.Accent or Theme.Input}, LouisHub.Motion.Hover)
+                    Utils.Tween(strokeShort, {BackgroundTransparency = v and 0 or 1}, LouisHub.Motion.Hover)
+                    Utils.Tween(strokeLong, {BackgroundTransparency = v and 0 or 1}, LouisHub.Motion.Hover)
                 end,
             }
         end)
     end
+    Section.Casilla = Section.Checkbox
 
-    function Seccion:Slider(cfg)
+    function Section:Slider(cfg)
         cfg = cfg or {}
-        validarCallback("Slider", cfg)
-        local flag      = cfg.Flag or cfg.Texto or cfg.Name or ("Slider_" .. tostring(math.random(1e5, 1e6)))
+        validateCallback("Slider", cfg)
+        local flag      = cfg.Flag or cfg.Text or cfg.Texto or cfg.Name or ("Slider_" .. tostring(math.random(1e5, 1e6)))
         local range     = cfg.Range or {cfg.Min or 0, cfg.Max or 100}
-        local minimo    = range[1]
-        local maximo    = range[2]
-        if minimo >= maximo then maximo = minimo + 1 end
-        local incremento = cfg.Increment or cfg.Incremento or 1
-        if incremento <= 0 then incremento = 1 end
-        local sufijo    = cfg.Sufijo or cfg.Suffix or ""
-        local valor     = math.clamp(cfg.CurrentValue or cfg.Defecto or minimo, minimo, maximo)
-        AlanLuna.Flags[flag] = valor
+        local minVal    = range[1]
+        local maxVal    = range[2]
+        if minVal >= maxVal then maxVal = minVal + 1 end
+        local stepVal   = cfg.Increment or cfg.Incremento or cfg.Step or 1
+        if stepVal <= 0 then stepVal = 1 end
+        local suffix    = cfg.Suffix or cfg.Sufijo or ""
+        local defaultV  = cfg.CurrentValue or cfg.Default or cfg.Defecto or minVal
+        local value     = math.clamp(defaultV, minVal, maxVal)
+        LouisHub.Flags[flag] = value
 
-        local destino = self:_ObtenerContenedorDestino("Slider", cfg)
-        local fila = Utils.Fila(destino, 42, siguienteOrden(), Theme.Fila)
-        AlanLuna:Registrar(fila, "BackgroundColor3", "Fila")
-        Utils.Hover(fila, fila)
-        registrarBuscable(fila, cfg.Texto or cfg.Name or "Slider", cfg.VisibleSi)
+        local targetCont = self:_GetTargetContainer("Slider", cfg)
+        local row = Utils.Row(targetCont, 42, nextOrder(), Theme.Row)
+        LouisHub:Register(row, "BackgroundColor3", "Row")
+        Utils.Hover(row, row)
+        registerSearchable(row, cfg.Text or cfg.Texto or cfg.Name or "Slider", cfg.VisibleIf or cfg.VisibleSi)
 
-        local lblSlider = Utils.Texto({
-            Padre = fila, Texto = cfg.Texto or cfg.Name or "Slider",
-            Size = UDim2.new(1, -90, 0, 16), Posicion = UDim2.new(0, 6, 0, 5),
-            Truncar = true, Tamano = 11,
+        local lblSlider = Utils.Text({
+            Parent = row, Text = cfg.Text or cfg.Texto or cfg.Name or "Slider",
+            Size = UDim2.new(1, -90, 0, 16), Position = UDim2.new(0, 6, 0, 5),
+            Truncate = true, TextSize = 11,
         })
-        agregarTooltipTexto(fila, cfg.Texto or cfg.Name or "Slider", cfg.Tooltip or cfg.Description, lblSlider, -90)
+        addTextTooltip(row, cfg.Text or cfg.Texto or cfg.Name or "Slider", cfg.Tooltip or cfg.Description, lblSlider, -90)
 
-        local inputValor = Instance.new("TextBox")
-        inputValor.Size             = UDim2.new(0, 80, 0, 18)
-        inputValor.Position         = UDim2.new(1, -86, 0, 4)
-        inputValor.BackgroundColor3 = Theme.Entrada
-        inputValor.BackgroundTransparency = 0.4
-        inputValor.Text             = tostring(valor) .. sufijo
-        inputValor.TextColor3       = Theme.Highlight
-        inputValor.Font             = Enum.Font.GothamBold
-        inputValor.TextSize         = 11
-        inputValor.TextXAlignment   = Enum.TextXAlignment.Right
-        inputValor.BorderSizePixel  = 0
-        inputValor.ClearTextOnFocus = false
-        inputValor.Parent           = fila
-        Utils.Corner(inputValor, 4)
-        AlanLuna:Registrar(inputValor, "BackgroundColor3", "Entrada")
-        AlanLuna:Registrar(inputValor, "TextColor3", "Highlight")
+        local inputValBox = Instance.new("TextBox")
+        inputValBox.Size             = UDim2.new(0, 80, 0, 18)
+        inputValBox.Position         = UDim2.new(1, -86, 0, 4)
+        inputValBox.BackgroundColor3 = Theme.Input
+        inputValBox.BackgroundTransparency = 0.4
+        inputValBox.Text             = tostring(value) .. suffix
+        inputValBox.TextColor3       = Theme.Highlight
+        inputValBox.Font             = Enum.Font.GothamBold
+        inputValBox.TextSize         = 11
+        inputValBox.TextXAlignment   = Enum.TextXAlignment.Right
+        inputValBox.BorderSizePixel  = 0
+        inputValBox.ClearTextOnFocus = false
+        inputValBox.Parent           = row
+        Utils.Corner(inputValBox, 4)
+        LouisHub:Register(inputValBox, "BackgroundColor3", "Input")
+        LouisHub:Register(inputValBox, "TextColor3", "Highlight")
 
-        local function redondear(v)
-            local factor = 1 / incremento
+        local function roundVal(v)
+            local factor = 1 / stepVal
             return math.clamp(
-                math.floor((v - minimo) * factor + 0.5) / factor + minimo,
-                minimo, maximo
+                math.floor((v - minVal) * factor + 0.5) / factor + minVal,
+                minVal, maxVal
             )
         end
 
-        local function quitarSufijo(txt)
-            if sufijo ~= "" and txt:sub(-#sufijo) == sufijo then
-                return txt:sub(1, -#sufijo - 1)
+        local function stripSuffix(txt)
+            if suffix ~= "" and txt:sub(-#suffix) == suffix then
+                return txt:sub(1, -#suffix - 1)
             end
             return txt
         end
 
-        local decimales = 0
-        local dec = tostring(incremento):match("%.(%d+)$")
-        if dec then decimales = #dec end
-        local function formatearValor(n)
-            if decimales > 0 then return string.format("%." .. decimales .. "f", n) end
+        local decimals = 0
+        local dec = tostring(stepVal):match("%.(%d+)$")
+        if dec then decimals = #dec end
+        local function formatNumber(n)
+            if decimals > 0 then return string.format("%." .. decimals .. "f", n) end
             return tostring(math.floor(n + 0.5))
         end
 
-        local ultimoProcesado = valor
-        local function animarTextoVisible(v, instantaneo)
-            if instantaneo then
-                inputValor.Text = formatearValor(v) .. sufijo
+        local lastProcessed = value
+        local function animateDisplay(v, instant)
+            if instant then
+                inputValBox.Text = formatNumber(v) .. suffix
             else
-                Utils.TweenNumero(ultimoProcesado, v, AlanLuna.Motion.Page, function(n)
-                    if inputValor and inputValor.Parent then
-                        inputValor.Text = formatearValor(redondear(n)) .. sufijo
+                Utils.TweenNumber(lastProcessed, v, LouisHub.Motion.Page, function(n)
+                    if inputValBox and inputValBox.Parent then
+                        inputValBox.Text = formatNumber(roundVal(n)) .. suffix
                     end
                 end)
             end
         end
 
-        local function procesarNuevoValor(vCrudo)
-            local v = redondear(vCrudo)
-            if v == ultimoProcesado then return end
-            ultimoProcesado = v
-            valor = v
-            AlanLuna.Flags[flag] = v
-            animarTextoVisible(v, true)
+        local function processNewVal(rawV)
+            local v = roundVal(rawV)
+            if v == lastProcessed then return end
+            lastProcessed = v
+            value = v
+            LouisHub.Flags[flag] = v
+            animateDisplay(v, true)
             if cfg.Callback then
-                ejecutarConFallback(cfg.Callback, cfg.Texto or cfg.Name or "control", v)
+                executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "control", v)
             end
         end
 
-        local barraSlider, relleno, fijarVisual = crearBarraArrastrable({
-            Padre = fila,
+        local barBg, fill, setVisual = createDraggableBar({
+            Parent = row,
             Size = UDim2.new(1, -12, 0, 7),
-            Posicion = UDim2.new(0, 6, 0, 27),
-            Min = minimo, Max = maximo, Valor = valor,
-            Incremento = incremento, Pasos = cfg.Pasos,
-            AltoHitbox = 16, OffsetHitboxY = 0,
-            OnCambio = procesarNuevoValor,
+            Position = UDim2.new(0, 6, 0, 27),
+            Min = minVal, Max = maxVal, Value = value,
+            Increment = stepVal, Steps = cfg.Steps or cfg.Pasos,
+            HitboxHeight = 16, HitboxOffsetY = 0,
+            OnChange = processNewVal,
         })
 
-        inputValor.FocusLost:Connect(function(enterPressed)
+        inputValBox.FocusLost:Connect(function(enterPressed)
             if not enterPressed then return end
-            local txt = quitarSufijo(inputValor.Text):gsub("%s+", "")
+            local txt = stripSuffix(inputValBox.Text):gsub("%s+", "")
             local num = tonumber(txt)
             if num then
-                num = redondear(num)
-                ultimoProcesado = num
-                valor = num
-                AlanLuna.Flags[flag] = num
-                animarTextoVisible(num, true)
-                fijarVisual(num)
-                Utils.FlashFeedback(inputValor, true, Theme.Entrada)
+                num = roundVal(num)
+                lastProcessed = num
+                value = num
+                LouisHub.Flags[flag] = num
+                animateDisplay(num, true)
+                setVisual(num)
+                Utils.FlashFeedback(inputValBox, true, Theme.Input)
                 if cfg.Callback then
-                    ejecutarConFallback(cfg.Callback, cfg.Texto or cfg.Name or "Slider", num)
+                    executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "Slider", num)
                 end
             else
-                animarTextoVisible(valor, true)
-                Utils.FlashFeedback(inputValor, false, Theme.Entrada)
+                animateDisplay(value, true)
+                Utils.FlashFeedback(inputValBox, false, Theme.Input)
             end
         end)
 
         local elemObj = {
-            Set = function(v, dispararCallback)
+            Set = function(v, fireCallback)
                 if typeof(v) ~= "number" then return end
-                v = redondear(v)
-                ultimoProcesado = v
-                valor = v
-                AlanLuna.Flags[flag] = v
-                animarTextoVisible(v, false)
-                fijarVisual(v)
-                if dispararCallback and cfg.Callback then
-                    ejecutarConFallback(cfg.Callback, cfg.Texto or cfg.Name or "control", v)
+                v = roundVal(v)
+                lastProcessed = v
+                value = v
+                LouisHub.Flags[flag] = v
+                animateDisplay(v, false)
+                setVisual(v)
+                if fireCallback and cfg.Callback then
+                    executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "control", v)
                 end
             end,
-            Get = function() return valor end,
-            CurrentValue = valor,
+            SetValue = function(selfElem, v)
+                if typeof(v) == "number" then selfElem.Set(v, true) end
+            end,
+            Get = function() return value end,
+            CurrentValue = value,
         }
-        AlanLuna.Elementos[flag] = elemObj
-        AlanLuna.Options[flag] = elemObj
+        LouisHub.Elements[flag] = elemObj
+        LouisHub.Options[flag]  = elemObj
 
-        return {
-            Set = function(...) elemObj.Set(normalizarArgSet(...), true) end,
-            Get = function() return valor end,
-            CurrentValue = valor,
-        }
+        return elemObj
     end
 
-    function Seccion:RangeSlider(cfg)
+    function Section:RangeSlider(cfg)
         cfg = cfg or {}
-        validarCallback("RangeSlider", cfg)
-        local flag      = cfg.Flag or cfg.Texto or ("RangeSlider_" .. tostring(math.random(1e5, 1e6)))
+        validateCallback("RangeSlider", cfg)
+        local flag      = cfg.Flag or cfg.Text or cfg.Texto or ("RangeSlider_" .. tostring(math.random(1e5, 1e6)))
         local range     = cfg.Range or {cfg.Min or 0, cfg.Max or 100}
-        local minimo    = range[1]
-        local maximo    = range[2]
-        if minimo >= maximo then maximo = minimo + 1 end
-        local incremento = cfg.Incremento or 1
-        local sufijo    = cfg.Sufijo or ""
-        local defecto   = cfg.Defecto or {min = minimo, max = maximo}
-        local valorMin  = math.clamp(defecto.min or minimo, minimo, maximo)
-        local valorMax  = math.clamp(defecto.max or maximo, minimo, maximo)
-        if valorMin > valorMax then valorMin, valorMax = valorMax, valorMin end
+        local minVal    = range[1]
+        local maxVal    = range[2]
+        if minVal >= maxVal then maxVal = minVal + 1 end
+        local stepVal   = cfg.Increment or cfg.Incremento or 1
+        local suffix    = cfg.Suffix or cfg.Sufijo or ""
+        local defaultT  = cfg.Default or cfg.Defecto or {min = minVal, max = maxVal}
+        local valMin    = math.clamp(defaultT.min or minVal, minVal, maxVal)
+        local valMax    = math.clamp(defaultT.max or maxVal, minVal, maxVal)
+        if valMin > valMax then valMin, valMax = valMax, valMin end
 
-        local function flagActual() return {min = valorMin, max = valorMax} end
-        AlanLuna.Flags[flag] = flagActual()
+        local function currentRange() return {min = valMin, max = valMax} end
+        LouisHub.Flags[flag] = currentRange()
 
-        local destino = self:_ObtenerContenedorDestino("RangeSlider", cfg)
-        local fila = Utils.Fila(destino, 42, siguienteOrden(), Theme.Fila)
-        AlanLuna:Registrar(fila, "BackgroundColor3", "Fila")
-        Utils.Hover(fila, fila)
-        registrarBuscable(fila, cfg.Texto or "RangeSlider", cfg.VisibleSi)
+        local targetCont = self:_GetTargetContainer("RangeSlider", cfg)
+        local row = Utils.Row(targetCont, 42, nextOrder(), Theme.Row)
+        LouisHub:Register(row, "BackgroundColor3", "Row")
+        Utils.Hover(row, row)
+        registerSearchable(row, cfg.Text or cfg.Texto or "RangeSlider", cfg.VisibleIf or cfg.VisibleSi)
 
-        local lblSlider = Utils.Texto({
-            Padre = fila, Texto = cfg.Texto or "RangeSlider",
-            Size = UDim2.new(1, -130, 0, 16), Posicion = UDim2.new(0, 6, 0, 5),
-            Truncar = true, Tamano = 11,
+        local lblSlider = Utils.Text({
+            Parent = row, Text = cfg.Text or cfg.Texto or "RangeSlider",
+            Size = UDim2.new(1, -130, 0, 16), Position = UDim2.new(0, 6, 0, 5),
+            Truncate = true, TextSize = 11,
         })
-        agregarTooltipTexto(fila, cfg.Texto or "RangeSlider", cfg.Tooltip, lblSlider, -130)
+        addTextTooltip(row, cfg.Text or cfg.Texto or "RangeSlider", cfg.Tooltip, lblSlider, -130)
 
-        local lblValores = Utils.Texto({
-            Padre = fila, Size = UDim2.new(0, 120, 0, 16),
-            Posicion = UDim2.new(1, -126, 0, 5), Alineacion = Enum.TextXAlignment.Right,
-            Fuente = Enum.Font.GothamBold, Tamano = 11, Color = Theme.Highlight,
+        local lblValues = Utils.Text({
+            Parent = row, Size = UDim2.new(0, 120, 0, 16),
+            Position = UDim2.new(1, -126, 0, 5), Alignment = Enum.TextXAlignment.Right,
+            Font = Enum.Font.GothamBold, TextSize = 11, Color = Theme.Highlight,
         })
-        AlanLuna:Registrar(lblValores, "TextColor3", "Highlight")
+        LouisHub:Register(lblValues, "TextColor3", "Highlight")
 
-        local function redondear(v)
-            local factor = 1 / incremento
+        local function roundVal(v)
+            local factor = 1 / stepVal
             return math.clamp(
-                math.floor((v - minimo) * factor + 0.5) / factor + minimo,
-                minimo, maximo
+                math.floor((v - minVal) * factor + 0.5) / factor + minVal,
+                minVal, maxVal
             )
         end
 
-        local function actualizarTextoVisible()
-            lblValores.Text = tostring(valorMin) .. sufijo .. " – " .. tostring(valorMax) .. sufijo
+        local function updateDisplay()
+            lblValues.Text = tostring(valMin) .. suffix .. " – " .. tostring(valMax) .. suffix
         end
-        actualizarTextoVisible()
+        updateDisplay()
 
-        local ultimoMin, ultimoMax = valorMin, valorMax
-        local function procesarNuevoRango(vMinCrudo, vMaxCrudo)
-            local vMin = redondear(vMinCrudo)
-            local vMax = redondear(vMaxCrudo)
+        local lastMin, lastMax = valMin, valMax
+        local function processNewRange(rawMin, rawMax)
+            local vMin = roundVal(rawMin)
+            local vMax = roundVal(rawMax)
             if vMin > vMax then vMin, vMax = vMax, vMin end
-            if vMin == ultimoMin and vMax == ultimoMax then return end
-            ultimoMin, ultimoMax = vMin, vMax
-            valorMin, valorMax = vMin, vMax
-            AlanLuna.Flags[flag] = flagActual()
-            actualizarTextoVisible()
+            if vMin == lastMin and vMax == lastMax then return end
+            lastMin, lastMax = vMin, vMax
+            valMin, valMax = vMin, vMax
+            LouisHub.Flags[flag] = currentRange()
+            updateDisplay()
             if cfg.Callback then
-                ejecutarConFallback(cfg.Callback, cfg.Texto or "control", flagActual())
+                executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "control", currentRange())
             end
         end
 
-        local _, fijarVisual = crearBarraArrastrableRango({
-            Padre = fila, Size = UDim2.new(1, -12, 0, 7),
-            Posicion = UDim2.new(0, 6, 0, 27),
-            Min = minimo, Max = maximo, ValorMin = valorMin, ValorMax = valorMax,
-            ObtenerMin = function() return ultimoMin end,
-            ObtenerMax = function() return ultimoMax end,
-            OnCambio = procesarNuevoRango,
+        local _, setVisual = createDraggableRangeBar({
+            Parent = row, Size = UDim2.new(1, -12, 0, 7),
+            Position = UDim2.new(0, 6, 0, 27),
+            Min = minVal, Max = maxVal, MinValue = valMin, MaxValue = valMax,
+            GetMin = function() return lastMin end,
+            GetMax = function() return lastMax end,
+            OnChange = processNewRange,
         })
 
         local elemObj = {
-            Set = function(v, dispararCallback)
+            Set = function(v, fireCallback)
                 if type(v) ~= "table" or v.min == nil or v.max == nil then return end
-                local vMin = redondear(math.clamp(v.min, minimo, maximo))
-                local vMax = redondear(math.clamp(v.max, minimo, maximo))
+                local vMin = roundVal(math.clamp(v.min, minVal, maxVal))
+                local vMax = roundVal(math.clamp(v.max, minVal, maxVal))
                 if vMin > vMax then vMin, vMax = vMax, vMin end
-                ultimoMin, ultimoMax = vMin, vMax
-                valorMin, valorMax = vMin, vMax
-                AlanLuna.Flags[flag] = flagActual()
-                actualizarTextoVisible()
-                fijarVisual(vMin, vMax)
-                if dispararCallback and cfg.Callback then
-                    ejecutarConFallback(cfg.Callback, cfg.Texto or "control", flagActual())
+                lastMin, lastMax = vMin, vMax
+                valMin, valMax = vMin, vMax
+                LouisHub.Flags[flag] = currentRange()
+                updateDisplay()
+                setVisual(vMin, vMax)
+                if fireCallback and cfg.Callback then
+                    executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "control", currentRange())
                 end
             end,
-            Get = function() return flagActual() end,
+            Get = function() return currentRange() end,
         }
-        AlanLuna.Elementos[flag] = elemObj
-        AlanLuna.Options[flag] = elemObj
+        LouisHub.Elements[flag] = elemObj
+        LouisHub.Options[flag]  = elemObj
 
-        return {
-            Set = function(...) elemObj.Set(normalizarArgSet(...), true) end,
-            Get = function() return flagActual() end,
-        }
+        return elemObj
     end
 
-    function Seccion:NumberStepper(cfg)
+    function Section:NumberStepper(cfg)
         cfg = cfg or {}
-        validarCallback("NumberStepper", cfg)
-        local flag = cfg.Flag or cfg.Texto or ("NumberStepper_" .. tostring(math.random(1e5, 1e6)))
-        local minimo = cfg.Min or 0
-        local maximo = cfg.Max or 100
-        if minimo >= maximo then maximo = minimo + 1 end
-        local incremento = cfg.Incremento or 1
-        local decimales = cfg.Decimales or (tostring(incremento):find("%.") and (#tostring(incremento) - tostring(incremento):find("%.")) or 0)
-        local prefijo = cfg.Prefijo or ""
-        local sufijo  = cfg.Sufijo or ""
+        validateCallback("NumberStepper", cfg)
+        local flag     = cfg.Flag or cfg.Text or cfg.Texto or ("NumberStepper_" .. tostring(math.random(1e5, 1e6)))
+        local minVal   = cfg.Min or 0
+        local maxVal   = cfg.Max or 100
+        if minVal >= maxVal then maxVal = minVal + 1 end
+        local stepVal  = cfg.Increment or cfg.Incremento or 1
+        local decimals = cfg.Decimals or cfg.Decimales or (tostring(stepVal):find("%.") and (#tostring(stepVal) - tostring(stepVal):find("%.")) or 0)
+        local prefix   = cfg.Prefix or cfg.Prefijo or ""
+        local suffix   = cfg.Suffix or cfg.Sufijo or ""
 
-        local function redondear(v)
-            local factor = 1 / incremento
+        local function roundVal(v)
+            local factor = 1 / stepVal
             return math.clamp(
-                math.floor((v - minimo) * factor + 0.5) / factor + minimo,
-                minimo, maximo
+                math.floor((v - minVal) * factor + 0.5) / factor + minVal,
+                minVal, maxVal
             )
         end
 
-        local valor = redondear(math.clamp(cfg.Defecto or minimo, minimo, maximo))
-        AlanLuna.Flags[flag] = valor
+        local value = roundVal(math.clamp(cfg.Default or cfg.Defecto or minVal, minVal, maxVal))
+        LouisHub.Flags[flag] = value
 
-        local function formatear(v)
-            local txt = (decimales > 0) and string.format("%." .. decimales .. "f", v) or tostring(math.floor(v + 0.5))
-            return prefijo .. txt .. sufijo
+        local function formatText(v)
+            local txt = (decimals > 0) and string.format("%." .. decimals .. "f", v) or tostring(math.floor(v + 0.5))
+            return prefix .. txt .. suffix
         end
 
-        local function quitarAfijos(txt)
-            if prefijo ~= "" and txt:sub(1, #prefijo) == prefijo then txt = txt:sub(#prefijo + 1) end
-            if sufijo ~= "" and txt:sub(-#sufijo) == sufijo then txt = txt:sub(1, -#sufijo - 1) end
+        local function stripAffixes(txt)
+            if prefix ~= "" and txt:sub(1, #prefix) == prefix then txt = txt:sub(#prefix + 1) end
+            if suffix ~= "" and txt:sub(-#suffix) == suffix then txt = txt:sub(1, -#suffix - 1) end
             return txt
         end
 
-        local destino = self:_ObtenerContenedorDestino("NumberStepper", cfg)
-        local fila, lbl = crearCabecera(26, cfg.Texto or "NumberStepper", 1, -120, nil, destino)
-        agregarTooltipTexto(fila, cfg.Texto or "NumberStepper", cfg.Tooltip, lbl)
-        registrarBuscable(fila, cfg.Texto or "NumberStepper", cfg.VisibleSi)
+        local targetCont = self:_GetTargetContainer("NumberStepper", cfg)
+        local row, lbl = createHeader(26, cfg.Text or cfg.Texto or "NumberStepper", 1, -120, nil, targetCont)
+        addTextTooltip(row, cfg.Text or cfg.Texto or "NumberStepper", cfg.Tooltip, lbl)
+        registerSearchable(row, cfg.Text or cfg.Texto or "NumberStepper", cfg.VisibleIf or cfg.VisibleSi)
 
-        local ANCHO_BOTON = 20
-        local ANCHO_CAJA  = 54
+        local BTN_WIDTH = 20
+        local BOX_WIDTH = 54
         local GAP = 3
-        local ALTO_CONTROL = 18
+        local CTRL_HEIGHT = 18
 
-        local btnMenos = Utils.BotonBase({
-            Padre = fila, Color = Theme.Entrada, Transparencia = 0.4, Radio = 4,
-            Size = UDim2.new(0, ANCHO_BOTON, 0, ALTO_CONTROL),
-            Posicion = UDim2.new(1, -(ANCHO_BOTON * 2 + ANCHO_CAJA + GAP * 2 + 6), 0.5, -ALTO_CONTROL/2),
+        local btnMinus = Utils.BaseButton({
+            Parent = row, Color = Theme.Input, Transparency = 0.4, Radius = 4,
+            Size = UDim2.new(0, BTN_WIDTH, 0, CTRL_HEIGHT),
+            Position = UDim2.new(1, -(BTN_WIDTH * 2 + BOX_WIDTH + GAP * 2 + 6), 0.5, -CTRL_HEIGHT/2),
         })
-        AlanLuna:Registrar(btnMenos, "BackgroundColor3", "Entrada")
-        Utils.Texto({
-            Padre = btnMenos, Texto = "−", Size = UDim2.new(1, 0, 1, 0),
-            Alineacion = Enum.TextXAlignment.Center, Fuente = Enum.Font.GothamBold, Tamano = 12,
-        })
-
-        local caja = Instance.new("TextBox")
-        caja.Size = UDim2.new(0, ANCHO_CAJA, 0, ALTO_CONTROL)
-        caja.Position = UDim2.new(1, -(ANCHO_BOTON + ANCHO_CAJA + GAP + 6), 0.5, -ALTO_CONTROL/2)
-        caja.BackgroundColor3 = Theme.Entrada
-        caja.BackgroundTransparency = 0.4
-        caja.Text = formatear(valor)
-        caja.TextColor3 = Theme.Highlight
-        caja.Font = Enum.Font.GothamBold
-        caja.TextSize = 10.5
-        caja.TextXAlignment = Enum.TextXAlignment.Center
-        caja.ClearTextOnFocus = false
-        caja.BorderSizePixel = 0
-        caja.Parent = fila
-        Utils.Corner(caja, 4)
-        AlanLuna:Registrar(caja, "BackgroundColor3", "Entrada")
-        AlanLuna:Registrar(caja, "TextColor3", "Highlight")
-
-        local btnMas = Utils.BotonBase({
-            Padre = fila, Color = Theme.Entrada, Transparencia = 0.4, Radio = 4,
-            Size = UDim2.new(0, ANCHO_BOTON, 0, ALTO_CONTROL),
-            Posicion = UDim2.new(1, -(ANCHO_BOTON + 6), 0.5, -ALTO_CONTROL/2),
-        })
-        AlanLuna:Registrar(btnMas, "BackgroundColor3", "Entrada")
-        Utils.Texto({
-            Padre = btnMas, Texto = "+", Size = UDim2.new(1, 0, 1, 0),
-            Alineacion = Enum.TextXAlignment.Center, Fuente = Enum.Font.GothamBold, Tamano = 12,
+        LouisHub:Register(btnMinus, "BackgroundColor3", "Input")
+        Utils.Text({
+            Parent = btnMinus, Text = "−", Size = UDim2.new(1, 0, 1, 0),
+            Alignment = Enum.TextXAlignment.Center, Font = Enum.Font.GothamBold, TextSize = 12,
         })
 
-        local function aplicarCambio(signo)
-            local nuevo = redondear(valor + signo * incremento)
-            if nuevo == valor then return end
-            valor = nuevo
-            AlanLuna.Flags[flag] = valor
-            caja.Text = formatear(valor)
-            if cfg.Callback then ejecutarConFallback(cfg.Callback, cfg.Texto or "control", valor) end
+        local textBox = Instance.new("TextBox")
+        textBox.Size = UDim2.new(0, BOX_WIDTH, 0, CTRL_HEIGHT)
+        textBox.Position = UDim2.new(1, -(BTN_WIDTH + BOX_WIDTH + GAP + 6), 0.5, -CTRL_HEIGHT/2)
+        textBox.BackgroundColor3 = Theme.Input
+        textBox.BackgroundTransparency = 0.4
+        textBox.Text = formatText(value)
+        textBox.TextColor3 = Theme.Highlight
+        textBox.Font = Enum.Font.GothamBold
+        textBox.TextSize = 10.5
+        textBox.TextXAlignment = Enum.TextXAlignment.Center
+        textBox.ClearTextOnFocus = false
+        textBox.BorderSizePixel = 0
+        textBox.Parent = row
+        Utils.Corner(textBox, 4)
+        LouisHub:Register(textBox, "BackgroundColor3", "Input")
+        LouisHub:Register(textBox, "TextColor3", "Highlight")
+
+        local btnPlus = Utils.BaseButton({
+            Parent = row, Color = Theme.Input, Transparency = 0.4, Radius = 4,
+            Size = UDim2.new(0, BTN_WIDTH, 0, CTRL_HEIGHT),
+            Position = UDim2.new(1, -(BTN_WIDTH + 6), 0.5, -CTRL_HEIGHT/2),
+        })
+        LouisHub:Register(btnPlus, "BackgroundColor3", "Input")
+        Utils.Text({
+            Parent = btnPlus, Text = "+", Size = UDim2.new(1, 0, 1, 0),
+            Alignment = Enum.TextXAlignment.Center, Font = Enum.Font.GothamBold, TextSize = 12,
+        })
+
+        local function applyStep(sign)
+            local newV = roundVal(value + sign * stepVal)
+            if newV == value then return end
+            value = newV
+            LouisHub.Flags[flag] = value
+            textBox.Text = formatText(value)
+            if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "control", value) end
         end
 
-        local idPresion = 0
-        local function iniciarPresion(signo, btnRef)
-            idPresion = idPresion + 1
-            local miId = idPresion
-            aplicarCambio(signo)
+        local pressId = 0
+        local function startHold(sign, refBtn)
+            pressId = pressId + 1
+            local myId = pressId
+            applyStep(sign)
             task.spawn(function()
                 task.wait(0.4)
-                while idPresion == miId and btnRef.Parent do
-                    aplicarCambio(signo)
+                while pressId == myId and refBtn.Parent do
+                    applyStep(sign)
                     task.wait(0.1)
                 end
             end)
         end
-        local function detenerPresion() idPresion = idPresion + 1 end
+        local function stopHold() pressId = pressId + 1 end
 
-        AlanLuna:RegistrarConexion(btnMenos.MouseButton1Down:Connect(function() iniciarPresion(-1, btnMenos) end))
-        AlanLuna:RegistrarConexion(btnMenos.MouseButton1Up:Connect(detenerPresion))
-        AlanLuna:RegistrarConexion(btnMenos.MouseLeave:Connect(detenerPresion))
+        LouisHub:RegisterConnection(btnMinus.MouseButton1Down:Connect(function() startHold(-1, btnMinus) end))
+        LouisHub:RegisterConnection(btnMinus.MouseButton1Up:Connect(stopHold))
+        LouisHub:RegisterConnection(btnMinus.MouseLeave:Connect(stopHold))
 
-        AlanLuna:RegistrarConexion(btnMas.MouseButton1Down:Connect(function() iniciarPresion(1, btnMas) end))
-        AlanLuna:RegistrarConexion(btnMas.MouseButton1Up:Connect(detenerPresion))
-        AlanLuna:RegistrarConexion(btnMas.MouseLeave:Connect(detenerPresion))
+        LouisHub:RegisterConnection(btnPlus.MouseButton1Down:Connect(function() startHold(1, btnPlus) end))
+        LouisHub:RegisterConnection(btnPlus.MouseButton1Up:Connect(stopHold))
+        LouisHub:RegisterConnection(btnPlus.MouseLeave:Connect(stopHold))
 
-        caja.FocusLost:Connect(function(enterPressed)
+        textBox.FocusLost:Connect(function(enterPressed)
             if not enterPressed then return end
-            local txt = quitarAfijos(caja.Text)
+            local txt = stripAffixes(textBox.Text)
             local num = tonumber(txt)
             if not num then
-                caja.Text = formatear(valor)
-                Utils.FlashFeedback(caja, false, Theme.Entrada)
+                textBox.Text = formatText(value)
+                Utils.FlashFeedback(textBox, false, Theme.Input)
                 return
             end
-            local nuevo = redondear(num)
-            valor = nuevo
-            AlanLuna.Flags[flag] = valor
-            caja.Text = formatear(valor)
-            Utils.FlashFeedback(caja, true, Theme.Entrada)
-            if cfg.Callback then ejecutarConFallback(cfg.Callback, cfg.Texto or "control", valor) end
+            local newV = roundVal(num)
+            value = newV
+            LouisHub.Flags[flag] = value
+            textBox.Text = formatText(value)
+            Utils.FlashFeedback(textBox, true, Theme.Input)
+            if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "control", value) end
         end)
 
         local elemObj = {
-            Set = function(v, dispararCallback)
+            Set = function(v, fireCallback)
                 if type(v) ~= "number" then return end
-                valor = redondear(v)
-                AlanLuna.Flags[flag] = valor
-                caja.Text = formatear(valor)
-                if dispararCallback and cfg.Callback then
-                    ejecutarConFallback(cfg.Callback, cfg.Texto or "control", valor)
+                value = roundVal(v)
+                LouisHub.Flags[flag] = value
+                textBox.Text = formatText(value)
+                if fireCallback and cfg.Callback then
+                    executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "control", value)
                 end
             end,
-            Get = function() return valor end,
+            Get = function() return value end,
         }
-        AlanLuna.Elementos[flag] = elemObj
-        AlanLuna.Options[flag] = elemObj
+        LouisHub.Elements[flag] = elemObj
+        LouisHub.Options[flag]  = elemObj
 
-        return {
-            Set = function(...) elemObj.Set(normalizarArgSet(...), true) end,
-            Get = function() return valor end,
-        }
+        return elemObj
     end
 
-    function Seccion:Input(cfg)
+    function Section:Input(cfg)
         cfg = cfg or {}
-        validarCallback("Input", cfg)
-        local flag  = cfg.Flag or cfg.Texto or cfg.Name or ("Input_" .. tostring(math.random(1e5, 1e6)))
-        local valor = cfg.CurrentValue or cfg.Defecto or ""
-        AlanLuna.Flags[flag] = valor
+        validateCallback("Input", cfg)
+        local flag  = cfg.Flag or cfg.Text or cfg.Texto or cfg.Name or ("Input_" .. tostring(math.random(1e5, 1e6)))
+        local value = cfg.CurrentValue or cfg.Default or cfg.Defecto or ""
+        LouisHub.Flags[flag] = value
 
-        local esArea = cfg.Tipo == "textarea"
-        local altoArea = math.clamp(cfg.Alto or 70, 45, 300)
-        local destino = self:_ObtenerContenedorDestino("Input", cfg)
+        local isArea = cfg.Type == "textarea" or cfg.Tipo == "textarea"
+        local areaHeight = math.clamp(cfg.Height or cfg.Alto or 70, 45, 300)
+        local targetCont = self:_GetTargetContainer("Input", cfg)
 
-        local fila, lblInput
-        if esArea then
-            fila, lblInput = crearCabecera(26, cfg.Texto or cfg.Name or "Input", nil, nil, "manual", destino)
+        local row, lblInput
+        if isArea then
+            row, lblInput = createHeader(26, cfg.Text or cfg.Texto or cfg.Name or "Input", nil, nil, "manual", targetCont)
             lblInput.AutomaticSize = Enum.AutomaticSize.Y
             lblInput.Size = UDim2.new(1, -16, 0, 0)
             lblInput.Position = UDim2.new(0, 6, 0, 6)
         else
-            fila, lblInput = crearCabecera(26, cfg.Texto or cfg.Name or "Input", 0.45, nil, nil, destino)
+            row, lblInput = createHeader(26, cfg.Text or cfg.Texto or cfg.Name or "Input", 0.45, nil, nil, targetCont)
         end
 
-        agregarTooltipTexto(fila, cfg.Texto or cfg.Name or "Input", cfg.Tooltip or cfg.Description, lblInput)
-        registrarBuscable(fila, cfg.Texto or cfg.Name or "Input", cfg.VisibleSi)
+        addTextTooltip(row, cfg.Text or cfg.Texto or cfg.Name or "Input", cfg.Tooltip or cfg.Description, lblInput)
+        registerSearchable(row, cfg.Text or cfg.Texto or cfg.Name or "Input", cfg.VisibleIf or cfg.VisibleSi)
 
-        local caja = Instance.new("TextBox")
-        caja.Size             = UDim2.new(0.5, -10, 0, 20)
-        caja.Position         = UDim2.new(0.5, 2, 0.5, -10)
-        caja.BackgroundColor3 = Theme.Entrada
-        caja.BackgroundTransparency = 0.4
-        caja.Text             = tostring(valor)
-        caja.PlaceholderText  = cfg.Placeholder or cfg.PlaceholderText or ""
-        caja.TextColor3       = Theme.Highlight
-        caja.Font             = Enum.Font.Gotham
-        caja.TextSize         = 11
-        caja.ClearTextOnFocus = (cfg.ClearTextOnFocus or cfg.RemoveTextAfterFocusLost) or false
-        caja.BorderSizePixel  = 0
-        caja.Parent           = fila
-        Utils.Corner(caja, 4)
-        AlanLuna:Registrar(caja, "BackgroundColor3", "Entrada")
-        AlanLuna:Registrar(caja, "TextColor3", "Highlight")
+        local box = Instance.new("TextBox")
+        box.Size             = UDim2.new(0.5, -10, 0, 20)
+        box.Position         = UDim2.new(0.5, 2, 0.5, -10)
+        box.BackgroundColor3 = Theme.Input
+        box.BackgroundTransparency = 0.4
+        box.Text             = tostring(value)
+        box.PlaceholderText  = cfg.Placeholder or cfg.PlaceholderText or ""
+        box.TextColor3       = Theme.Highlight
+        box.Font             = Enum.Font.Gotham
+        box.TextSize         = 11
+        box.ClearTextOnFocus = (cfg.ClearTextOnFocus or cfg.RemoveTextAfterFocusLost) or false
+        box.BorderSizePixel  = 0
+        box.Parent           = row
+        Utils.Corner(box, 4)
+        LouisHub:Register(box, "BackgroundColor3", "Input")
+        LouisHub:Register(box, "TextColor3", "Highlight")
 
-        if esArea then
-            caja.Size             = UDim2.new(1, -12, 0, altoArea)
-            caja.Position         = UDim2.new(0, 6, 0, 24)
-            caja.MultiLine        = true
-            caja.TextWrapped      = true
-            caja.TextXAlignment   = Enum.TextXAlignment.Left
-            caja.TextYAlignment   = Enum.TextYAlignment.Top
+        if isArea then
+            box.Size             = UDim2.new(1, -12, 0, areaHeight)
+            box.Position         = UDim2.new(0, 6, 0, 24)
+            box.MultiLine        = true
+            box.TextWrapped      = true
+            box.TextXAlignment   = Enum.TextXAlignment.Left
+            box.TextYAlignment   = Enum.TextYAlignment.Top
             local padArea = Instance.new("UIPadding")
             padArea.PaddingLeft, padArea.PaddingRight = UDim.new(0, 6), UDim.new(0, 6)
             padArea.PaddingTop, padArea.PaddingBottom = UDim.new(0, 4), UDim.new(0, 4)
-            padArea.Parent = caja
+            padArea.Parent = box
 
-            fila.Size = UDim2.new(1, 0, 0, altoArea + 30)
+            row.Size = UDim2.new(1, 0, 0, areaHeight + 30)
         end
 
-        local maxCaracteres = cfg.MaxCharacters or cfg.MaxCaracteres or (esArea and 2000 or 200)
+        local maxChars = cfg.MaxCharacters or cfg.MaxCaracteres or (isArea and 2000 or 200)
 
-        caja:GetPropertyChangedSignal("Text"):Connect(function()
+        box:GetPropertyChangedSignal("Text"):Connect(function()
             if cfg.Numeric then
-                local txt = caja.Text
-                local partes = string.split(txt, ".")
-                if #partes > 2 then
-                    caja.Text = partes[1] .. "." .. table.concat(partes, "", 2)
+                local txt = box.Text
+                local parts = string.split(txt, ".")
+                if #parts > 2 then
+                    box.Text = parts[1] .. "." .. table.concat(parts, "", 2)
                 else
-                    caja.Text = txt:gsub("[^%d%.%-]", "")
+                    box.Text = txt:gsub("[^%d%.%-]", "")
                 end
             end
-            if #caja.Text > maxCaracteres then
-                caja.Text = caja.Text:sub(1, maxCaracteres)
-                Utils.FlashFeedback(caja, false, Theme.Entrada)
+            if #box.Text > maxChars then
+                box.Text = box.Text:sub(1, maxChars)
+                Utils.FlashFeedback(box, false, Theme.Input)
             end
-            if not cfg.Enter and not esArea then
-                valor = caja.Text
-                AlanLuna.Flags[flag] = valor
-                if cfg.Callback then ejecutarConFallback(cfg.Callback, cfg.Texto or "Input", valor) end
+            if not cfg.Enter and not isArea then
+                value = box.Text
+                LouisHub.Flags[flag] = value
+                if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "Input", value) end
             end
         end)
 
-        caja.FocusLost:Connect(function(enterPressed)
-            local textoLimpio = caja.Text:gsub("^%s+", ""):gsub("%s+$", "")
-            local valorFinal = textoLimpio
+        box.FocusLost:Connect(function(enterPressed)
+            local cleanTxt = box.Text:gsub("^%s+", ""):gsub("%s+$", "")
+            local finalVal = cleanTxt
 
-            if cfg.Tipo == "number" or cfg.Numeric then
-                local n = tonumber(textoLimpio)
-                if not n and textoLimpio ~= "" then
-                    caja.Text = tostring(valor)
-                    Utils.FlashFeedback(caja, false, Theme.Entrada)
+            if cfg.Type == "number" or cfg.Tipo == "number" or cfg.Numeric then
+                local n = tonumber(cleanTxt)
+                if not n and cleanTxt ~= "" then
+                    box.Text = tostring(value)
+                    Utils.FlashFeedback(box, false, Theme.Input)
                     return
                 elseif n then
                     if cfg.Min and n < cfg.Min then n = cfg.Min end
                     if cfg.Max and n > cfg.Max then n = cfg.Max end
-                    valorFinal = n
+                    finalVal = n
                 end
-            elseif cfg.Tipo == "pattern" and cfg.Regex then
-                local patronLimpio = cfg.Regex:gsub("^%^", ""):gsub("%$$", "")
-                if not textoLimpio:match("^" .. patronLimpio .. "$") then
-                    caja.Text = tostring(valor)
-                    Utils.FlashFeedback(caja, false, Theme.Entrada)
+            elseif (cfg.Type == "pattern" or cfg.Tipo == "pattern") and (cfg.Regex or cfg.Pattern) then
+                local pat = (cfg.Regex or cfg.Pattern):gsub("^%^", ""):gsub("%$$", "")
+                if not cleanTxt:match("^" .. pat .. "$") then
+                    box.Text = tostring(value)
+                    Utils.FlashFeedback(box, false, Theme.Input)
                     return
                 end
             end
 
-            valor = valorFinal
-            caja.Text = tostring(valorFinal)
-            AlanLuna.Flags[flag] = valor
-            if (enterPressed or esArea or cfg.Enter) and cfg.Callback then
-                ejecutarConFallback(cfg.Callback, cfg.Texto or "Input", valor)
+            value = finalVal
+            box.Text = tostring(finalVal)
+            LouisHub.Flags[flag] = value
+            if (enterPressed or isArea or cfg.Enter) and cfg.Callback then
+                executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "Input", value)
             end
         end)
 
         local elemObj = {
-            Set = function(v, dispararCallback)
-                valor = v
-                caja.Text = tostring(v)
-                AlanLuna.Flags[flag] = v
-                if dispararCallback and cfg.Callback then
-                    ejecutarConFallback(cfg.Callback, cfg.Texto or "Input", v)
+            Set = function(v, fireCallback)
+                value = v
+                box.Text = tostring(v)
+                LouisHub.Flags[flag] = v
+                if fireCallback and cfg.Callback then
+                    executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "Input", v)
                 end
             end,
-            Get = function() return valor end,
-            CurrentValue = valor,
+            Get = function() return value end,
+            CurrentValue = value,
         }
-        AlanLuna.Elementos[flag] = elemObj
-        AlanLuna.Options[flag] = elemObj
+        LouisHub.Elements[flag] = elemObj
+        LouisHub.Options[flag]  = elemObj
 
-        return {
-            Set = function(...) elemObj.Set(normalizarArgSet(...), true) end,
-            Get = function() return valor end,
-            CurrentValue = valor,
-        }
+        return elemObj
     end
 
-    function Seccion:TagInput(cfg)
+    function Section:TagInput(cfg)
         cfg = cfg or {}
-        validarCallback("TagInput", cfg)
-        local flag          = cfg.Flag or cfg.Texto or ("TagInput_" .. tostring(math.random(1e5, 1e6)))
-        local maxCaracteres = cfg.MaxCaracteres or 200
-        local maxTags       = cfg.MaxTags
+        validateCallback("TagInput", cfg)
+        local flag     = cfg.Flag or cfg.Text or cfg.Texto or ("TagInput_" .. tostring(math.random(1e5, 1e6)))
+        local maxChars = cfg.MaxCharacters or cfg.MaxCaracteres or 200
+        local maxTags  = cfg.MaxTags
 
         local tags = {}
         local tagsLower = {}
-        for _, t in ipairs(cfg.Defecto or {}) do
+        for _, t in ipairs(cfg.Default or cfg.Defecto or {}) do
             if type(t) == "string" then
-                local limpio = t:gsub("^%s+", ""):gsub("%s+$", "")
-                if limpio ~= "" and not tagsLower[limpio:lower()] then
-                    table.insert(tags, limpio)
-                    tagsLower[limpio:lower()] = true
+                local clean = t:gsub("^%s+", ""):gsub("%s+$", "")
+                if clean ~= "" and not tagsLower[clean:lower()] then
+                    table.insert(tags, clean)
+                    tagsLower[clean:lower()] = true
                 end
             end
         end
 
-        local function flagActual()
-            local copia = {}
-            for i, t in ipairs(tags) do copia[i] = t end
-            return copia
+        local function currentTags()
+            local copy = {}
+            for i, t in ipairs(tags) do copy[i] = t end
+            return copy
         end
-        AlanLuna.Flags[flag] = flagActual()
+        LouisHub.Flags[flag] = currentTags()
 
-        local destino = self:_ObtenerContenedorDestino("TagInput", cfg)
-        local fila = Utils.Fila(destino, 56, siguienteOrden(), Theme.Fila)
-        AlanLuna:Registrar(fila, "BackgroundColor3", "Fila")
-        Utils.Hover(fila, fila)
-        registrarBuscable(fila, cfg.Texto or "TagInput", cfg.VisibleSi)
+        local targetCont = self:_GetTargetContainer("TagInput", cfg)
+        local row = Utils.Row(targetCont, 56, nextOrder(), Theme.Row)
+        LouisHub:Register(row, "BackgroundColor3", "Row")
+        Utils.Hover(row, row)
+        registerSearchable(row, cfg.Text or cfg.Texto or "TagInput", cfg.VisibleIf or cfg.VisibleSi)
 
-        local lblTitulo = Utils.Texto({
-            Padre = fila, Texto = cfg.Texto or "TagInput",
-            Size = UDim2.new(1, -12, 0, 16), Posicion = UDim2.new(0, 6, 0, 4),
-            Truncar = true, Tamano = 11,
+        local lblTitle = Utils.Text({
+            Parent = row, Text = cfg.Text or cfg.Texto or "TagInput",
+            Size = UDim2.new(1, -12, 0, 16), Position = UDim2.new(0, 6, 0, 4),
+            Truncate = true, TextSize = 11,
         })
-        agregarTooltipTexto(fila, cfg.Texto or "TagInput", cfg.Tooltip, lblTitulo)
+        addTextTooltip(row, cfg.Text or cfg.Texto or "TagInput", cfg.Tooltip, lblTitle)
 
-        local contenedorChips = Utils.Frame({
-            Padre = fila, Size = UDim2.new(1, -12, 0, 0),
-            Posicion = UDim2.new(0, 6, 0, 22), Transparencia = 1,
-            Radio = false, Borde = false,
+        local chipsContainer = Utils.Frame({
+            Parent = row, Size = UDim2.new(1, -12, 0, 0),
+            Position = UDim2.new(0, 6, 0, 22), Transparency = 1,
+            Radius = false, Border = false,
         })
         local layoutChips = Instance.new("UIListLayout")
         layoutChips.FillDirection = Enum.FillDirection.Horizontal
         layoutChips.Wraps = true
         layoutChips.Padding = UDim.new(0, 4)
-        layoutChips.Parent = contenedorChips
+        layoutChips.Parent = chipsContainer
 
-        local caja = Instance.new("TextBox")
-        caja.Size             = UDim2.new(1, -12, 0, 22)
-        caja.Position         = UDim2.new(0, 6, 0, 26)
-        caja.BackgroundColor3 = Theme.Entrada
-        caja.BackgroundTransparency = 0.4
-        caja.PlaceholderText  = cfg.Placeholder or "Escribe y pulsa Enter..."
-        caja.Text             = ""
-        caja.TextColor3       = Theme.Highlight
-        caja.Font             = Enum.Font.Gotham
-        caja.TextSize         = 10.5
-        caja.ClearTextOnFocus = false
-        caja.BorderSizePixel  = 0
-        caja.Parent           = fila
-        Utils.Corner(caja, 4)
-        AlanLuna:Registrar(caja, "BackgroundColor3", "Entrada")
-        AlanLuna:Registrar(caja, "TextColor3", "Highlight")
+        local box = Instance.new("TextBox")
+        box.Size             = UDim2.new(1, -12, 0, 22)
+        box.Position         = UDim2.new(0, 6, 0, 26)
+        box.BackgroundColor3 = Theme.Input
+        box.BackgroundTransparency = 0.4
+        box.PlaceholderText  = cfg.Placeholder or "Type and press Enter..."
+        box.Text             = ""
+        box.TextColor3       = Theme.Highlight
+        box.Font             = Enum.Font.Gotham
+        box.TextSize         = 10.5
+        box.ClearTextOnFocus = false
+        box.BorderSizePixel  = 0
+        box.Parent           = row
+        Utils.Corner(box, 4)
+        LouisHub:Register(box, "BackgroundColor3", "Input")
+        LouisHub:Register(box, "TextColor3", "Highlight")
 
-        local dibujarChips
+        local drawChips
 
-        local function agregarUnTag(crudo)
-            local limpio = crudo:gsub("^%s+", ""):gsub("%s+$", "")
-            if limpio == "" then return false end
-            if tagsLower[limpio:lower()] then return false end
+        local function addOneTag(raw)
+            local clean = raw:gsub("^%s+", ""):gsub("%s+$", "")
+            if clean == "" then return false end
+            if tagsLower[clean:lower()] then return false end
             if maxTags and #tags >= maxTags then
-                Utils.FlashFeedback(caja, false, Theme.Entrada)
+                Utils.FlashFeedback(box, false, Theme.Input)
                 return false
             end
-            table.insert(tags, limpio)
-            tagsLower[limpio:lower()] = true
+            table.insert(tags, clean)
+            tagsLower[clean:lower()] = true
             return true
         end
 
-        local function commitCaja()
-            local huboCambio = false
-            for frag in (caja.Text .. ","):gmatch("([^,]*),") do
-                if agregarUnTag(frag) then huboCambio = true end
+        local function commitBox()
+            local hadChange = false
+            for frag in (box.Text .. ","):gmatch("([^,]*),") do
+                if addOneTag(frag) then hadChange = true end
             end
-            if huboCambio then
-                AlanLuna.Flags[flag] = flagActual()
-                dibujarChips()
-                if cfg.Callback then ejecutarConFallback(cfg.Callback, cfg.Texto or "control", flagActual()) end
+            if hadChange then
+                LouisHub.Flags[flag] = currentTags()
+                drawChips()
+                if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "control", currentTags()) end
             end
-            caja.Text = ""
+            box.Text = ""
         end
 
-        caja.FocusLost:Connect(commitCaja)
+        box.FocusLost:Connect(commitBox)
 
         local function reLayoutChips()
-            if not (fila and fila.Parent) then return end
-            local e = Utils.FactorEscalaUI(fila)
-            local altoChips = (#tags > 0) and math.ceil(layoutChips.AbsoluteContentSize.Y / e) or 0
-            contenedorChips.Size = UDim2.new(1, -12, 0, altoChips)
-            local yCaja = 22 + altoChips + (altoChips > 0 and 5 or 3)
-            caja.Position = UDim2.new(0, 6, 0, yCaja)
-            fila.Size = UDim2.new(1, 0, 0, yCaja + 22 + 6)
+            if not (row and row.Parent) then return end
+            local e = Utils.UIScaleFactor(row)
+            local chipsH = (#tags > 0) and math.ceil(layoutChips.AbsoluteContentSize.Y / e) or 0
+            chipsContainer.Size = UDim2.new(1, -12, 0, chipsH)
+            local yBox = 22 + chipsH + (chipsH > 0 and 5 or 3)
+            box.Position = UDim2.new(0, 6, 0, yBox)
+            row.Size = UDim2.new(1, 0, 0, yBox + 22 + 6)
         end
-        AlanLuna:RegistrarConexion(layoutChips:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(Utils.Diferir(reLayoutChips)))
+        LouisHub:RegisterConnection(layoutChips:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(Utils.Defer(reLayoutChips)))
 
-        dibujarChips = function()
-            for _, hijo in ipairs(contenedorChips:GetChildren()) do
-                if hijo:IsA("Frame") then hijo:Destroy() end
+        drawChips = function()
+            for _, child in ipairs(chipsContainer:GetChildren()) do
+                if child:IsA("Frame") then child:Destroy() end
             end
             for i, t in ipairs(tags) do
-                local anchoT = math.ceil(TextService:GetTextSize(t, 10.5, Enum.Font.GothamBold, Vector2.new(1000, 20)).X)
+                local tWidth = math.ceil(TextService:GetTextSize(t, 10.5, Enum.Font.GothamBold, Vector2.new(1000, 20)).X)
                 local chip = Utils.Frame({
-                    Padre = contenedorChips,
-                    Size = UDim2.new(0, anchoT + 26, 0, 18),
-                    Color = Theme.Accent, Radio = 9, Transparencia = 0.2,
+                    Parent = chipsContainer,
+                    Size = UDim2.new(0, tWidth + 26, 0, 18),
+                    Color = Theme.Accent, Radius = 9, Transparency = 0.2,
                 })
-                AlanLuna:Registrar(chip, "BackgroundColor3", "Accent")
-                Utils.GradienteAcento(chip)
+                LouisHub:Register(chip, "BackgroundColor3", "Accent")
+                Utils.AccentGradient(chip)
 
-                Utils.Texto({
-                    Padre = chip, Texto = t, Size = UDim2.new(0, anchoT, 1, 0),
-                    Posicion = UDim2.new(0, 6, 0, 0), Tamano = 10, Fuente = Enum.Font.GothamBold,
+                Utils.Text({
+                    Parent = chip, Text = t, Size = UDim2.new(0, tWidth, 1, 0),
+                    Position = UDim2.new(0, 6, 0, 0), TextSize = 10, Font = Enum.Font.GothamBold,
                     Color = Color3.fromRGB(255, 255, 255),
                 })
                 local btnX = Instance.new("TextButton")
@@ -7942,17 +8216,17 @@ local function aplicarMetodosControles(Seccion)
                 btnX.MouseButton1Click:Connect(function()
                     table.remove(tags, i)
                     tagsLower[t:lower()] = nil
-                    AlanLuna.Flags[flag] = flagActual()
-                    dibujarChips()
-                    if cfg.Callback then ejecutarConFallback(cfg.Callback, cfg.Texto or "control", flagActual()) end
+                    LouisHub.Flags[flag] = currentTags()
+                    drawChips()
+                    if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "control", currentTags()) end
                 end)
             end
             task.defer(reLayoutChips)
         end
-        dibujarChips()
+        drawChips()
 
         local elemObj = {
-            Set = function(v, dispararCallback)
+            Set = function(v, fireCallback)
                 if type(v) ~= "table" then return end
                 tags = {}
                 tagsLower = {}
@@ -7962,1046 +8236,1122 @@ local function aplicarMetodosControles(Seccion)
                         tagsLower[t:lower()] = true
                     end
                 end
-                AlanLuna.Flags[flag] = flagActual()
-                dibujarChips()
-                if dispararCallback and cfg.Callback then
-                    ejecutarConFallback(cfg.Callback, cfg.Texto or "control", flagActual())
+                LouisHub.Flags[flag] = currentTags()
+                drawChips()
+                if fireCallback and cfg.Callback then
+                    executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "control", currentTags())
                 end
             end,
-            Get = function() return flagActual() end,
+            Get = function() return currentTags() end,
         }
-        AlanLuna.Elementos[flag] = elemObj
-        AlanLuna.Options[flag] = elemObj
+        LouisHub.Elements[flag] = elemObj
+        LouisHub.Options[flag]  = elemObj
 
-        return {
-            Set = function(...) elemObj.Set(normalizarArgSet(...), true) end,
-            Get = function() return flagActual() end,
-        }
+        return elemObj
     end
 
-    function Seccion:RadioGroup(cfg)
+    function Section:RadioGroup(cfg)
         cfg = cfg or {}
-        validarCallback("RadioGroup", cfg)
-        local flag     = cfg.Flag or cfg.Texto or ("RadioGroup_" .. tostring(math.random(1e5, 1e6)))
-        local opciones = cfg.Opciones or {}
-        local valor    = cfg.Defecto or opciones[1]
-        AlanLuna.Flags[flag] = valor
+        validateCallback("RadioGroup", cfg)
+        local flag     = cfg.Flag or cfg.Text or cfg.Texto or ("RadioGroup_" .. tostring(math.random(1e5, 1e6)))
+        local options  = cfg.Options or cfg.Opciones or {}
+        local value    = cfg.Default or cfg.Defecto or options[1]
+        LouisHub.Flags[flag] = value
 
-        local destino = self:_ObtenerContenedorDestino("RadioGroup", cfg)
-        local fila, lbl = crearCabecera(50, cfg.Texto or "RadioGroup", nil, nil, "manual", destino)
+        local targetCont = self:_GetTargetContainer("RadioGroup", cfg)
+        local row, lbl = createHeader(50, cfg.Text or cfg.Texto or "RadioGroup", nil, nil, "manual", targetCont)
         lbl.AutomaticSize = Enum.AutomaticSize.Y
         lbl.Size = UDim2.new(1, -16, 0, 0)
         lbl.Position = UDim2.new(0, 6, 0, 6)
-        agregarTooltipTexto(fila, cfg.Texto or "RadioGroup", cfg.Tooltip, lbl)
-        registrarBuscable(fila, cfg.Texto or "RadioGroup", cfg.VisibleSi)
+        addTextTooltip(row, cfg.Text or cfg.Texto or "RadioGroup", cfg.Tooltip, lbl)
+        registerSearchable(row, cfg.Text or cfg.Texto or "RadioGroup", cfg.VisibleIf or cfg.VisibleSi)
 
-        local filaBotones = Utils.Frame({
-            Padre = fila, Size = UDim2.new(1, -12, 0, 22),
-            Posicion = UDim2.new(0, 6, 0, 24), Transparencia = 1,
-            Radio = false, Borde = false,
+        local btnRow = Utils.Frame({
+            Parent = row, Size = UDim2.new(1, -12, 0, 22),
+            Position = UDim2.new(0, 6, 0, 24), Transparency = 1,
+            Radius = false, Border = false,
         })
-        local layoutBotones = Instance.new("UIListLayout")
-        layoutBotones.FillDirection = Enum.FillDirection.Horizontal
-        layoutBotones.Padding       = UDim.new(0, 4)
-        layoutBotones.Parent        = filaBotones
+        local layoutButtons = Instance.new("UIListLayout")
+        layoutButtons.FillDirection = Enum.FillDirection.Horizontal
+        layoutButtons.Padding       = UDim.new(0, 4)
+        layoutButtons.Parent        = btnRow
 
-        local botonesOp = {}
-        local function refrescarVisual()
-            for opcion, btn in pairs(botonesOp) do
-                local activo = (opcion == valor)
+        local opButtons = {}
+        local function refreshVisual()
+            for opt, btn in pairs(opButtons) do
+                local isActive = (opt == value)
                 Utils.Tween(btn, {
-                    BackgroundColor3 = activo and Theme.Accent or Theme.Entrada,
-                    BackgroundTransparency = activo and 0.2 or 0.5,
-                }, AlanLuna.Motion.Hover)
+                    BackgroundColor3 = isActive and Theme.Accent or Theme.Input,
+                    BackgroundTransparency = isActive and 0.2 or 0.5,
+                }, LouisHub.Motion.Hover)
                 local lblBtn = btn:FindFirstChildOfClass("TextLabel")
-                if lblBtn then lblBtn.TextColor3 = activo and Theme.Text or Theme.TextDark end
+                if lblBtn then lblBtn.TextColor3 = isActive and Theme.Text or Theme.TextDark end
             end
         end
 
-        local function elegir(opcion)
-            if opcion == valor then return end
-            valor = opcion
-            AlanLuna.Flags[flag] = valor
-            refrescarVisual()
-            if cfg.Callback then ejecutarConFallback(cfg.Callback, cfg.Texto or "RadioGroup", valor) end
+        local function pickOption(opt)
+            if opt == value then return end
+            value = opt
+            LouisHub.Flags[flag] = value
+            refreshVisual()
+            if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "RadioGroup", value) end
         end
 
-        for i, opcion in ipairs(opciones) do
-            local activo = (opcion == valor)
-            local btn = Utils.BotonBase({
-                Padre = filaBotones,
-                Size = UDim2.new(1 / math.max(#opciones, 1), -math.floor(4 * (#opciones - 1) / #opciones), 1, 0),
-                Color = activo and Theme.Accent or Theme.Entrada,
-                Transparencia = activo and 0.2 or 0.5, Radio = 5, Orden = i,
+        for i, opt in ipairs(options) do
+            local isActive = (opt == value)
+            local btn = Utils.BaseButton({
+                Parent = btnRow,
+                Size = UDim2.new(1 / math.max(#options, 1), -math.floor(4 * (#options - 1) / #options), 1, 0),
+                Color = isActive and Theme.Accent or Theme.Input,
+                Transparency = isActive and 0.2 or 0.5, Radius = 5, Order = i,
             })
-            AlanLuna:Registrar(btn, "BackgroundColor3", function()
-                return (opcion == valor) and Theme.Accent or Theme.Entrada
+            LouisHub:Register(btn, "BackgroundColor3", function()
+                return (opt == value) and Theme.Accent or Theme.Input
             end)
-            local lblBtn = Utils.Texto({
-                Padre = btn, Texto = tostring(opcion), Size = UDim2.new(1, 0, 1, 0),
-                Alineacion = Enum.TextXAlignment.Center, Tamano = 10.5, Truncar = true,
-                Color = activo and Theme.Text or Theme.TextDark,
+            local lblBtn = Utils.Text({
+                Parent = btn, Text = tostring(opt), Size = UDim2.new(1, 0, 1, 0),
+                Alignment = Enum.TextXAlignment.Center, TextSize = 10.5, Truncate = true,
+                Color = isActive and Theme.Text or Theme.TextDark,
             })
-            Utils.ClickConfiable(btn, function() elegir(opcion) end)
-            botonesOp[opcion] = btn
+            Utils.ReliableClick(btn, function() pickOption(opt) end)
+            opButtons[opt] = btn
         end
 
         local elemObj = {
-            Set = function(v, dispararCallback)
-                valor = v
-                AlanLuna.Flags[flag] = v
-                refrescarVisual()
-                if dispararCallback and cfg.Callback then
-                    ejecutarConFallback(cfg.Callback, cfg.Texto or "RadioGroup", v)
+            Set = function(v, fireCallback)
+                value = v
+                LouisHub.Flags[flag] = v
+                refreshVisual()
+                if fireCallback and cfg.Callback then
+                    executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "RadioGroup", v)
                 end
             end,
-            Get = function() return valor end,
+            Get = function() return value end,
         }
-        AlanLuna.Elementos[flag] = elemObj
-        AlanLuna.Options[flag] = elemObj
+        LouisHub.Elements[flag] = elemObj
+        LouisHub.Options[flag]  = elemObj
 
-        return {
-            Set = function(...) elemObj.Set(normalizarArgSet(...), true) end,
-            Get = function() return valor end,
-        }
+        return elemObj
     end
 
-    function Seccion:Dropdown(cfg)
+    function Section:Dropdown(cfg)
         cfg = cfg or {}
-        validarCallback("Dropdown", cfg)
-        local flag     = cfg.Flag or cfg.Texto or cfg.Name or ("Dropdown_" .. tostring(math.random(1e5, 1e6)))
-        local opciones = clonarTabla(cfg.Options or cfg.Opciones or {})
-        local multi    = cfg.MultipleOptions or cfg.Multi or false
-        local seleccion = {}
+        validateCallback("Dropdown", cfg)
+        local flag     = cfg.Flag or cfg.Text or cfg.Texto or cfg.Name or ("Dropdown_" .. tostring(math.random(1e5, 1e6)))
+        local options  = cloneTable(cfg.Options or cfg.Opciones or {})
+        local multi    = (cfg.MultipleOptions ~= nil and cfg.MultipleOptions) or (cfg.Multi ~= nil and cfg.Multi) or false
+        local selection = {}
 
         if multi then
-            local def = cfg.CurrentOption or cfg.Defecto or {}
+            local def = cfg.CurrentOption or cfg.Default or cfg.Defecto or {}
             if type(def) == "table" then
                 if #def > 0 then
-                    for _, v in ipairs(def) do seleccion[v] = true end
+                    for _, v in ipairs(def) do selection[v] = true end
                 else
-                    for k, v in pairs(def) do if v then seleccion[k] = true end end
+                    for k, v in pairs(def) do if v then selection[k] = true end end
                 end
             elseif type(def) == "string" then
-                seleccion[def] = true
+                selection[def] = true
             end
         else
-            local def = cfg.CurrentOption or cfg.Defecto
+            local def = cfg.CurrentOption or cfg.Default or cfg.Defecto
             if type(def) == "table" then def = def[1] end
-            if def then seleccion[def] = true end
+            if def then selection[def] = true end
         end
 
-        AlanLuna.Flags[flag] = multi and clonarTabla(seleccion) or (cfg.CurrentOption or cfg.Defecto)
+        LouisHub.Flags[flag] = multi and cloneTable(selection) or (cfg.CurrentOption or cfg.Default or cfg.Defecto)
 
-        local UMBRAL_BUSQUEDA = 8
-        local conBusqueda     = #opciones > UMBRAL_BUSQUEDA
-        local ALTO_FILA       = 26
-        local ALTO_BUSQUEDA   = conBusqueda and 22 or 0
-        local MAX_ALTO_LISTA  = 132
+        local SEARCH_THRESHOLD = 8
+        local hasSearch       = #options > SEARCH_THRESHOLD
+        local ROW_HEIGHT      = 26
+        local SEARCH_HEIGHT   = hasSearch and 22 or 0
+        local MAX_LIST_HEIGHT = 132
 
-        local destino = self:_ObtenerContenedorDestino("Dropdown", cfg)
-        local marco = Utils.Frame({
-            Padre = destino, Size = UDim2.new(1, 0, 0, ALTO_FILA),
-            Color = Theme.Fila, Orden = siguienteOrden(), Recortar = true,
-            Transparencia = 0.5,
+        local targetCont = self:_GetTargetContainer("Dropdown", cfg)
+        local frame = Utils.Frame({
+            Parent = targetCont, Size = UDim2.new(1, 0, 0, ROW_HEIGHT),
+            Color = Theme.Row, Order = nextOrder(), Clips = true,
+            Transparency = 0.5,
         })
-        AlanLuna:Registrar(marco, "BackgroundColor3", "Fila")
-        registrarBuscable(marco, cfg.Texto or cfg.Name or "Dropdown", cfg.VisibleSi)
+        LouisHub:Register(frame, "BackgroundColor3", "Row")
+        registerSearchable(frame, cfg.Text or cfg.Texto or cfg.Name or "Dropdown", cfg.VisibleIf or cfg.VisibleSi)
 
-        local cabecera = Utils.BotonBase({Padre = marco, Size = UDim2.new(1, 0, 0, ALTO_FILA)})
-        Utils.Hover(cabecera, marco)
+        local headerBtn = Utils.BaseButton({Parent = frame, Size = UDim2.new(1, 0, 0, ROW_HEIGHT)})
+        Utils.Hover(headerBtn, frame)
 
-        local lbl = Utils.Texto({
-            Padre = marco, Size = UDim2.new(1, -26, 0, ALTO_FILA),
-            Truncar = true, Tamano = 11,
+        local lbl = Utils.Text({
+            Parent = frame, Size = UDim2.new(1, -26, 0, ROW_HEIGHT),
+            Truncate = true, TextSize = 11,
         })
-        local flecha = Instance.new("ImageLabel")
-        flecha.BackgroundTransparency = 1
-        flecha.Image = "rbxassetid://83472139709682"
-        flecha.Size = UDim2.new(0, 9, 0, 9)
-        flecha.AnchorPoint = Vector2.new(0.5, 0.5)
-        flecha.Position = UDim2.new(1, -12, 0.5, 0)
-        flecha.Parent = marco
-        AlanLuna:Registrar(flecha, "ImageColor3", "Text")
+        local arrow = Instance.new("ImageLabel")
+        arrow.BackgroundTransparency = 1
+        arrow.Image = "rbxassetid://83472139709682"
+        arrow.Size = UDim2.new(0, 9, 0, 9)
+        arrow.AnchorPoint = Vector2.new(0.5, 0.5)
+        arrow.Position = UDim2.new(1, -12, 0.5, 0)
+        arrow.Parent = frame
+        LouisHub:Register(arrow, "ImageColor3", "Text")
 
-        agregarTooltipTexto(marco, cfg.Texto or cfg.Name or "Dropdown", cfg.Tooltip or cfg.Description, lbl)
+        addTextTooltip(frame, cfg.Text or cfg.Texto or cfg.Name or "Dropdown", cfg.Tooltip or cfg.Description, lbl)
 
         local searchBox = nil
-        if conBusqueda then
+        if hasSearch then
             searchBox = Instance.new("TextBox")
-            searchBox.Size             = UDim2.new(1, -8, 0, ALTO_BUSQUEDA - 2)
-            searchBox.Position         = UDim2.new(0, 4, 0, ALTO_FILA + 2)
-            searchBox.BackgroundColor3 = Theme.Entrada
+            searchBox.Size             = UDim2.new(1, -8, 0, SEARCH_HEIGHT - 2)
+            searchBox.Position         = UDim2.new(0, 4, 0, ROW_HEIGHT + 2)
+            searchBox.BackgroundColor3 = Theme.Input
             searchBox.BackgroundTransparency = 0.4
-            searchBox.PlaceholderText  = "🔍 Buscar opción..."
+            searchBox.PlaceholderText  = "🔍 Search option..."
             searchBox.Text             = ""
             searchBox.TextColor3       = Theme.Text
             searchBox.Font             = Enum.Font.Gotham
             searchBox.TextSize         = 10
             searchBox.BorderSizePixel  = 0
             searchBox.ClearTextOnFocus = false
-            searchBox.Parent           = marco
+            searchBox.Parent           = frame
             Utils.Corner(searchBox, 4)
-            AlanLuna:Registrar(searchBox, "BackgroundColor3", "Entrada")
-            AlanLuna:Registrar(searchBox, "TextColor3", "Text")
+            LouisHub:Register(searchBox, "BackgroundColor3", "Input")
+            LouisHub:Register(searchBox, "TextColor3", "Text")
         end
 
-        local listaOp = Instance.new("ScrollingFrame")
-        listaOp.Name                   = "DropdownScroll"
-        listaOp.BackgroundTransparency = 1
-        listaOp.BorderSizePixel        = 0
-        listaOp.ScrollBarThickness     = 2
-        listaOp.ScrollBarImageColor3   = Theme.Accent
-        listaOp.CanvasSize             = UDim2.new(0, 0, 0, #opciones * 22)
-        listaOp.AutomaticCanvasSize    = Enum.AutomaticSize.None
-        listaOp.Size                   = UDim2.new(1, 0, 0, math.min(#opciones * 22, MAX_ALTO_LISTA))
-        listaOp.Position               = UDim2.new(0, 0, 0, ALTO_FILA + ALTO_BUSQUEDA + 2)
-        listaOp.Parent                 = marco
+        local optionsScroll = Instance.new("ScrollingFrame")
+        optionsScroll.Name                   = "DropdownScroll"
+        optionsScroll.BackgroundTransparency = 1
+        optionsScroll.BorderSizePixel        = 0
+        optionsScroll.ScrollBarThickness     = 2
+        optionsScroll.ScrollBarImageColor3   = Theme.Accent
+        optionsScroll.CanvasSize             = UDim2.new(0, 0, 0, #options * 22)
+        optionsScroll.AutomaticCanvasSize    = Enum.AutomaticSize.None
+        optionsScroll.Size                   = UDim2.new(1, 0, 0, math.min(#options * 22, MAX_LIST_HEIGHT))
+        optionsScroll.Position               = UDim2.new(0, 0, 0, ROW_HEIGHT + SEARCH_HEIGHT + 2)
+        optionsScroll.Parent                 = frame
 
         local layoutOp = Instance.new("UIListLayout")
         layoutOp.Padding = UDim.new(0, 2)
         layoutOp.SortOrder = Enum.SortOrder.LayoutOrder
-        layoutOp.Parent = listaOp
+        layoutOp.Parent = optionsScroll
 
-        local function valorMostrado()
+        local function getDisplayText()
             if multi then
-                local nombres = {}
-                for _, o in ipairs(opciones) do
-                    if seleccion[o] then table.insert(nombres, tostring(o)) end
+                local names = {}
+                for _, o in ipairs(options) do
+                    if selection[o] then table.insert(names, tostring(o)) end
                 end
-                return #nombres > 0 and table.concat(nombres, ", ") or "Ninguno"
+                return #names > 0 and table.concat(names, ", ") or "None"
             end
-            for k, v in pairs(seleccion) do if v then return tostring(k) end end
-            return "Ninguno"
+            for k, v in pairs(selection) do if v then return tostring(k) end end
+            return "None"
         end
 
-        local function actualizarLabel()
-            lbl.Text = (cfg.Texto or cfg.Name or "Dropdown") .. ": " .. valorMostrado()
+        local function updateLabel()
+            lbl.Text = (cfg.Text or cfg.Texto or cfg.Name or "Dropdown") .. ": " .. getDisplayText()
         end
-        actualizarLabel()
+        updateLabel()
 
-        local botonesOp = {}
-        local alternar
+        local opButtons = {}
+        local toggleDropdown
 
-        local function elegir(opcion, sinCerrar)
+        local function pickOpt(opt, keepOpen)
             if multi then
-                seleccion[opcion] = not seleccion[opcion] or nil
+                selection[opt] = not selection[opt] or nil
             else
-                seleccion = {[opcion] = true}
+                selection = {[opt] = true}
             end
-            local res = multi and clonarTabla(seleccion) or opcion
-            AlanLuna.Flags[flag] = res
-            for op, btn in pairs(botonesOp) do
-                btn.BackgroundColor3 = seleccion[op] and Theme.Accent or Theme.Entrada
-                btn.BackgroundTransparency = seleccion[op] and 0.2 or 0.5
+            local res = multi and cloneTable(selection) or opt
+            LouisHub.Flags[flag] = res
+            for o, btn in pairs(opButtons) do
+                btn.BackgroundColor3 = selection[o] and Theme.Accent or Theme.Input
+                btn.BackgroundTransparency = selection[o] and 0.2 or 0.5
             end
-            actualizarLabel()
-            if cfg.Callback then ejecutarConFallback(cfg.Callback, cfg.Texto or cfg.Name or "Dropdown", res) end
-            if not multi and not sinCerrar and alternar then alternar() end
+            updateLabel()
+            if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "Dropdown", res) end
+            if not multi and not keepOpen and toggleDropdown then toggleDropdown() end
         end
 
-        local function construirBotonesOpciones()
-            for _, child in ipairs(listaOp:GetChildren()) do
+        local function buildOptionButtons()
+            for _, child in ipairs(optionsScroll:GetChildren()) do
                 if child:IsA("GuiObject") and not child:IsA("UIListLayout") then
                     child:Destroy()
                 end
             end
-            botonesOp = {}
+            opButtons = {}
 
-            listaOp.CanvasSize = UDim2.new(0, 0, 0, #opciones * 22)
-            listaOp.Size = UDim2.new(1, 0, 0, math.min(#opciones * 22, MAX_ALTO_LISTA))
+            optionsScroll.CanvasSize = UDim2.new(0, 0, 0, #options * 22)
+            optionsScroll.Size = UDim2.new(1, 0, 0, math.min(#options * 22, MAX_LIST_HEIGHT))
 
-            for i, op in ipairs(opciones) do
-                local btn = Utils.BotonBase({
-                    Padre = listaOp, Size = UDim2.new(1, -8, 0, 20),
-                    Posicion = UDim2.new(0, 4, 0, 0),
-                    Color = seleccion[op] and Theme.Accent or Theme.Entrada,
-                    Transparencia = seleccion[op] and 0.2 or 0.5,
-                    Orden = i, Radio = 4,
+            for i, opt in ipairs(options) do
+                local btn = Utils.BaseButton({
+                    Parent = optionsScroll, Size = UDim2.new(1, -8, 0, 20),
+                    Position = UDim2.new(0, 4, 0, 0),
+                    Color = selection[opt] and Theme.Accent or Theme.Input,
+                    Transparency = selection[opt] and 0.2 or 0.5,
+                    Order = i, Radius = 4,
                 })
-                AlanLuna:Registrar(btn, "BackgroundColor3", function()
-                    return seleccion[op] and Theme.Accent or Theme.Entrada
+                LouisHub:Register(btn, "BackgroundColor3", function()
+                    return selection[opt] and Theme.Accent or Theme.Input
                 end)
-                Utils.Texto({
-                    Padre = btn, Texto = tostring(op), Size = UDim2.new(1, -8, 1, 0),
-                    Posicion = UDim2.new(0, 6, 0, 0), Tamano = 10.5, Truncar = true,
+                Utils.Text({
+                    Parent = btn, Text = tostring(opt), Size = UDim2.new(1, -8, 1, 0),
+                    Position = UDim2.new(0, 6, 0, 0), TextSize = 10.5, Truncate = true,
                 })
-                Utils.ClickConfiable(btn, function() elegir(op) end)
-                botonesOp[op] = btn
+                Utils.ReliableClick(btn, function() pickOpt(opt) end)
+                opButtons[opt] = btn
             end
         end
 
-        construirBotonesOpciones()
+        buildOptionButtons()
 
-        alternar = hacerExpandible(marco, ALTO_FILA, function()
-            local altoContenido = math.min(#opciones * 22, MAX_ALTO_LISTA)
-            return ALTO_FILA + ALTO_BUSQUEDA + altoContenido + 6
+        toggleDropdown = makeExpandable(frame, ROW_HEIGHT, function()
+            local contentH = math.min(#options * 22, MAX_LIST_HEIGHT)
+            return ROW_HEIGHT + SEARCH_HEIGHT + contentH + 6
         end, function()
-            Utils.Tween(flecha, {Rotation = 0}, AlanLuna.Motion.Expand)
+            Utils.Tween(arrow, {Rotation = 0}, LouisHub.Motion.Expand)
             if searchBox then searchBox.Visible = false end
         end)
 
-        Utils.ClickConfiable(cabecera, function()
-            local ab = alternar()
-            Utils.Tween(flecha, {Rotation = ab and 180 or 0}, AlanLuna.Motion.Expand)
-            if searchBox then searchBox.Visible = ab end
+        Utils.ReliableClick(headerBtn, function()
+            local openState = toggleDropdown()
+            Utils.Tween(arrow, {Rotation = openState and 180 or 0}, LouisHub.Motion.Expand)
+            if searchBox then searchBox.Visible = openState end
         end)
 
         if searchBox then
             searchBox:GetPropertyChangedSignal("Text"):Connect(function()
                 local t = searchBox.Text:lower()
-                for op, btn in pairs(botonesOp) do
-                    btn.Visible = (t == "") or (tostring(op):lower():find(t, 1, true) ~= nil)
+                for opt, btn in pairs(opButtons) do
+                    btn.Visible = (t == "") or (tostring(opt):lower():find(t, 1, true) ~= nil)
                 end
             end)
         end
 
-        local function obtenerValor()
-            if multi then return clonarTabla(seleccion) end
-            for k, v in pairs(seleccion) do if v then return k end end
+        local function getSelectedValue()
+            if multi then return cloneTable(selection) end
+            for k, v in pairs(selection) do if v then return k end end
             return nil
         end
 
-        local function actualizarOpcionesExterno(nuevasOpciones)
-            opciones = clonarTabla(nuevasOpciones or {})
-            construirBotonesOpciones()
-            actualizarLabel()
+        local function updateOptionsExternal(newOpts)
+            options = cloneTable(newOpts or {})
+            buildOptionButtons()
+            updateLabel()
         end
 
         local elemObj = {
-            Set = function(v, dispararCallback)
+            Set = function(v, fireCallback)
                 if multi then
-                    seleccion = {}
+                    selection = {}
                     if type(v) == "table" then
                         if #v > 0 then
-                            for _, item in ipairs(v) do seleccion[item] = true end
+                            for _, item in ipairs(v) do selection[item] = true end
                         else
-                            for item, val in pairs(v) do if val then seleccion[item] = true end end
+                            for item, val in pairs(v) do if val then selection[item] = true end end
                         end
                     elseif type(v) == "string" then
-                        seleccion[v] = true
+                        selection[v] = true
                     end
                 else
-                    seleccion = {[v] = true}
+                    selection = {[v] = true}
                 end
-                for op, btn in pairs(botonesOp) do
-                    btn.BackgroundColor3 = seleccion[op] and Theme.Accent or Theme.Entrada
-                    btn.BackgroundTransparency = seleccion[op] and 0.2 or 0.5
+                for opt, btn in pairs(opButtons) do
+                    btn.BackgroundColor3 = selection[opt] and Theme.Accent or Theme.Input
+                    btn.BackgroundTransparency = selection[opt] and 0.2 or 0.5
                 end
-                actualizarLabel()
-                AlanLuna.Flags[flag] = multi and clonarTabla(seleccion) or v
-                if dispararCallback and cfg.Callback then
-                    ejecutarConFallback(cfg.Callback, cfg.Texto or cfg.Name or "Dropdown", AlanLuna.Flags[flag])
+                updateLabel()
+                LouisHub.Flags[flag] = multi and cloneTable(selection) or v
+                if fireCallback and cfg.Callback then
+                    executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "Dropdown", LouisHub.Flags[flag])
                 end
             end,
-            Get = obtenerValor,
-            ActualizarOpciones = actualizarOpcionesExterno,
-            Refresh = actualizarOpcionesExterno,
-            CurrentOption = multi and clonarTabla(seleccion) or (cfg.CurrentOption or cfg.Defecto),
+            SetOption          = function(selfElem, v) selfElem.Set(v, true) end,
+            SetOptions         = updateOptionsExternal,
+            Refresh            = updateOptionsExternal,
+            ActualizarOpciones = updateOptionsExternal,
+            Get                = getSelectedValue,
+            CurrentOption      = multi and cloneTable(selection) or (cfg.CurrentOption or cfg.Default or cfg.Defecto),
         }
-        AlanLuna.Elementos[flag] = elemObj
-        AlanLuna.Options[flag] = elemObj
+        LouisHub.Elements[flag] = elemObj
+        LouisHub.Options[flag]  = elemObj
 
-        return {
-            Set = function(...) elemObj.Set(normalizarArgSet(...), true) end,
-            Get = obtenerValor,
-            ActualizarOpciones = actualizarOpcionesExterno,
-            Refresh = actualizarOpcionesExterno,
-            CurrentOption = elemObj.CurrentOption,
-        }
+        return elemObj
     end
 
-    function Seccion:ColorPicker(cfg, flagArg)
+    function Section:ColorPicker(cfg, flagArg)
         cfg = cfg or {}
-        validarCallback("ColorPicker", cfg)
-        local flag        = cfg.Flag or flagArg or cfg.Texto or cfg.Name or ("Color_" .. tostring(math.random(1e5, 1e6)))
-        local colorActual = cfg.Color or cfg.Defecto or Color3.fromRGB(255, 255, 255)
-        AlanLuna.Flags[flag] = colorActual
+        validateCallback("ColorPicker", cfg)
+        local flag        = cfg.Flag or flagArg or cfg.Text or cfg.Texto or cfg.Name or ("Color_" .. tostring(math.random(1e5, 1e6)))
+        local currentColor= cfg.Color or cfg.Default or cfg.Defecto or Color3.fromRGB(255, 255, 255)
+        LouisHub.Flags[flag] = currentColor
 
-        local ALTO_FILA = 26
-        local destino = self:_ObtenerContenedorDestino("ColorPicker", cfg)
-        local marco = Utils.Frame({
-            Padre = destino, Size = UDim2.new(1, 0, 0, ALTO_FILA),
-            Color = Theme.Fila, Orden = siguienteOrden(), Recortar = true,
-            Transparencia = 0.5,
+        local ROW_HEIGHT = 26
+        local targetCont = self:_GetTargetContainer("ColorPicker", cfg)
+        local frame = Utils.Frame({
+            Parent = targetCont, Size = UDim2.new(1, 0, 0, ROW_HEIGHT),
+            Color = Theme.Row, Order = nextOrder(), Clips = true,
+            Transparency = 0.5,
         })
-        AlanLuna:Registrar(marco, "BackgroundColor3", "Fila")
+        LouisHub:Register(frame, "BackgroundColor3", "Row")
 
-        local cabecera = Utils.BotonBase({Padre = marco, Size = UDim2.new(1, 0, 0, ALTO_FILA)})
-        Utils.Hover(cabecera, marco)
+        local headerBtn = Utils.BaseButton({Parent = frame, Size = UDim2.new(1, 0, 0, ROW_HEIGHT)})
+        Utils.Hover(headerBtn, frame)
 
-        local lbl = Utils.Texto({
-            Padre = marco, Texto = cfg.Texto or cfg.Name or "Color",
-            Size = UDim2.new(1, -44, 0, ALTO_FILA), Truncar = true, Tamano = 11,
+        local lbl = Utils.Text({
+            Parent = frame, Text = cfg.Text or cfg.Texto or cfg.Name or "Color",
+            Size = UDim2.new(1, -44, 0, ROW_HEIGHT), Truncate = true, TextSize = 11,
         })
-        local muestra = Utils.Frame({
-            Padre = marco, Size = UDim2.new(0, 24, 0, 14),
-            Posicion = UDim2.new(1, -30, 0.5, -7),
-            Color = colorActual, Radio = 3, Transparencia = 0,
+        local swatch = Utils.Frame({
+            Parent = frame, Size = UDim2.new(0, 24, 0, 14),
+            Position = UDim2.new(1, -30, 0.5, -7),
+            Color = currentColor, Radius = 3, Transparency = 0,
         })
 
-        agregarTooltipTexto(marco, cfg.Texto or cfg.Name or "Color", cfg.Tooltip, lbl, -44)
-        registrarBuscable(marco, cfg.Texto or cfg.Name or "Color", cfg.VisibleSi)
+        addTextTooltip(frame, cfg.Text or cfg.Texto or cfg.Name or "Color", cfg.Tooltip, lbl, -44)
+        registerSearchable(frame, cfg.Text or cfg.Texto or cfg.Name or "Color", cfg.VisibleIf or cfg.VisibleSi)
 
         local panel = Utils.Frame({
-            Padre = marco, Size = UDim2.new(1, -12, 0, 105),
-            Posicion = UDim2.new(0, 6, 0, ALTO_FILA + 2), Transparencia = 1,
-            Radio = false, Borde = false,
+            Parent = frame, Size = UDim2.new(1, -12, 0, 105),
+            Position = UDim2.new(0, 6, 0, ROW_HEIGHT + 2), Transparency = 1,
+            Radius = false, Border = false,
         })
         local layoutP = Instance.new("UIListLayout")
         layoutP.Padding = UDim.new(0, 4)
         layoutP.Parent = panel
 
-        local r = colorActual.R * 255
-        local g = colorActual.G * 255
-        local b = colorActual.B * 255
-        local fijarVisualR, fijarVisualG, fijarVisualB
+        local r = currentColor.R * 255
+        local g = currentColor.G * 255
+        local b = currentColor.B * 255
+        local setVisualR, setVisualG, setVisualB
         local hexBox = nil
 
         local elemObj = {}
 
-        local function aHex(c)
+        local function toHex(c)
             return string.format("#%02X%02X%02X", math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5))
         end
 
-        local function dispararCallbackColor(c)
+        local function triggerColorCallback(c)
             local cb = elemObj.Callback or cfg.Callback
-            if cb then ejecutarConFallback(cb, cfg.Texto or cfg.Name or "ColorPicker", c) end
+            if cb then executeWithFallback(cb, cfg.Text or cfg.Texto or cfg.Name or "ColorPicker", c) end
         end
 
-        local function actualizarColor()
-            local nuevo = Color3.fromRGB(math.floor(r + 0.5), math.floor(g + 0.5), math.floor(b + 0.5))
-            colorActual = nuevo
-            muestra.BackgroundColor3 = nuevo
-            if hexBox then hexBox.Text = aHex(nuevo) end
-            AlanLuna.Flags[flag] = nuevo
-            elemObj.Color = nuevo
-            dispararCallbackColor(nuevo)
+        local function updateColor()
+            local newC = Color3.fromRGB(math.floor(r + 0.5), math.floor(g + 0.5), math.floor(b + 0.5))
+            currentColor = newC
+            swatch.BackgroundColor3 = newC
+            if hexBox then hexBox.Text = toHex(newC) end
+            LouisHub.Flags[flag] = newC
+            elemObj.Color = newC
+            triggerColorCallback(newC)
         end
 
-        local function canalRGB(nombreCanal, ordenC, getV, setV)
-            local filaC = Utils.Frame({
-                Padre = panel, Size = UDim2.new(1, 0, 0, 18),
-                Orden = ordenC, Transparencia = 1, Radio = false, Borde = false,
+        local function makeChannelRow(chName, orderIdx, getV, setV)
+            local rowC = Utils.Frame({
+                Parent = panel, Size = UDim2.new(1, 0, 0, 18),
+                Order = orderIdx, Transparency = 1, Radius = false, Border = false,
             })
-            Utils.Texto({
-                Padre = filaC, Texto = nombreCanal, Size = UDim2.new(0, 14, 1, 0),
-                Fuente = Enum.Font.GothamBold, Tamano = 9.5,
+            Utils.Text({
+                Parent = rowC, Text = chName, Size = UDim2.new(0, 14, 1, 0),
+                Font = Enum.Font.GothamBold, TextSize = 9.5,
             })
-            local _, _, fv = crearBarraArrastrable({
-                Padre = filaC, Size = UDim2.new(1, -16, 0, 6),
-                Posicion = UDim2.new(0, 16, 0.5, -3),
-                Min = 0, Max = 255, Valor = getV(),
-                OnCambio = function(v) setV(v); actualizarColor() end,
+            local _, _, sv = createDraggableBar({
+                Parent = rowC, Size = UDim2.new(1, -16, 0, 6),
+                Position = UDim2.new(0, 16, 0.5, -3),
+                Min = 0, Max = 255, Value = getV(),
+                OnChange = function(v) setV(v); updateColor() end,
             })
-            return fv
+            return sv
         end
 
-        fijarVisualR = canalRGB("R", 1, function() return r end, function(v) r = v end)
-        fijarVisualG = canalRGB("G", 2, function() return g end, function(v) g = v end)
-        fijarVisualB = canalRGB("B", 3, function() return b end, function(v) b = v end)
+        setVisualR = makeChannelRow("R", 1, function() return r end, function(v) r = v end)
+        setVisualG = makeChannelRow("G", 2, function() return g end, function(v) g = v end)
+        setVisualB = makeChannelRow("B", 3, function() return b end, function(v) b = v end)
 
-        local filaHex = Utils.Frame({
-            Padre = panel, Size = UDim2.new(1, 0, 0, 18),
-            Orden = 4, Transparencia = 1, Radio = false, Borde = false,
+        local rowHex = Utils.Frame({
+            Parent = panel, Size = UDim2.new(1, 0, 0, 18),
+            Order = 4, Transparency = 1, Radius = false, Border = false,
         })
-        Utils.Texto({
-            Padre = filaHex, Texto = "Hex", Size = UDim2.new(0, 24, 1, 0),
-            Fuente = Enum.Font.GothamBold, Tamano = 9.5,
+        Utils.Text({
+            Parent = rowHex, Text = "Hex", Size = UDim2.new(0, 24, 1, 0),
+            Font = Enum.Font.GothamBold, TextSize = 9.5,
         })
         hexBox = Instance.new("TextBox")
         hexBox.Size = UDim2.new(1, -26, 1, 0)
         hexBox.Position = UDim2.new(0, 26, 0, 0)
-        hexBox.BackgroundColor3 = Theme.Entrada
+        hexBox.BackgroundColor3 = Theme.Input
         hexBox.BackgroundTransparency = 0.4
         hexBox.BorderSizePixel = 0
         hexBox.Font = Enum.Font.Code
         hexBox.TextSize = 10.5
         hexBox.TextColor3 = Theme.Text
-        hexBox.Text = aHex(colorActual)
+        hexBox.Text = toHex(currentColor)
         hexBox.ClearTextOnFocus = false
-        hexBox.Parent = filaHex
+        hexBox.Parent = rowHex
         Utils.Corner(hexBox, 3)
-        AlanLuna:Registrar(hexBox, "BackgroundColor3", "Entrada")
-        AlanLuna:Registrar(hexBox, "TextColor3", "Text")
+        LouisHub:Register(hexBox, "BackgroundColor3", "Input")
+        LouisHub:Register(hexBox, "TextColor3", "Text")
 
         hexBox.FocusLost:Connect(function()
-            local limpio = hexBox.Text:gsub("^#", ""):gsub("%s", "")
-            if #limpio == 6 and not limpio:match("%X") then
-                r = tonumber(limpio:sub(1,2), 16)
-                g = tonumber(limpio:sub(3,4), 16)
-                b = tonumber(limpio:sub(5,6), 16)
-                fijarVisualR(r); fijarVisualG(g); fijarVisualB(b)
-                actualizarColor()
-                Utils.FlashFeedback(hexBox, true, Theme.Entrada)
+            local cleanHex = hexBox.Text:gsub("^#", ""):gsub("%s", "")
+            if #cleanHex == 6 and not cleanHex:match("%X") then
+                r = tonumber(cleanHex:sub(1,2), 16)
+                g = tonumber(cleanHex:sub(3,4), 16)
+                b = tonumber(cleanHex:sub(5,6), 16)
+                setVisualR(r); setVisualG(g); setVisualB(b)
+                updateColor()
+                Utils.FlashFeedback(hexBox, true, Theme.Input)
             else
-                hexBox.Text = aHex(colorActual)
-                Utils.FlashFeedback(hexBox, false, Theme.Entrada)
+                hexBox.Text = toHex(currentColor)
+                Utils.FlashFeedback(hexBox, false, Theme.Input)
             end
         end)
 
-        local alternar = hacerExpandible(marco, ALTO_FILA, function() return ALTO_FILA + 112 end)
-        Utils.ClickConfiable(cabecera, function() alternar() end)
+        local togglePicker = makeExpandable(frame, ROW_HEIGHT, function() return ROW_HEIGHT + 112 end)
+        Utils.ReliableClick(headerBtn, function() togglePicker() end)
 
-        elemObj.Set = function(v, dispararCallback)
+        elemObj.Set = function(v, fireCallback)
             if typeof(v) ~= "Color3" then return end
-            colorActual = v
+            currentColor = v
             r = v.R * 255; g = v.G * 255; b = v.B * 255
-            muestra.BackgroundColor3 = v
-            if hexBox then hexBox.Text = aHex(v) end
-            AlanLuna.Flags[flag] = v
+            swatch.BackgroundColor3 = v
+            if hexBox then hexBox.Text = toHex(v) end
+            LouisHub.Flags[flag] = v
             elemObj.Color = v
-            fijarVisualR(r); fijarVisualG(g); fijarVisualB(b)
-            if dispararCallback then
-                dispararCallbackColor(v)
+            setVisualR(r); setVisualG(g); setVisualB(b)
+            if fireCallback then
+                triggerColorCallback(v)
             end
         end
-        elemObj.Get = function() return colorActual end
-        elemObj.Color = colorActual
+        elemObj.Get = function() return currentColor end
+        elemObj.Color = currentColor
         elemObj.Callback = cfg.Callback
 
-        AlanLuna.Elementos[flag] = elemObj
-        AlanLuna.Options[flag] = elemObj
+        LouisHub.Elements[flag] = elemObj
+        LouisHub.Options[flag]  = elemObj
 
         return elemObj
     end
 
-    function Seccion:Keybind(cfg)
+    function Section:Keybind(cfg)
         cfg = cfg or {}
-        validarCallback("Keybind", cfg)
-        local flag     = cfg.Flag or cfg.Texto or cfg.Name or ("Keybind_" .. tostring(math.random(1e5, 1e6)))
-        local conMods  = cfg.ConModificadores or false
-        local defecto  = cfg.CurrentBind or cfg.Defecto or (conMods and {KeyCode = Enum.KeyCode.Unknown} or Enum.KeyCode.Unknown)
-        if conMods and typeof(defecto) ~= "table" then
-            defecto = {KeyCode = defecto, Ctrl = false, Shift = false, Alt = false}
+        validateCallback("Keybind", cfg)
+        local flag     = cfg.Flag or cfg.Text or cfg.Texto or cfg.Name or ("Keybind_" .. tostring(math.random(1e5, 1e6)))
+        local withMods = (cfg.WithModifiers or cfg.ConModificadores) or false
+        local defaultK = cfg.CurrentBind or cfg.Default or cfg.Defecto or (withMods and {KeyCode = Enum.KeyCode.Unknown} or Enum.KeyCode.Unknown)
+        if withMods and typeof(defaultK) ~= "table" then
+            defaultK = {KeyCode = defaultK, Ctrl = false, Shift = false, Alt = false}
         end
-        local valor = defecto
-        local esperando = false
-        local conexionCaptura = nil
-        local _asignadaEnEsteFrame = false
-        local tokenEspera = 0
-        AlanLuna.Flags[flag] = valor
+        local value = defaultK
+        local isWaiting = false
+        local connCapture = nil
+        local _assignedThisFrame = false
+        local waitToken = 0
+        LouisHub.Flags[flag] = value
 
-        local entryConflicto = { flag = flag, texto = cfg.Texto or cfg.Name or "Keybind" }
-        entryConflicto.GetValor = function() return valor end
-        table.insert(_keybindsRegistrados, entryConflicto)
+        local conflictEntry = { flag = flag, text = cfg.Text or cfg.Texto or cfg.Name or "Keybind" }
+        conflictEntry.GetValor = function() return value end
+        table.insert(_registeredKeybinds, conflictEntry)
 
-        local function textoTecla(v)
-            if not conMods then
-                return (v == Enum.KeyCode.Unknown) and "Ninguna" or v.Name
+        local function formatKeyText(v)
+            if not withMods then
+                return (v == Enum.KeyCode.Unknown) and "None" or v.Name
             end
             if typeof(v) ~= "table" then v = {KeyCode = v, Ctrl = false, Shift = false, Alt = false} end
-            if not v or v.KeyCode == Enum.KeyCode.Unknown then return "Ninguna" end
-            local partes = {}
-            if v.Ctrl then table.insert(partes, "Ctrl") end
-            if v.Shift then table.insert(partes, "Shift") end
-            if v.Alt then table.insert(partes, "Alt") end
-            table.insert(partes, v.KeyCode.Name)
-            return table.concat(partes, "+")
+            if not v or v.KeyCode == Enum.KeyCode.Unknown then return "None" end
+            local parts = {}
+            if v.Ctrl then table.insert(parts, "Ctrl") end
+            if v.Shift then table.insert(parts, "Shift") end
+            if v.Alt then table.insert(parts, "Alt") end
+            table.insert(parts, v.KeyCode.Name)
+            return table.concat(parts, "+")
         end
 
-        local destino = self:_ObtenerContenedorDestino("Keybind", cfg)
-        local fila, lbl = crearCabecera(26, cfg.Texto or cfg.Name or "Keybind", 1, -64, nil, destino)
-        agregarTooltipTexto(fila, cfg.Texto or cfg.Name or "Keybind", cfg.Tooltip or cfg.Description, lbl)
-        registrarBuscable(fila, cfg.Texto or cfg.Name or "Keybind", cfg.VisibleSi)
+        local targetCont = self:_GetTargetContainer("Keybind", cfg)
+        local row, lbl = createHeader(26, cfg.Text or cfg.Texto or cfg.Name or "Keybind", 1, -64, nil, targetCont)
+        addTextTooltip(row, cfg.Text or cfg.Texto or cfg.Name or "Keybind", cfg.Tooltip or cfg.Description, lbl)
+        registerSearchable(row, cfg.Text or cfg.Texto or cfg.Name or "Keybind", cfg.VisibleIf or cfg.VisibleSi)
 
-        local btnTecla = Utils.BotonBase({
-            Padre = fila, Size = UDim2.new(0, 54, 0, 18),
-            Posicion = UDim2.new(1, -58, 0.5, -9),
-            Color = Theme.Entrada, Transparencia = 0.4, Radio = 4,
+        local btnKey = Utils.BaseButton({
+            Parent = row, Size = UDim2.new(0, 54, 0, 18),
+            Position = UDim2.new(1, -58, 0.5, -9),
+            Color = Theme.Input, Transparency = 0.4, Radius = 4,
         })
-        AlanLuna:Registrar(btnTecla, "BackgroundColor3", "Entrada")
-        Utils.Hover(btnTecla, btnTecla)
+        LouisHub:Register(btnKey, "BackgroundColor3", "Input")
+        Utils.Hover(btnKey, btnKey)
 
-        local lblTecla = Utils.Texto({
-            Padre = btnTecla, Texto = textoTecla(valor),
-            Alineacion = Enum.TextXAlignment.Center,
-            Color = Theme.Highlight, Tamano = 9.5, Truncar = true,
+        local lblKey = Utils.Text({
+            Parent = btnKey, Text = formatKeyText(value),
+            Alignment = Enum.TextXAlignment.Center,
+            Color = Theme.Highlight, TextSize = 9.5, Truncate = true,
         })
-        AlanLuna:Registrar(lblTecla, "TextColor3", "Highlight")
+        LouisHub:Register(lblKey, "TextColor3", "Highlight")
 
-        local function actualizarTecla(tecla, disparar)
-            valor = tecla
-            AlanLuna.Flags[flag] = tecla
-            lblTecla.Text = textoTecla(tecla)
-            if disparar and cfg.Callback then
-                ejecutarConFallback(cfg.Callback, cfg.Texto or cfg.Name or "Keybind", tecla)
+        local function updateKey(keyVal, fire)
+            value = keyVal
+            LouisHub.Flags[flag] = keyVal
+            lblKey.Text = formatKeyText(keyVal)
+            if fire and cfg.Callback then
+                executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "Keybind", keyVal)
             end
         end
 
-        local function cancelarEspera()
-            if not esperando then return end
-            esperando = false
-            btnTecla.BackgroundColor3 = Theme.Entrada
-            lblTecla.Text = textoTecla(valor)
-            if conexionCaptura then
-                conexionCaptura:Disconnect()
-                conexionCaptura = nil
+        local function cancelListening()
+            if not isWaiting then return end
+            isWaiting = false
+            btnKey.BackgroundColor3 = Theme.Input
+            lblKey.Text = formatKeyText(value)
+            if connCapture then
+                connCapture:Disconnect()
+                connCapture = nil
             end
         end
 
-        AlanLuna:RegistrarConexion(UserInputService.InputBegan:Connect(function(input, procesado)
-            if procesado or esperando or _asignadaEnEsteFrame then return end
-            local k, c, s, a = _descomponerTecla(valor)
+        LouisHub:RegisterConnection(UserInputService.InputBegan:Connect(function(input, processed)
+            if processed or isWaiting or _assignedThisFrame then return end
+            local k, c, s, a = _decomposeKey(value)
             if k == Enum.KeyCode.Unknown or input.KeyCode ~= k then return end
 
-            if conMods then
-                local ctrlA = UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
-                local shiftA = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
-                local altA = UserInputService:IsKeyDown(Enum.KeyCode.LeftAlt) or UserInputService:IsKeyDown(Enum.KeyCode.RightAlt)
-                if ctrlA ~= c or shiftA ~= s or altA ~= a then return end
+            if withMods then
+                local ctrlDown = UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
+                local shiftDown = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
+                local altDown = UserInputService:IsKeyDown(Enum.KeyCode.LeftAlt) or UserInputService:IsKeyDown(Enum.KeyCode.RightAlt)
+                if ctrlDown ~= c or shiftDown ~= s or altDown ~= a then return end
             end
 
             if cfg.Callback then
-                ejecutarConFallback(cfg.Callback, cfg.Texto or cfg.Name or "Keybind", valor)
+                executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "Keybind", value)
             end
         end))
 
-        Utils.ClickConfiable(btnTecla, function()
-            if esperando then
-                cancelarEspera()
+        Utils.ReliableClick(btnKey, function()
+            if isWaiting then
+                cancelListening()
                 return
             end
-            esperando = true
-            lblTecla.Text = "..."
-            btnTecla.BackgroundColor3 = Theme.Accent
+            isWaiting = true
+            lblKey.Text = "..."
+            btnKey.BackgroundColor3 = Theme.Accent
 
-            tokenEspera = tokenEspera + 1
-            local miToken = tokenEspera
+            waitToken = waitToken + 1
+            local myToken = waitToken
 
             task.delay(5, function()
-                if esperando and tokenEspera == miToken then
-                    cancelarEspera()
+                if isWaiting and waitToken == myToken then
+                    cancelListening()
                 end
             end)
 
-            conexionCaptura = UserInputService.InputBegan:Connect(function(input, procesado)
-                if procesado or not esperando then return end
+            connCapture = UserInputService.InputBegan:Connect(function(input, processed)
+                if processed or not isWaiting then return end
                 if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode ~= Enum.KeyCode.Unknown then
-                    local esMod = conMods and (
+                    local isModKey = withMods and (
                         input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.RightControl or
                         input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.RightShift or
                         input.KeyCode == Enum.KeyCode.LeftAlt or input.KeyCode == Enum.KeyCode.RightAlt
                     )
-                    if esMod then return end
+                    if isModKey then return end
 
-                    esperando = false
-                    btnTecla.BackgroundColor3 = Theme.Entrada
-                    if conexionCaptura then conexionCaptura:Disconnect(); conexionCaptura = nil end
+                    isWaiting = false
+                    btnKey.BackgroundColor3 = Theme.Input
+                    if connCapture then connCapture:Disconnect(); connCapture = nil end
 
-                    local nuevoValor = conMods and {
+                    local newVal = withMods and {
                         KeyCode = input.KeyCode,
                         Ctrl = UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl),
                         Shift = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift),
                         Alt = UserInputService:IsKeyDown(Enum.KeyCode.LeftAlt) or UserInputService:IsKeyDown(Enum.KeyCode.RightAlt),
                     } or input.KeyCode
 
-                    _revisarConflictoKeybind(entryConflicto, nuevoValor)
-                    _asignadaEnEsteFrame = true
-                    task.defer(function() _asignadaEnEsteFrame = false end)
-                    actualizarTecla(nuevoValor, false)
+                    _checkKeybindConflict(conflictEntry, newVal)
+                    _assignedThisFrame = true
+                    task.defer(function() _assignedThisFrame = false end)
+                    updateKey(newVal, false)
                 end
             end)
-            AlanLuna:RegistrarConexion(conexionCaptura)
+            LouisHub:RegisterConnection(connCapture)
         end)
 
         local elemObj = {
-            Set = function(v, dispararCallback) actualizarTecla(v, dispararCallback or false) end,
-            Get = function() return valor end,
-            CurrentBind = valor,
+            Set = function(v, fireCallback) updateKey(v, fireCallback or false) end,
+            Get = function() return value end,
+            CurrentBind = value,
         }
-        AlanLuna.Elementos[flag] = elemObj
-        AlanLuna.Options[flag] = elemObj
+        LouisHub.Elements[flag] = elemObj
+        LouisHub.Options[flag]  = elemObj
 
-        return {
-            Set = function(...) elemObj.Set(normalizarArgSet(...), true) end,
-            Get = function() return valor end,
-            CurrentBind = valor,
-        }
+        return elemObj
     end
 
-    function Seccion:Label(cfg)
+    function Section:Label(cfg)
         cfg = cfg or {}
         local flag  = cfg.Flag or ("Label_" .. tostring(math.random(1e5, 1e6)))
-        local valor = tostring(cfg.Valor or "")
-        _flagsNoPersistir[flag] = true
+        local isLunaLabel = (cfg.Value == nil and cfg.Valor == nil)
+        local valueStr = tostring(cfg.Value or cfg.Valor or "")
+        _nonPersistentFlags[flag] = true
 
-        local destino = self:_ObtenerContenedorDestino("Label", cfg)
-        local fila, lbl = crearCabecera(26, cfg.Texto or cfg.Text or "Label", 1, -100, nil, destino)
-        agregarTooltipTexto(fila, cfg.Texto or cfg.Text or "Label", cfg.Tooltip, lbl)
-        registrarBuscable(fila, cfg.Texto or cfg.Text or "Label", cfg.VisibleSi)
+        local targetCont = self:_GetTargetContainer("Label", cfg)
+        local row, lbl = createHeader(26, cfg.Text or cfg.Texto or "Label", 1, isLunaLabel and -16 or -100, nil, targetCont)
+        addTextTooltip(row, cfg.Text or cfg.Texto or "Label", cfg.Tooltip or cfg.Description, lbl)
+        registerSearchable(row, cfg.Text or cfg.Texto or "Label", cfg.VisibleIf or cfg.VisibleSi)
 
-        local lblValor = Utils.Texto({
-            Padre = fila, Texto = valor, Size = UDim2.new(0, 90, 1, 0),
-            Posicion = UDim2.new(1, -96, 0, 0), Alineacion = Enum.TextXAlignment.Right,
-            Color = Theme.AccentLight, Tamano = 10.5, Truncar = true,
-        })
-        AlanLuna:Registrar(lblValor, "TextColor3", "AccentLight")
-
-        local function fijar(v)
-            valor = tostring(v)
-            lblValor.Text = valor
-            _flagsReales[flag] = v
+        local lblValue = nil
+        if not isLunaLabel then
+            lblValue = Utils.Text({
+                Parent = row, Text = valueStr, Size = UDim2.new(0, 90, 1, 0),
+                Position = UDim2.new(1, -96, 0, 0), Alignment = Enum.TextXAlignment.Right,
+                Color = Theme.AccentLight, TextSize = 10.5, Truncate = true,
+            })
+            LouisHub:Register(lblValue, "TextColor3", "AccentLight")
         end
 
-        _flagsReales[flag] = cfg.Valor
-        local elemObj = {
-            Set = function(v) fijar(v) end,
-            Get = function() return valor end,
-        }
-        AlanLuna.Elementos[flag] = elemObj
-
-        if cfg.Cada and cfg.Actualizar and type(cfg.Actualizar) == "function" then
-            local cada = tonumber(cfg.Cada)
-            if cada and cada >= 0.05 then
-                _labelsAutoActualizables[lblValor] = {
-                    cada = cada, fn = cfg.Actualizar, aplicar = fijar,
-                    flag = flag, proxima = os.clock() + cada,
-                }
+        local function setVal(v)
+            local txt = tostring(v)
+            _realFlags[flag] = v
+            if isLunaLabel then
+                lbl.Text = txt
+            else
+                valueStr = txt
+                if lblValue then lblValue.Text = valueStr end
             end
         end
 
-        return {
-            Set = function(...) fijar(normalizarArgSet(...)) end,
-            SetTexto = function(...) fijar(normalizarArgSet(...)) end,
-            Get = function() return valor end,
+        _realFlags[flag] = cfg.Value or cfg.Valor or cfg.Text or cfg.Texto
+        local elemObj = {
+            Set      = function(v) setVal(v) end,
+            SetText  = function(v) setVal(v) end,
+            SetTexto = function(v) setVal(v) end,
+            Get      = function() return isLunaLabel and lbl.Text or valueStr end,
+            Row      = row,
+            Fila     = row,
         }
+        LouisHub.Elements[flag] = elemObj
+
+        local updateInterval = tonumber(cfg.Every or cfg.Cada)
+        local updateFn = cfg.Update or cfg.Actualizar
+        if updateInterval and updateFn and type(updateFn) == "function" and updateInterval >= 0.05 then
+            _autoUpdateLabels[lblValue or lbl] = {
+                interval = updateInterval,
+                fn = updateFn,
+                apply = setVal,
+                flag = flag,
+                nextTime = os.clock() + updateInterval,
+            }
+        end
+
+        return elemObj
     end
 
-    function Seccion:Progreso(cfg)
+    function Section:Progress(cfg)
         cfg = cfg or {}
-        local flag  = cfg.Flag or ("Progreso_" .. tostring(math.random(1e5, 1e6)))
-        local valor = math.clamp(cfg.Defecto or 0, 0, 100)
-        _flagsNoPersistir[flag] = true
-        _flagsReales[flag] = valor
+        local flag  = cfg.Flag or ("Progress_" .. tostring(math.random(1e5, 1e6)))
+        local value = math.clamp(cfg.Default or cfg.Defecto or 0, 0, 100)
+        _nonPersistentFlags[flag] = true
+        _realFlags[flag] = value
 
-        local destino = self:_ObtenerContenedorDestino("Progreso", cfg)
-        local fila, lbl = crearCabecera(34, cfg.Texto or "Progreso", nil, nil, "fijo", destino)
+        local targetCont = self:_GetTargetContainer("Progress", cfg)
+        local row, lbl = createHeader(34, cfg.Text or cfg.Texto or "Progress", nil, nil, "fixed", targetCont)
         lbl.Size = UDim2.new(1, -55, 0, 16)
         lbl.Position = UDim2.new(0, 6, 0, 2)
-        agregarTooltipTexto(fila, cfg.Texto or "Progreso", cfg.Tooltip, lbl)
-        registrarBuscable(fila, cfg.Texto or "Progreso", cfg.VisibleSi)
+        addTextTooltip(row, cfg.Text or cfg.Texto or "Progress", cfg.Tooltip, lbl)
+        registerSearchable(row, cfg.Text or cfg.Texto or "Progress", cfg.VisibleIf or cfg.VisibleSi)
 
-        local lblValor = Utils.Texto({
-            Padre = fila, Texto = math.floor(valor) .. "%",
-            Size = UDim2.new(0, 45, 0, 16), Posicion = UDim2.new(1, -50, 0, 2),
-            Alineacion = Enum.TextXAlignment.Right, Color = Theme.AccentLight, Tamano = 10,
+        local lblVal = Utils.Text({
+            Parent = row, Text = math.floor(value) .. "%",
+            Size = UDim2.new(0, 45, 0, 16), Position = UDim2.new(1, -50, 0, 2),
+            Alignment = Enum.TextXAlignment.Right, Color = Theme.AccentLight, TextSize = 10,
         })
-        AlanLuna:Registrar(lblValor, "TextColor3", "AccentLight")
+        LouisHub:Register(lblVal, "TextColor3", "AccentLight")
 
-        local fondo = Utils.Frame({
-            Padre = fila, Size = UDim2.new(1, -12, 0, 5),
-            Posicion = UDim2.new(0, 6, 0, 22), Color = Theme.Entrada,
-            Radio = 3, Transparencia = 0.4,
+        local bg = Utils.Frame({
+            Parent = row, Size = UDim2.new(1, -12, 0, 5),
+            Position = UDim2.new(0, 6, 0, 22), Color = Theme.Input,
+            Radius = 3, Transparency = 0.4,
         })
-        AlanLuna:Registrar(fondo, "BackgroundColor3", "Entrada")
+        LouisHub:Register(bg, "BackgroundColor3", "Input")
 
-        local relleno = Utils.Frame({
-            Padre = fondo, Size = UDim2.new(valor / 100, 0, 1, 0),
-            Color = Theme.Accent, Radio = 3, Transparencia = 0, Borde = false,
+        local fill = Utils.Frame({
+            Parent = bg, Size = UDim2.new(value / 100, 0, 1, 0),
+            Color = Theme.Accent, Radius = 3, Transparency = 0, Border = false,
         })
-        AlanLuna:Registrar(relleno, "BackgroundColor3", "Accent")
-        Utils.GradienteAcento(relleno)
+        LouisHub:Register(fill, "BackgroundColor3", "Accent")
+        Utils.AccentGradient(fill)
 
-        local function fijar(v)
+        local function setProgress(v)
             if type(v) ~= "number" then return end
-            valor = math.clamp(v, 0, 100)
-            Utils.Tween(relleno, {Size = UDim2.new(valor / 100, 0, 1, 0)}, AlanLuna.Motion.Expand)
-            lblValor.Text = math.floor(valor + 0.5) .. "%"
-            _flagsReales[flag] = valor
+            value = math.clamp(v, 0, 100)
+            Utils.Tween(fill, {Size = UDim2.new(value / 100, 0, 1, 0)}, LouisHub.Motion.Expand)
+            lblVal.Text = math.floor(value + 0.5) .. "%"
+            _realFlags[flag] = value
         end
 
         local elemObj = {
-            Set = function(v) fijar(v) end,
-            Get = function() return valor end,
+            Set = function(v) setProgress(v) end,
+            Get = function() return value end,
         }
-        AlanLuna.Elementos[flag] = elemObj
-        return {
-            Set = function(...) fijar(normalizarArgSet(...)) end,
-            Get = function() return valor end,
-        }
+        LouisHub.Elements[flag] = elemObj
+        return elemObj
     end
+    Section.Progreso = Section.Progress
 
-    function Seccion:Parrafo(cfg)
+    function Section:Paragraph(cfg)
         cfg = cfg or {}
-        local destino = self:_ObtenerContenedorDestino("Parrafo", cfg)
-        local marco2 = Utils.Frame({
-            Padre = destino, Size = UDim2.new(1, 0, 0, 0),
-            Color = Theme.Fila, Orden = siguienteOrden(), Radio = 6,
-            Transparencia = 0.5,
+        local targetCont = self:_GetTargetContainer("Paragraph", cfg)
+        local frame = Utils.Frame({
+            Parent = targetCont, Size = UDim2.new(1, 0, 0, 0),
+            Color = Theme.Row, Order = nextOrder(), Radius = 6,
+            Transparency = 0.5,
         })
-        marco2.AutomaticSize = Enum.AutomaticSize.Y
-        AlanLuna:Registrar(marco2, "BackgroundColor3", "Fila")
+        frame.AutomaticSize = Enum.AutomaticSize.Y
+        LouisHub:Register(frame, "BackgroundColor3", "Row")
 
-        local padP = Instance.new("UIPadding")
-        padP.PaddingTop, padP.PaddingBottom = UDim.new(0, 6), UDim.new(0, 6)
-        padP.PaddingLeft, padP.PaddingRight = UDim.new(0, 8), UDim.new(0, 8)
-        padP.Parent = marco2
+        local pad = Instance.new("UIPadding")
+        pad.PaddingTop, pad.PaddingBottom = UDim.new(0, 6), UDim.new(0, 6)
+        pad.PaddingLeft, pad.PaddingRight = UDim.new(0, 8), UDim.new(0, 8)
+        pad.Parent = frame
 
-        local layoutP = Instance.new("UIListLayout")
-        layoutP.Padding = UDim.new(0, 2)
-        layoutP.SortOrder = Enum.SortOrder.LayoutOrder
-        layoutP.Parent = marco2
+        local layout = Instance.new("UIListLayout")
+        layout.Padding = UDim.new(0, 2)
+        layout.SortOrder = Enum.SortOrder.LayoutOrder
+        layout.Parent = frame
 
-        if cfg.Titulo or cfg.Title then
-            local lblTit = Utils.Texto({
-                Padre = marco2, Texto = cfg.Titulo or cfg.Title,
-                Size = UDim2.new(1, 0, 0, 0), Fuente = Enum.Font.GothamBold,
-                Tamano = 11, Color = Theme.Highlight, Ajustar = true, Orden = 1,
+        local titleParam = cfg.Title or cfg.Titulo
+        if titleParam then
+            local lblTit = Utils.Text({
+                Parent = frame, Text = titleParam,
+                Size = UDim2.new(1, 0, 0, 0), Font = Enum.Font.GothamBold,
+                TextSize = 11, Color = Theme.Highlight, Wrapped = true, Order = 1,
             })
             lblTit.AutomaticSize = Enum.AutomaticSize.Y
-            AlanLuna:Registrar(lblTit, "TextColor3", "Highlight")
+            LouisHub:Register(lblTit, "TextColor3", "Highlight")
         end
 
-        local lblCont = Utils.Texto({
-            Padre = marco2, Texto = cfg.Contenido or cfg.Content or cfg.Text or "",
-            Size = UDim2.new(1, 0, 0, 0), Tamano = 10.5, Color = Theme.Text,
-            Ajustar = true, Orden = 2,
+        local bodyParam = cfg.Content or cfg.Contenido or cfg.Text or cfg.Texto or ""
+        local lblBody = Utils.Text({
+            Parent = frame, Text = bodyParam,
+            Size = UDim2.new(1, 0, 0, 0), TextSize = 10.5, Color = Theme.Text,
+            Wrapped = true, Order = 2,
         })
-        lblCont.AutomaticSize = Enum.AutomaticSize.Y
-        AlanLuna:Registrar(lblCont, "TextColor3", "Text")
+        lblBody.AutomaticSize = Enum.AutomaticSize.Y
+        LouisHub:Register(lblBody, "TextColor3", "Text")
 
         return {
-            Instancia = marco2,
+            Instance = frame,
+            Instancia= frame,
             Set = function(...)
-                local t = normalizarArgSet(...)
-                lblCont.Text = tostring(t)
+                local t = normalizeArgSet(...)
+                lblBody.Text = tostring(t)
             end,
         }
     end
+    Section.Parrafo = Section.Paragraph
 
-    function Seccion:Divider(cfg)
+    function Section:Divider(cfg)
         cfg = cfg or {}
-        local destino = self:_ObtenerContenedorDestino("Divider", cfg)
-        local fila = Utils.Frame({
-            Padre = destino, Size = UDim2.new(1, 0, 0, cfg.Texto and 24 or 12),
-            Orden = siguienteOrden(), Transparencia = 1, Radio = false, Borde = false,
+        local textParam = cfg.Text or cfg.Texto
+        local targetCont = self:_GetTargetContainer("Divider", cfg)
+        local row = Utils.Frame({
+            Parent = targetCont, Size = UDim2.new(1, 0, 0, textParam and 24 or 12),
+            Order = nextOrder(), Transparency = 1, Radius = false, Border = false,
         })
-        if cfg.Texto then
-            Utils.Texto({
-                Padre = fila, Texto = tostring(cfg.Texto),
-                Size = UDim2.new(1, -12, 0, 14), Posicion = UDim2.new(0, 6, 0, 0),
-                Fuente = Enum.Font.GothamBold, Tamano = 9.5, ColorTema = "AccentLight",
+        if textParam then
+            Utils.Text({
+                Parent = row, Text = tostring(textParam),
+                Size = UDim2.new(1, -12, 0, 14), Position = UDim2.new(0, 6, 0, 0),
+                Font = Enum.Font.GothamBold, TextSize = 9.5, ThemeColor = "AccentLight",
             })
         end
-        local linea = Utils.Frame({
-            Padre = fila, Size = UDim2.new(1, 0, 0, 1.5),
-            Posicion = UDim2.new(0, 0, 1, -2), Color = Theme.Accent,
-            Radio = false, Borde = false, Transparencia = 0.3,
+        local line = Utils.Frame({
+            Parent = row, Size = UDim2.new(1, 0, 0, 1.5),
+            Position = UDim2.new(0, 0, 1, -2), Color = Theme.Accent,
+            Radius = false, Border = false, Transparency = 0.3,
         })
-        AlanLuna:Registrar(linea, "BackgroundColor3", "Accent")
-        Utils.GradienteAcento(linea)
-        return { Instancia = fila }
+        LouisHub:Register(line, "BackgroundColor3", "Accent")
+        Utils.AccentGradient(line)
+        return { Instance = row, Instancia = row }
     end
 
-    function Seccion:Imagen(cfg)
+    function Section:Image(cfg)
         cfg = cfg or {}
-        local destino = self:_ObtenerContenedorDestino("Imagen", cfg)
-        local altoFijo = math.clamp(cfg.Alto or 90, 30, 350)
-        local fila = Utils.Frame({
-            Padre = destino, Size = UDim2.new(1, 0, 0, altoFijo),
-            Transparencia = 1, Orden = siguienteOrden(), Radio = false, Borde = false,
+        local targetCont = self:_GetTargetContainer("Image", cfg)
+        local fixedHeight = math.clamp(cfg.Height or cfg.Alto or 90, 30, 350)
+        local row = Utils.Frame({
+            Parent = targetCont, Size = UDim2.new(1, 0, 0, fixedHeight),
+            Transparency = 1, Order = nextOrder(), Radius = false, Border = false,
         })
         local img = Instance.new("ImageLabel")
-        img.BackgroundColor3 = Theme.Fila
+        img.BackgroundColor3 = Theme.Row
         img.BackgroundTransparency = 0.5
         img.BorderSizePixel = 0
         img.Image = type(cfg.Url) == "string" and cfg.Url or ""
         img.ScaleType = Enum.ScaleType.Fit
         img.Size = UDim2.new(1, 0, 1, 0)
-        img.Parent = fila
+        img.Parent = row
         Utils.Corner(img, 6)
-        AlanLuna:Registrar(img, "BackgroundColor3", "Fila")
+        LouisHub:Register(img, "BackgroundColor3", "Row")
         return {
             Set = function(...)
-                local u = normalizarArgSet(...)
+                local u = normalizeArgSet(...)
                 if type(u) == "string" then img.Image = u end
             end,
             Get = function() return img.Image end,
-            Instancia = img,
+            Instance = img,
+            Instancia= img,
         }
     end
+    Section.Imagen = Section.Image
 
-    function Seccion:Grupo(cfg)
+    function Section:Group(cfg)
         cfg = cfg or {}
-        local destino = self:_ObtenerContenedorDestino("Grupo", cfg)
-        local ALTO_G = 26
-        local filaG = Utils.Frame({
-            Padre = destino, Size = UDim2.new(1, 0, 0, ALTO_G),
-            Transparencia = 1, Orden = siguienteOrden(), Radio = false, Borde = false,
+        local targetCont = self:_GetTargetContainer("Group", cfg)
+        local GROUP_H = 26
+        local rowG = Utils.Frame({
+            Parent = targetCont, Size = UDim2.new(1, 0, 0, GROUP_H),
+            Transparency = 1, Order = nextOrder(), Radius = false, Border = false,
         })
         local layG = Instance.new("UIListLayout")
         layG.FillDirection = Enum.FillDirection.Horizontal
         layG.Padding = UDim.new(0, 6)
-        layG.Parent = filaG
+        layG.Parent = rowG
 
-        local botonesG = {}
-        local grupo = { Instancia = filaG }
-        function grupo:Boton(cfgB)
-            local btn = Seccion:Boton(cfgB)
-            btn.Parent = filaG
-            table.insert(botonesG, btn)
-            local tot = #botonesG
-            for _, b in ipairs(botonesG) do
+        local groupButtons = {}
+        local groupObj = { Instance = rowG, Instancia = rowG }
+        function groupObj:Button(cfgB)
+            local btn = Section:Button(cfgB)
+            btn.Parent = rowG
+            table.insert(groupButtons, btn)
+            local tot = #groupButtons
+            for _, b in ipairs(groupButtons) do
                 b.Size = UDim2.new(1 / tot, -math.ceil(6 * (tot - 1) / tot), 1, 0)
             end
             return btn
         end
-        return grupo
+        groupObj.Boton = groupObj.Button
+        return groupObj
     end
+    Section.Grupo = Section.Group
 
-    function Seccion:Construir(lista)
+    function Section:Build(list)
         local res = {}
-        for i, def in ipairs(lista or {}) do
-            local tipoCtrl = def.Control or def.Tipo
-            if tipoCtrl and type(self[tipoCtrl]) == "function" then
-                local obj = self[tipoCtrl](self, def)
+        for i, def in ipairs(list or {}) do
+            local ctrlType = def.Control or def.Type or def.Tipo
+            if ctrlType and type(self[ctrlType]) == "function" then
+                local obj = self[ctrlType](self, def)
                 res[i] = obj
                 if def.Flag then res[def.Flag] = obj end
             end
         end
         return res
     end
+    Section.Construir = Section.Build
 
     for _, n in ipairs({
-        "Boton", "Toggle", "Casilla", "Slider", "RangeSlider", "NumberStepper",
-        "Input", "TagInput", "Dropdown", "RadioGroup", "ColorPicker", "Keybind",
+        "Button", "Boton", "Toggle", "Checkbox", "Casilla", "Slider", "RangeSlider",
+        "NumberStepper", "Input", "TagInput", "Dropdown", "RadioGroup", "ColorPicker", "Keybind",
     }) do
-        Utils.EnvolverControlBloqueable(Seccion, Seccion.contenedor, n)
+        Utils.WrapLockableControl(Section, Section.container or Section.contenedor, n)
     end
 end
 
-local function hookCrearSeccionParaControles()
-    local oldCrearVentana = AlanLuna.CrearVentana
-    function AlanLuna:CrearVentana(config)
-        local Ventana = oldCrearVentana(self, config)
+local function hookCreateSectionForControls()
+    local oldCreateWindow = LouisHub.CreateWindow or LouisHub.CrearVentana
+    function LouisHub:CreateWindow(config)
+        local Window = oldCreateWindow(self, config)
 
-        local oldCrearCategoria = Ventana.CrearCategoria
-        function Ventana:CrearCategoria(catCfg)
-            local CatObj = oldCrearCategoria(self, catCfg)
+        local oldCreateCategory = Window.CreateCategory or Window.CrearCategoria
+        function Window:CreateCategory(catCfg)
+            local CatObj = oldCreateCategory(self, catCfg)
 
-            local oldCrearTab = CatObj.CrearTab
-            function CatObj:CrearTab(tabCfg)
-                local TabObj = oldCrearTab(self, tabCfg)
+            local oldCreateTab = CatObj.CreateTab or CatObj.CrearTab
+            function CatObj:CreateTab(tabCfg, iconParamOverride)
+                local TabObj = oldCreateTab(self, tabCfg, iconParamOverride)
 
-                local oldCrearSubTab = TabObj.CrearSubTab
-                function TabObj:CrearSubTab(subCfg)
-                    local SubTabObj = oldCrearSubTab(self, subCfg)
+                local oldCreateSubTab = TabObj.CreateSubTab or TabObj.CrearSubTab
+                function TabObj:CreateSubTab(subCfg)
+                    local SubTabObj = oldCreateSubTab(self, subCfg)
 
-                    local oldCrearSeccion = SubTabObj.CrearSeccion
-                    function SubTabObj:CrearSeccion(secNombre, secCfg)
-                        local Seccion = oldCrearSeccion(self, secNombre, secCfg)
-                        aplicarMetodosControles(Seccion)
-                        return Seccion
+                    local oldCreateSection = SubTabObj.CreateSection or SubTabObj.CrearSeccion
+                    function SubTabObj:CreateSection(secName, secCfg)
+                        local Section = oldCreateSection(self, secName, secCfg)
+                        applyControlMethods(Section)
+                        return Section
                     end
+                    SubTabObj.CrearSeccion = SubTabObj.CreateSection
 
                     return SubTabObj
                 end
+                TabObj.CrearSubTab = TabObj.CreateSubTab
 
-                function TabObj:CrearSeccion(secNombre, secCfg)
-                    local subMain = self.SubTabs["Main"] or self:CrearSubTab("Main")
-                    return subMain:CrearSeccion(secNombre, secCfg)
+                function TabObj:CreateSection(secName, secCfg)
+                    local subMain = self.SubTabs["Main"] or self:CreateSubTab("Main")
+                    return subMain:CreateSection(secName, secCfg)
+                end
+                TabObj.CrearSeccion = TabObj.CreateSection
+
+                -- ========================================================
+                -- LUNA UI ADAPTIVE SECTION ATTACHMENT
+                -- ========================================================
+                local currentSection = nil
+
+                TabObj.CreateSection = function(selfTab, secName, secCfg)
+                    currentSection = selfTab:CrearSeccion(secName, secCfg)
+                    return currentSection
                 end
 
-                TabObj.CreateButton      = function(_, c) return TabObj:CrearSeccion(""):Boton(c) end
-                TabObj.CreateToggle      = function(_, c, f) if f then c.Flag = f end return TabObj:CrearSeccion(""):Toggle(c) end
-                TabObj.CreateSlider      = function(_, c, f) if f then c.Flag = f end return TabObj:CrearSeccion(""):Slider(c) end
-                TabObj.CreateInput       = function(_, c, f) if f then c.Flag = f end return TabObj:CrearSeccion(""):Input(c) end
-                TabObj.CreateDropdown    = function(_, c, f) if f then c.Flag = f end return TabObj:CrearSeccion(""):Dropdown(c) end
-                TabObj.CreateColorPicker = function(_, c, f) if f then c.Flag = f end return TabObj:CrearSeccion(""):ColorPicker(c, f) end
-                TabObj.CreateBind        = function(_, c, f) if f then c.Flag = f end return TabObj:CrearSeccion(""):Keybind(c) end
-                TabObj.CreateKeybind     = TabObj.CreateBind
-                TabObj.CreateLabel       = function(_, c) return TabObj:CrearSeccion(""):Label(c) end
-                TabObj.CreateParagraph   = function(_, c) return TabObj:CrearSeccion(""):Parrafo(c) end
-                TabObj.CreateDivider     = function(_) return TabObj:CrearSeccion(""):Divider() end
-                TabObj.CreateSection     = function(_, n) return TabObj:CrearSeccion(n) end
+                local function getTargetSec(selfTab)
+                    if not currentSection then
+                        currentSection = selfTab:CrearSeccion("")
+                    end
+                    return currentSection
+                end
+
+                TabObj.CreateButton = function(selfTab, c)
+                    return getTargetSec(selfTab):Button(c)
+                end
+
+                TabObj.CreateToggle = function(selfTab, c, f)
+                    if f then c.Flag = f end
+                    local tog = getTargetSec(selfTab):Toggle(c)
+                    if tog then
+                        tog.SetState = tog.Set
+                        tog.SetValue = tog.Set
+                    end
+                    return tog
+                end
+
+                TabObj.CreateSlider = function(selfTab, c, f)
+                    if f then c.Flag = f end
+                    local sld = getTargetSec(selfTab):Slider(c)
+                    if sld then
+                        sld.SetValue = sld.Set
+                    end
+                    return sld
+                end
+
+                TabObj.CreateInput = function(selfTab, c, f)
+                    if f then c.Flag = f end
+                    return getTargetSec(selfTab):Input(c)
+                end
+
+                TabObj.CreateDropdown = function(selfTab, c, f)
+                    if f then c.Flag = f end
+                    local drop = getTargetSec(selfTab):Dropdown(c)
+                    if drop then
+                        drop.SetOptions = drop.Refresh or drop.ActualizarOpciones
+                        drop.SetOption  = drop.Set
+                    end
+                    return drop
+                end
+
+                TabObj.CreateColorPicker = function(selfTab, c, f)
+                    if f then c.Flag = f end
+                    return getTargetSec(selfTab):ColorPicker(c, f)
+                end
+
+                TabObj.CreateBind = function(selfTab, c, f)
+                    if f then c.Flag = f end
+                    return getTargetSec(selfTab):Keybind(c)
+                end
+                TabObj.CreateKeybind = TabObj.CreateBind
+
+                TabObj.CreateLabel = function(selfTab, c)
+                    return getTargetSec(selfTab):Label(c)
+                end
+
+                TabObj.CreateParagraph = function(selfTab, c)
+                    return getTargetSec(selfTab):Paragraph(c)
+                end
+
+                TabObj.CreateDivider = function(selfTab)
+                    return getTargetSec(selfTab):Divider()
+                end
 
                 return TabObj
             end
+            CatObj.CrearTab = CatObj.CreateTab
 
             return CatObj
         end
+        Window.CrearCategoria = Window.CreateCategory
 
-        return Ventana
+        return Window
     end
+    LouisHub.CrearVentana = LouisHub.CreateWindow
 end
 
-hookCrearSeccionParaControles()
+hookCreateSectionForControls()
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 24: LUNA UI 1:1 CONFIG SECTION & THEME SECTION
+--  SECTION 24: 1:1 LUNA CONFIG & CUSTOM THEME SECTION BUILDER
 -- ══════════════════════════════════════════════════════════════
 local ClassParser = {
     ["Toggle"] = {
-        Save = function(Flag, data)
+        Save = function(flag, data)
             return {
                 type = "Toggle",
-                flag = Flag,
+                flag = flag,
                 state = data.CurrentValue or false
             }
         end,
-        Load = function(Flag, data)
-            if AlanLuna.Options[Flag] then
-                AlanLuna.Options[Flag]:Set(data.state)
+        Load = function(flag, data)
+            if LouisHub.Options[flag] then
+                LouisHub.Options[flag]:Set(data.state)
             end
         end
     },
     ["Slider"] = {
-        Save = function(Flag, data)
+        Save = function(flag, data)
             return {
                 type = "Slider",
-                flag = Flag,
+                flag = flag,
                 value = (data.CurrentValue and tostring(data.CurrentValue)),
             }
         end,
-        Load = function(Flag, data)
-            if AlanLuna.Options[Flag] and data.value then
-                AlanLuna.Options[Flag]:Set(tonumber(data.value) or data.value)
+        Load = function(flag, data)
+            if LouisHub.Options[flag] and data.value then
+                LouisHub.Options[flag]:Set(tonumber(data.value) or data.value)
             end
         end
     },
     ["Input"] = {
-        Save = function(Flag, data)
+        Save = function(flag, data)
             return {
                 type = "Input",
-                flag = Flag,
+                flag = flag,
                 text = data.CurrentValue
             }
         end,
-        Load = function(Flag, data)
-            if AlanLuna.Options[Flag] and data.text and type(data.text) == "string" then
-                AlanLuna.Options[Flag]:Set(data.text)
+        Load = function(flag, data)
+            if LouisHub.Options[flag] and data.text and type(data.text) == "string" then
+                LouisHub.Options[flag]:Set(data.text)
             end
         end
     },
     ["Dropdown"] = {
-        Save = function(Flag, data)
+        Save = function(flag, data)
             return {
                 type = "Dropdown",
-                flag = Flag,
+                flag = flag,
                 value = data.CurrentOption
             }
         end,
-        Load = function(Flag, data)
-            if AlanLuna.Options[Flag] and data.value then
-                AlanLuna.Options[Flag]:Set(data.value)
+        Load = function(flag, data)
+            if LouisHub.Options[flag] and data.value then
+                LouisHub.Options[flag]:Set(data.value)
             end
         end
     },
     ["Colorpicker"] = {
-        Save = function(Flag, data)
+        Save = function(flag, data)
             local function Color3ToHex(color)
                 return string.format("#%02X%02X%02X", math.floor(color.R * 255), math.floor(color.G * 255), math.floor(color.B * 255))
             end
 
             return {
                 type = "Colorpicker",
-                flag = Flag,
+                flag = flag,
                 color = Color3ToHex(data.Color) or nil,
                 alpha = data.Alpha
             }
         end,
-        Load = function(Flag, data)
+        Load = function(flag, data)
             local function HexToColor3(hex)
                 local r = tonumber(hex:sub(2, 3), 16) / 255
                 local g = tonumber(hex:sub(4, 5), 16) / 255
@@ -9009,30 +9359,30 @@ local ClassParser = {
                 return Color3.new(r, g, b)
             end
 
-            if AlanLuna.Options[Flag] and data.color then
-                AlanLuna.Options[Flag]:Set(HexToColor3(data.color))
+            if LouisHub.Options[flag] and data.color then
+                LouisHub.Options[flag]:Set(HexToColor3(data.color))
             end
         end
     }
 }
 
-local function registrarMetodosLunaAvanzados(TabObj)
+local function registerAdvancedLunaMethods(TabObj)
     function TabObj:BuildConfigSection()
-        if not fsDisponible() then
-            local secErr = self:CrearSeccion("Configuraciones", { Columnas = 1 })
-            secErr:Label({ Texto = "Config system unavailable (No filesystem support)." })
+        if not isFilesystemAvailable() then
+            local secErr = self:CreateSection("Configurations", { Columns = 1 })
+            secErr:Label({ Text = "Config system unavailable (No filesystem support)." })
             return "Config system unavailable."
         end
 
         local inputPath = nil
         local selectedConfig = nil
 
-        local secCreator = self:CrearSeccion("Config Creator", { Columnas = 1 })
+        local secCreator = self:CreateSection("Config Creator", { Columns = 1 })
 
         secCreator:Input({
-            Texto = "Config Name",
+            Text = "Config Name",
             Placeholder = "Name",
-            Defecto = "",
+            Default = "",
             Callback = function(input)
                 inputPath = input
             end,
@@ -9040,12 +9390,12 @@ local function registrarMetodosLunaAvanzados(TabObj)
 
         local configSelection
 
-        secCreator:Boton({
-            Texto = "Create Config",
+        secCreator:Button({
+            Text = "Create Config",
             Tooltip = "Create a config with all of your current settings.",
             Callback = function()
                 if not inputPath or string.gsub(inputPath, " ", "") == "" then
-                    AlanLuna:Notificar({
+                    LouisHub:Notify({
                         Title = "Interface",
                         Icon = "warning",
                         ImageSource = "Material",
@@ -9054,16 +9404,16 @@ local function registrarMetodosLunaAvanzados(TabObj)
                     return
                 end
 
-                local success, returned = AlanLuna.SaveManager:Guardar(inputPath)
+                local success, returned = LouisHub.SaveManager:Save(inputPath)
                 if not success then
-                    AlanLuna:Notificar({
+                    LouisHub:Notify({
                         Title = "Interface",
                         Icon = "warning",
                         ImageSource = "Material",
-                        Content = "Unable to save config, return error: " .. tostring(returned)
+                        Content = "Unable to save config, error: " .. tostring(returned)
                     })
                 else
-                    AlanLuna:Notificar({
+                    LouisHub:Notify({
                         Title = "Interface",
                         Icon = "info",
                         ImageSource = "Material",
@@ -9071,42 +9421,43 @@ local function registrarMetodosLunaAvanzados(TabObj)
                     })
                 end
 
-                if configSelection and configSelection.ActualizarOpciones then
-                    configSelection.ActualizarOpciones(AlanLuna.SaveManager:Listar())
+                if configSelection and (configSelection.Refresh or configSelection.SetOptions) then
+                    local refreshFn = configSelection.Refresh or configSelection.SetOptions
+                    refreshFn(LouisHub.SaveManager:List())
                 end
             end
         })
 
-        local secSettings = self:CrearSeccion("Config Load/Settings", { Columnas = 1 })
+        local secSettings = self:CreateSection("Config Load/Settings", { Columns = 1 })
 
         configSelection = secSettings:Dropdown({
-            Texto = "Select Config",
-            Tooltip = "Select a config to load your settings on.",
-            Opciones = AlanLuna.SaveManager:Listar(),
-            Defecto = {},
-            Multi = false,
-            Callback = function(Value)
-                selectedConfig = Value
+            Text = "Select Config",
+            Tooltip = "Select a config to load your settings from.",
+            Options = LouisHub.SaveManager:List(),
+            Default = {},
+            MultipleOptions = false,
+            Callback = function(val)
+                selectedConfig = val
             end,
         })
 
-        secSettings:Boton({
-            Texto = "Load Config",
+        secSettings:Button({
+            Text = "Load Config",
             Tooltip = "Load your saved config settings.",
             Callback = function()
                 if not selectedConfig then return end
-                local success, returned = AlanLuna.SaveManager:Cargar(selectedConfig)
+                local success, returned = LouisHub.SaveManager:Load(selectedConfig)
                 if not success then
-                    AlanLuna:Notificar({
+                    LouisHub:Notify({
                         Title = "Interface",
                         Icon = "warning",
                         ImageSource = "Material",
-                        Content = "Unable to load config, return error: " .. tostring(returned)
+                        Content = "Unable to load config, error: " .. tostring(returned)
                     })
                     return
                 end
 
-                AlanLuna:Notificar({
+                LouisHub:Notify({
                     Title = "Interface",
                     Icon = "info",
                     ImageSource = "Material",
@@ -9115,23 +9466,23 @@ local function registrarMetodosLunaAvanzados(TabObj)
             end
         })
 
-        secSettings:Boton({
-            Texto = "Overwrite Config",
+        secSettings:Button({
+            Text = "Overwrite Config",
             Tooltip = "Overwrite your current config settings.",
             Callback = function()
                 if not selectedConfig then return end
-                local success, returned = AlanLuna.SaveManager:Guardar(selectedConfig)
+                local success, returned = LouisHub.SaveManager:Save(selectedConfig)
                 if not success then
-                    AlanLuna:Notificar({
+                    LouisHub:Notify({
                         Title = "Interface",
                         Icon = "warning",
                         ImageSource = "Material",
-                        Content = "Unable to overwrite config, return error: " .. tostring(returned)
+                        Content = "Unable to overwrite config, error: " .. tostring(returned)
                     })
                     return
                 end
 
-                AlanLuna:Notificar({
+                LouisHub:Notify({
                     Title = "Interface",
                     Icon = "info",
                     ImageSource = "Material",
@@ -9140,31 +9491,32 @@ local function registrarMetodosLunaAvanzados(TabObj)
             end
         })
 
-        secSettings:Boton({
-            Texto = "Refresh Config List",
+        secSettings:Button({
+            Text = "Refresh Config List",
             Tooltip = "Refresh the current config list.",
             Callback = function()
-                if configSelection and configSelection.ActualizarOpciones then
-                    configSelection.ActualizarOpciones(AlanLuna.SaveManager:Listar())
+                if configSelection and (configSelection.Refresh or configSelection.SetOptions) then
+                    local refreshFn = configSelection.Refresh or configSelection.SetOptions
+                    refreshFn(LouisHub.SaveManager:List())
                 end
             end,
         })
 
-        local loadlabel
-        secSettings:Boton({
-            Texto = "Set as autoload",
-            Tooltip = "Set a config to auto load setting in your next session.",
+        local loadLabel
+        secSettings:Button({
+            Text = "Set as autoload",
+            Tooltip = "Set a config to auto load in your next session.",
             Callback = function()
-                if not selectedConfig or not fsDisponible() then return end
+                if not selectedConfig or not isFilesystemAvailable() then return end
                 local name = selectedConfig
                 pcall(function()
-                    writefile(AlanLuna.Folder .. "/autoload.txt", name)
+                    writefile(LouisHub.Folder .. "/autoload.txt", name)
                 end)
-                if loadlabel then
-                    loadlabel:Set("Current autoload config: " .. name)
+                if loadLabel then
+                    loadLabel:Set("Current autoload config: " .. name)
                 end
 
-                AlanLuna:Notificar({
+                LouisHub:Notify({
                     Title = "Interface",
                     Icon = "info",
                     ImageSource = "Material",
@@ -9173,54 +9525,54 @@ local function registrarMetodosLunaAvanzados(TabObj)
             end,
         })
 
-        loadlabel = secSettings:Parrafo({
-            Titulo = "Current Auto Load",
-            Contenido = "None"
+        loadLabel = secSettings:Paragraph({
+            Title = "Current Auto Load",
+            Content = "None"
         })
 
-        secSettings:Boton({
-            Texto = "Delete Autoload",
-            Tooltip = "Delete The Autoload File",
+        secSettings:Button({
+            Text = "Delete Autoload",
+            Tooltip = "Delete the autoload config pointer file.",
             Callback = function()
-                if fsDisponible() and type(isfile) == "function" and isfile(AlanLuna.Folder .. "/autoload.txt") then
-                    pcall(delfile, AlanLuna.Folder .. "/autoload.txt")
+                if isFilesystemAvailable() and type(isfile) == "function" and isfile(LouisHub.Folder .. "/autoload.txt") then
+                    pcall(delfile, LouisHub.Folder .. "/autoload.txt")
                 end
-                if loadlabel then
-                    loadlabel:Set("None")
+                if loadLabel then
+                    loadLabel:Set("None")
                 end
 
-                AlanLuna:Notificar({
+                LouisHub:Notify({
                     Title = "Interface",
                     Icon = "info",
                     ImageSource = "Material",
-                    Content = "Deleted Autoload",
+                    Content = "Deleted Autoload file.",
                 })
             end,
         })
 
-        if fsDisponible() and type(isfile) == "function" and isfile(AlanLuna.Folder .. "/autoload.txt") then
-            local okRead, name = pcall(readfile, AlanLuna.Folder .. "/autoload.txt")
-            if okRead and name and loadlabel then
-                loadlabel:Set("Current autoload config: " .. name)
+        if isFilesystemAvailable() and type(isfile) == "function" and isfile(LouisHub.Folder .. "/autoload.txt") then
+            local okRead, name = pcall(readfile, LouisHub.Folder .. "/autoload.txt")
+            if okRead and name and loadLabel then
+                loadLabel:Set("Current autoload config: " .. name)
             end
         end
     end
 
     function TabObj:BuildThemeSection()
-        local secEditor = self:CrearSeccion("Custom Editor", { Columnas = 1 })
+        local secEditor = self:CreateSection("Custom Editor", { Columns = 1 })
 
         local c1cp = secEditor:ColorPicker({
-            Texto = "Color 1",
+            Text = "Color 1",
             Color = Color3.fromRGB(117, 164, 206),
         }, "LunaInterfaceSuitePrebuiltCPC1")
 
         local c2cp = secEditor:ColorPicker({
-            Texto = "Color 2",
+            Text = "Color 2",
             Color = Color3.fromRGB(123, 201, 201),
         }, "LunaInterfaceSuitePrebuiltCPC2")
 
         local c3cp = secEditor:ColorPicker({
-            Texto = "Color 3",
+            Text = "Color 3",
             Color = Color3.fromRGB(224, 138, 184),
         }, "LunaInterfaceSuitePrebuiltCPC3")
 
@@ -9229,16 +9581,16 @@ local function registrarMetodosLunaAvanzados(TabObj)
             local c2 = (c2cp and c2cp:Get()) or Color3.fromRGB(255, 255, 255)
             local c3 = (c3cp and c3cp:Get()) or Color3.fromRGB(255, 255, 255)
 
-            AlanLuna.Theme.Accent      = c1
-            AlanLuna.Theme.AccentLight = c2
-            AlanLuna.Theme.Highlight   = c3
+            LouisHub.Theme.Accent      = c1
+            LouisHub.Theme.AccentLight = c2
+            LouisHub.Theme.Highlight   = c3
 
-            AlanLuna.ThemeGradient = ColorSequence.new{
+            LouisHub.ThemeGradient = ColorSequence.new{
                 ColorSequenceKeypoint.new(0.00, c1),
                 ColorSequenceKeypoint.new(0.50, c2),
                 ColorSequenceKeypoint.new(1.00, c3)
             }
-            AlanLuna.ThemeManager:AplicarTema(AlanLuna.Theme)
+            LouisHub.ThemeManager:ApplyTheme(LouisHub.Theme)
         end
 
         task.spawn(function()
@@ -9248,40 +9600,41 @@ local function registrarMetodosLunaAvanzados(TabObj)
             if c3cp then c3cp.Callback = updateGradient end
         end)
 
-        local secPresets = self:CrearSeccion("Preset Gradients", { Columnas = 2 })
+        local secPresets = self:CreateSection("Preset Gradients", { Columns = 2 })
 
-        for nombrePreset, colores in pairs(PresetGradients) do
-            secPresets:Boton({
-                Texto = tostring(nombrePreset),
+        for presetName, colors in pairs(PresetGradients) do
+            secPresets:Button({
+                Text = tostring(presetName),
                 Callback = function()
-                    if c1cp then c1cp:Set(colores[1], false) end
-                    if c2cp then c2cp:Set(colores[2], false) end
-                    if c3cp then c3cp:Set(colores[3], false) end
+                    if c1cp then c1cp:Set(colors[1], false) end
+                    if c2cp then c2cp:Set(colors[2], false) end
+                    if c3cp then c3cp:Set(colors[3], false) end
                     updateGradient()
                 end,
             })
         end
     end
 end
+local registrarMetodosLunaAvanzados = registerAdvancedLunaMethods
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 25: LUNA HOME TAB PORT (DASHBOARD & STATS)
+--  SECTION 25: LUNA HOME TAB PORT (DASHBOARD & STATS)
 -- ══════════════════════════════════════════════════════════════
-local function crearHomeTabLuna(Ventana, HomeTabSettings)
+local function createLunaHomeTab(Window, HomeTabSettings)
     HomeTabSettings = Kwargify({
         Icon = 1,
         SupportedExecutors = {"Vega X", "Delta", "Nihon", "Xeno", "Synapse X", "Krnl", "Fluxus"},
-        DiscordInvite = "xhxMeyzana"
+        DiscordInvite = "nebula"
     }, HomeTabSettings or {})
 
-    local catGeneral = Ventana.Categorias["General"] or Ventana:CrearCategoria("General")
-    local homeTab = catGeneral:CrearTab({
-        Nombre = "Home",
-        Icono = (HomeTabSettings.Icon == 2) and "dashboard" or "home",
+    local catGeneral = Window.Categories["General"] or Window:CreateCategory("General")
+    local homeTab = catGeneral:CreateTab({
+        Name = "Home",
+        Icon = (HomeTabSettings.Icon == 2) and "dashboard" or "home",
         ShowTitle = true
     })
 
-    local secProfile = homeTab:CrearSeccion("Player Profile", { Columnas = 2 })
+    local secProfile = homeTab:CreateSection("Player Profile", { Columns = 2 })
 
     local headshot = ""
     if LocalPlayer then
@@ -9290,45 +9643,45 @@ local function crearHomeTabLuna(Ventana, HomeTabSettings)
         end)
     end
 
-    secProfile:Imagen({
+    secProfile:Image({
         Url = headshot,
-        Alto = 80,
-        Columna = 1
+        Height = 80,
+        Column = 1
     })
 
-    secProfile:Label({ Texto = "Display Name", Valor = LocalPlayer and LocalPlayer.DisplayName or "Player", Columna = 2 })
-    secProfile:Label({ Texto = "Username", Valor = "@" .. (LocalPlayer and LocalPlayer.Name or "Player"), Columna = 2 })
-    secProfile:Label({ Texto = "Account ID", Valor = tostring(LocalPlayer and LocalPlayer.UserId or 0), Columna = 2 })
+    secProfile:Label({ Text = "Display Name", Value = LocalPlayer and LocalPlayer.DisplayName or "Player", Column = 2 })
+    secProfile:Label({ Text = "Username", Value = "@" .. (LocalPlayer and LocalPlayer.Name or "Player"), Column = 2 })
+    secProfile:Label({ Text = "Account ID", Value = tostring(LocalPlayer and LocalPlayer.UserId or 0), Column = 2 })
 
-    local secClient = homeTab:CrearSeccion("Client & Server Status", { Columnas = 2 })
+    local secClient = homeTab:CreateSection("Client & Server Status", { Columns = 2 })
 
-    local execName = (isStudio and "Roblox Studio (Debugging)") or detectarEjecutor()
-    secClient:Label({ Texto = "Executor", Valor = execName, Columna = 1 })
+    local execName = (isStudio and "Roblox Studio (Debugging)") or detectExecutor()
+    secClient:Label({ Text = "Executor", Value = execName, Column = 1 })
 
     local isSupported = false
     for _, ex in pairs(HomeTabSettings.SupportedExecutors) do
         if ex == execName or isStudio then isSupported = true; break end
     end
     secClient:Label({
-        Texto = "Compatibility",
-        Valor = isSupported and "🟢 Supported" or "🟡 Untested",
-        Columna = 1
+        Text = "Compatibility",
+        Value = isSupported and "🟢 Supported" or "🟡 Untested",
+        Column = 1
     })
 
-    local pingLbl = secClient:Label({ Texto = "Latency", Valor = "0 ms", Columna = 1 })
-    local timeLbl = secClient:Label({ Texto = "Server Time", Valor = "00:00:00", Columna = 2 })
-    local playersLbl = secClient:Label({ Texto = "Players", Valor = "-- / --", Columna = 2 })
+    local pingLbl = secClient:Label({ Text = "Latency", Value = "0 ms", Column = 1 })
+    local timeLbl = secClient:Label({ Text = "Server Time", Value = "00:00:00", Column = 2 })
+    local playersLbl = secClient:Label({ Text = "Players", Value = "-- / --", Column = 2 })
 
     local regionStr = "Global"
     if LocalPlayer then
         pcall(function() regionStr = Localization:GetCountryRegionForPlayerAsync(LocalPlayer) end)
     end
-    secClient:Label({ Texto = "Region", Valor = regionStr, Columna = 2 })
+    secClient:Label({ Text = "Region", Value = regionStr, Column = 2 })
 
-    local secDiscord = homeTab:CrearSeccion("Discord Community", { Columnas = 1 })
-    secDiscord:Boton({
-        Texto = "Join Official Discord Server",
-        Icono = "chat",
+    local secDiscord = homeTab:CreateSection("Discord Community", { Columns = 1 })
+    secDiscord:Button({
+        Text = "Join Official Discord Server",
+        Icon = "chat",
         Callback = function()
             local link = "https://discord.gg/" .. tostring(HomeTabSettings.DiscordInvite)
             if setclipboard then setclipboard(link) end
@@ -9349,7 +9702,7 @@ local function crearHomeTabLuna(Ventana, HomeTabSettings)
                     })
                 end)
             end
-            AlanLuna:Notificar({
+            LouisHub:Notify({
                 Title = "Discord Invite",
                 Content = "Link copied to clipboard: " .. link,
                 Duration = 3,
@@ -9376,9 +9729,9 @@ local function crearHomeTabLuna(Ventana, HomeTabSettings)
         return 50
     end
 
-    AlanLuna:RegistrarHilo(task.spawn(function()
-        while homeTab and homeTab.Pagina and homeTab.Pagina.Parent do
-            if Ventana._main.Visible and homeTab.Pagina.Visible then
+    LouisHub:RegisterThread(task.spawn(function()
+        while homeTab and homeTab.Page and homeTab.Page.Parent do
+            if Window._main.Visible and homeTab.Page.Visible then
                 local ms = isStudio and (LocalPlayer and math.round((LocalPlayer:GetNetworkPing() * 2) / 0.01) or 0) or math.floor(getPing())
                 pingLbl:Set(tostring(ms) .. " ms")
                 timeLbl:Set(convertToHMS(time()))
@@ -9388,270 +9741,280 @@ local function crearHomeTabLuna(Ventana, HomeTabSettings)
         end
     end))
 
-    homeTab:Seleccionar()
+    homeTab:Select()
     return homeTab
 end
+local crearHomeTabLuna = createLunaHomeTab
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 26: PESTANA PREINSTALADA ALANUI (SISTEMA & AJUSTES)
+--  SECTION 26: PREINSTALLED SYSTEM & HARDWARE DIAGNOSTICS TAB
 -- ══════════════════════════════════════════════════════════════
-local function agregarPestanaPreinstaladaCompleta(Ventana, cfg)
+local function addCompletePreinstalledTab(Window, cfg)
     cfg = cfg or {}
 
-    local catSystem = Ventana:CrearCategoria({ Nombre = "System", Icono = "settings" })
-    local sysTab = catSystem:CrearTab({
-        Nombre = cfg.Nombre or "Preinstalada",
-        Icono = "settings",
+    local catSystem = Window:CreateCategory({ Name = "System", Icon = "settings" })
+    local sysTab = catSystem:CreateTab({
+        Name = cfg.Name or cfg.Nombre or "Preinstalled",
+        Icon = "settings",
         ShowTitle = true
     })
 
-    local secInfo = sysTab:CrearSeccion("Información", { Columnas = 2 })
-    secInfo:Label({ Texto = "Ejecutor", Valor = detectarEjecutor(), Columna = 1 })
-    secInfo:Label({ Texto = "Versión AlanLuna", Valor = AlanLuna.Version, Columna = 1 })
-    secInfo:Label({ Texto = "Desarrollo", Valor = "AlanbeikersFF & Nebula", Columna = 1 })
+    local secInfo = sysTab:CreateSection("Information", { Columns = 2 })
+    secInfo:Label({ Text = "Executor", Value = detectExecutor(), Column = 1 })
+    secInfo:Label({ Text = "LouisHub Version", Value = LouisHub.Version, Column = 1 })
+    secInfo:Label({ Text = "Engineered By", Value = "LouisHub", Column = 1 })
 
-    local lblFps = secInfo:Label({ Texto = "FPS", Valor = "–", Columna = 2 })
-    local lblFrameTime = secInfo:Label({ Texto = "Frame Time", Valor = "–", Columna = 2 })
-    local lblEstado = secInfo:Label({ Texto = "Estado", Valor = "–", Columna = 2 })
-    local lblSalud = secInfo:Label({
-        Texto = "Salud Interfaz",
-        Valor = "🟢 Óptimo",
-        Tooltip = "Evalúa memoria, crecimiento de instancias y tasa de refresco.",
-        Columna = 2
+    local lblFps = secInfo:Label({ Text = "FPS", Value = "–", Column = 2 })
+    local lblFrameTime = secInfo:Label({ Text = "Frame Time", Value = "–", Column = 2 })
+    local lblState = secInfo:Label({ Text = "State", Value = "–", Column = 2 })
+    local lblHealth = secInfo:Label({
+        Text    = "Interface Health",
+        Value   = "🟢 Optimal",
+        Tooltip = "Evaluates memory footprint, instance lifecycle, and framerate stability.",
+        Column  = 2
     })
 
     local statsOk, statsService = pcall(function() return game:GetService("Stats") end)
-    local lblMemoria = nil
+    local lblMemory = nil
     if statsOk and statsService then
-        lblMemoria = secInfo:Label({ Texto = "Memoria", Valor = "–", Columna = 1 })
+        lblMemory = secInfo:Label({ Text = "Memory Usage", Value = "–", Column = 1 })
     end
 
-    local ultimo, frames = os.clock(), 0
-    AlanLuna:RegistrarConexion(RunService.Heartbeat:Connect(function()
+    local lastTick, frames = os.clock(), 0
+    LouisHub:RegisterConnection(RunService.Heartbeat:Connect(function()
         frames = frames + 1
-        local ahora = os.clock()
-        if ahora - ultimo >= 1 then
-            local intervalo = ahora - ultimo
-            local fps = math.round(frames / intervalo)
-            local ft = math.round((intervalo / frames) * 1000 * 10) / 10
+        local now = os.clock()
+        if now - lastTick >= 1 then
+            local delta = now - lastTick
+            local fps = math.round(frames / delta)
+            local ft = math.round((delta / frames) * 1000 * 10) / 10
             lblFps:Set(fps .. " FPS")
             lblFrameTime:Set(ft .. " ms")
 
-            if fps >= 50 then lblEstado:Set("🟢 Excelente")
-            elseif fps >= 30 then lblEstado:Set("🟡 Normal")
-            else lblEstado:Set("🔴 Degradado") end
+            if fps >= 50 then lblState:Set("🟢 Excellent")
+            elseif fps >= 30 then lblState:Set("🟡 Normal")
+            else lblState:Set("🔴 Degraded") end
 
-            if lblMemoria then
+            if lblMemory then
                 local okMem, m = pcall(function() return statsService:GetTotalMemoryUsageMb() end)
-                if okMem and m then lblMemoria:Set("~" .. math.round(m) .. " MB") end
+                if okMem and m then lblMemory:Set("~" .. math.round(m) .. " MB") end
             end
 
-            frames, ultimo = 0, ahora
+            frames, lastTick = 0, now
         end
     end))
 
-    local secDiag = sysTab:CrearSeccion("Diagnóstico de Hardware", { Columnas = 2 })
-    local C = AlanLuna.Capacidades
-    secDiag:Label({ Texto = "Dispositivo", Valor = C.Tipo .. " (" .. C:NombrePlataforma() .. ")", Columna = 1 })
-    secDiag:Label({ Texto = "Pantalla", Valor = math.floor(C.ViewportSize.X) .. "x" .. math.floor(C.ViewportSize.Y), Columna = 1 })
+    local secDiag = sysTab:CreateSection("Hardware Diagnostics", { Columns = 2 })
+    local C = LouisHub.Capabilities
+    secDiag:Label({ Text = "Device Type", Value = C.Type .. " (" .. C:PlatformName() .. ")", Column = 1 })
+    secDiag:Label({ Text = "Screen Resolution", Value = math.floor(C.ViewportSize.X) .. "x" .. math.floor(C.ViewportSize.Y), Column = 1 })
 
-    local fSoportadas, fTotales = 0, 0
-    for _, f in ipairs(AlanLuna.Features) do
-        fTotales = fTotales + 1
-        if AlanLuna:VerificarSoporte(f.nombre).ok then fSoportadas = fSoportadas + 1 end
+    local fSupported, fTotal = 0, 0
+    for _, f in ipairs(LouisHub.Features) do
+        fTotal = fTotal + 1
+        if LouisHub:VerifySupport(f.name).ok then fSupported = fSupported + 1 end
     end
-    secDiag:Label({ Texto = "Capacidades", Valor = fSoportadas .. " / " .. fTotales, Columna = 2 })
+    secDiag:Label({ Text = "Supported Features", Value = fSupported .. " / " .. fTotal, Column = 2 })
 
     secDiag:Dropdown({
-        Texto = "Forzar Tipo",
-        Opciones = {"Auto", "PC", "Movil", "Tablet", "Consola"},
-        Defecto = _G.AlanLuna_TipoForzado or "Auto",
-        Columna = 2,
+        Text = "Force Device Emulation",
+        Options = {"Auto", "PC", "Mobile", "Tablet", "Console"},
+        Default = _G.LouisHub_ForcedType or "Auto",
+        Column = 2,
         Callback = function(v)
-            if v == "Auto" then AlanLuna:LiberarForzado() else AlanLuna:ForzarTipo(v) end
+            if v == "Auto" then LouisHub:ReleaseForcedType() else LouisHub:ForceType(v) end
         end
     })
 
-    local secAp = sysTab:CrearSeccion("Apariencia & Dimensiones", { Columnas = 2 })
-    local nombresTemas = {}
-    for n in pairs(AlanLuna.ThemeManager.Temas) do table.insert(nombresTemas, n) end
-    table.sort(nombresTemas)
+    local secAp = sysTab:CreateSection("Appearance & Dimensions", { Columns = 2 })
+    local themeNames = {}
+    for n in pairs(LouisHub.ThemeManager.Themes) do table.insert(themeNames, n) end
+    table.sort(themeNames)
 
     for n in pairs(PresetGradients) do
-        table.insert(nombresTemas, "Gradient: " .. n)
+        table.insert(themeNames, "Gradient: " .. n)
     end
 
     secAp:Dropdown({
-        Texto = "Tema de Interfaz",
-        Flag = "sys_tema",
-        Opciones = nombresTemas,
-        Defecto = Themes.Predeterminado,
-        Columna = 1,
+        Text = "Theme Palette",
+        Flag = "sys_theme",
+        Options = themeNames,
+        Default = Themes.Default,
+        Column = 1,
         Callback = function(v)
-            AlanLuna.ThemeManager:AplicarTema(v)
-            AlanLuna:Notificar({ Title = "Apariencia", Content = "Tema " .. v .. " aplicado.", Duration = 2 })
-            AlanLuna.SaveManager:GuardarUI("preinstalada")
+            LouisHub.ThemeManager:ApplyTheme(v)
+            LouisHub:Notify({ Title = "Appearance", Content = "Theme " .. v .. " applied.", Duration = 2 })
+            LouisHub.SaveManager:SaveUI("preinstalled")
         end
     })
 
     secAp:Slider({
-        Texto = "Escala General",
-        Flag = "sys_escala",
-        Min = 70, Max = 130, Incremento = 5, Sufijo = "%", Defecto = 100,
-        Columna = 1,
+        Text = "Interface Scale",
+        Flag = "sys_scale",
+        Min = 70, Max = 130, Increment = 5, Suffix = "%", Default = 100,
+        Column = 1,
         Callback = function(v)
-            if Ventana._main and Ventana._main:FindFirstChildOfClass("UIScale") then
-                Ventana._main:FindFirstChildOfClass("UIScale").Scale = (v / 100)
+            if Window._main and Window._main:FindFirstChildOfClass("UIScale") then
+                Window._main:FindFirstChildOfClass("UIScale").Scale = (v / 100)
             end
-            AlanLuna.SaveManager:GuardarUI("preinstalada")
+            LouisHub.SaveManager:SaveUI("preinstalled")
         end
     })
 
     secAp:Slider({
-        Texto = "Ancho Ventana",
-        Flag = "sys_ancho",
-        Min = 70, Max = 130, Incremento = 5, Sufijo = "%", Defecto = 100,
-        Columna = 2,
+        Text = "Window Width",
+        Flag = "sys_width",
+        Min = 70, Max = 130, Increment = 5, Suffix = "%", Default = 100,
+        Column = 2,
         Callback = function(v)
             local factor = v / 100
-            local nuevoAncho = 620 * factor
-            Utils.Tween(Ventana._main, {Size = UDim2.new(0, nuevoAncho, 0, Ventana._main.Size.Y.Offset)}, 0.2)
-            AlanLuna.SaveManager:GuardarUI("preinstalada")
+            local newWidth = 620 * factor
+            Utils.Tween(Window._main, {Size = UDim2.new(0, newWidth, 0, Window._main.Size.Y.Offset)}, 0.2)
+            LouisHub.SaveManager:SaveUI("preinstalled")
         end
     })
 
     secAp:Slider({
-        Texto = "Alto Ventana",
-        Flag = "sys_alto",
-        Min = 70, Max = 130, Incremento = 5, Sufijo = "%", Defecto = 100,
-        Columna = 2,
+        Text = "Window Height",
+        Flag = "sys_height",
+        Min = 70, Max = 130, Increment = 5, Suffix = "%", Default = 100,
+        Column = 2,
         Callback = function(v)
             local factor = v / 100
-            local nuevoAlto = 380 * factor
-            Utils.Tween(Ventana._main, {Size = UDim2.new(0, Ventana._main.Size.X.Offset, 0, nuevoAlto)}, 0.2)
-            AlanLuna.SaveManager:GuardarUI("preinstalada")
+            local newHeight = 380 * factor
+            Utils.Tween(Window._main, {Size = UDim2.new(0, Window._main.Size.X.Offset, 0, newHeight)}, 0.2)
+            LouisHub.SaveManager:SaveUI("preinstalled")
         end
     })
 
-    AlanLuna:MarcarComoUI({"sys_tema", "sys_escala", "sys_ancho", "sys_alto"})
+    LouisHub:MarkAsUI({"sys_theme", "sys_scale", "sys_width", "sys_height", "sys_tema", "sys_escala", "sys_ancho", "sys_alto"})
 
-    local secProfiles = sysTab:CrearSeccion("Perfiles & Guardado", { Columnas = 2 })
-    local perfilSel = nil
+    local secProfiles = sysTab:CreateSection("Profiles & Storage", { Columns = 2 })
+    local selectedProfile = nil
 
     local dropP = secProfiles:Dropdown({
-        Texto = "Perfil",
-        Opciones = AlanLuna.SaveManager:Listar(),
-        Columna = 1,
-        Callback = function(v) perfilSel = v end
+        Text = "Profile",
+        Options = LouisHub.SaveManager:List(),
+        Column = 1,
+        Callback = function(v) selectedProfile = v end
     })
 
-    secProfiles:Boton({
-        Texto = "Cargar Seleccionado",
-        Columna = 1,
+    secProfiles:Button({
+        Text = "Load Selected Profile",
+        Column = 1,
         Callback = function()
-            if perfilSel then AlanLuna.SaveManager:Cargar(perfilSel) end
+            if selectedProfile then LouisHub.SaveManager:Load(selectedProfile) end
         end
     })
 
-    local nuevoNombre = ""
+    local newProfileName = ""
     secProfiles:Input({
-        Texto = "Nuevo Perfil",
-        Placeholder = "Nombre...",
-        Columna = 2,
-        Callback = function(v) nuevoNombre = v end
+        Text = "New Profile Name",
+        Placeholder = "Name...",
+        Column = 2,
+        Callback = function(v) newProfileName = v end
     })
 
-    secProfiles:Boton({
-        Texto = "Guardar Nuevo",
-        Columna = 2,
+    secProfiles:Button({
+        Text = "Save New Profile",
+        Column = 2,
         Callback = function()
-            if nuevoNombre ~= "" then
-                AlanLuna.SaveManager:Guardar(nuevoNombre)
-                if dropP and dropP.ActualizarOpciones then
-                    dropP.ActualizarOpciones(AlanLuna.SaveManager:Listar())
+            if newProfileName ~= "" then
+                LouisHub.SaveManager:Save(newProfileName)
+                if dropP and (dropP.Refresh or dropP.SetOptions) then
+                    local refreshFn = dropP.Refresh or dropP.SetOptions
+                    refreshFn(LouisHub.SaveManager:List())
                 end
             end
         end
     })
 
-    local secHistorial = sysTab:CrearSeccion("Historial de Modificaciones", { Columnas = 2 })
-    local lblHist = secHistorial:Label({ Texto = "Estado", Valor = "Sin cambios", Columna = 1 })
+    local secHistory = sysTab:CreateSection("Modification History", { Columns = 2 })
+    local lblHist = secHistory:Label({ Text = "Status", Value = "No changes", Column = 1 })
 
-    AlanLuna:RegistrarConexion(AlanLuna.Eventos.HistorialCambiado:Connect(function(u, r)
-        lblHist:Set(u .. " Deshacer · " .. r .. " Rehacer")
+    LouisHub:RegisterConnection(LouisHub.Events.HistoryChanged:Connect(function(u, r)
+        lblHist:Set(u .. " Undo · " .. r .. " Redo")
     end))
 
-    secHistorial:Boton({
-        Texto = "↩️ Deshacer",
-        Columna = 2,
-        Callback = function() AlanLuna:Deshacer() end
+    secHistory:Button({
+        Text = "↩️ Undo",
+        Column = 2,
+        Callback = function() LouisHub:Undo() end
     })
 
-    secHistorial:Boton({
-        Texto = "↪️ Rehacer",
-        Columna = 2,
-        Callback = function() AlanLuna:Rehacer() end
+    secHistory:Button({
+        Text = "↪️ Redo",
+        Column = 2,
+        Callback = function() LouisHub:Redo() end
     })
 
     return sysTab
 end
+local agregarPestanaPreinstaladaCompleta = addCompletePreinstalledTab
 
 -- ══════════════════════════════════════════════════════════════
---  SECCION 27: MONKEY PATCHING & HOOKING GLOBAL DE COMPATIBILIDAD
+--  SECTION 27: GLOBAL COMPATIBILITY HOOKS, MONKEY PATCHING & CLEANUP
 -- ══════════════════════════════════════════════════════════════
-local oldCrearVentanaFinal = AlanLuna.CrearVentana
-function AlanLuna:CrearVentana(config)
-    local Ventana = oldCrearVentanaFinal(self, config)
+local oldCreateWindowFinal = LouisHub.CreateWindow or LouisHub.CrearVentana
+function LouisHub:CreateWindow(config)
+    local Window = oldCreateWindowFinal(self, config)
 
-    local catSystem = Ventana:CrearCategoria({ Nombre = "System", Icono = "settings" })
+    local catSystem = Window:CreateCategory({ Name = "System", Icon = "settings" })
 
-    local tabConfigLuna = catSystem:CrearTab({
-        Nombre = "Config",
-        Icono = "settings",
+    local tabConfigLuna = catSystem:CreateTab({
+        Name = "Config",
+        Icon = "settings",
         ShowTitle = true
     })
-    registrarMetodosLunaAvanzados(tabConfigLuna)
+    registerAdvancedLunaMethods(tabConfigLuna)
     tabConfigLuna:BuildConfigSection()
     tabConfigLuna:BuildThemeSection()
 
-    if config.PestanaPreinstalada ~= false then
-        agregarPestanaPreinstaladaCompleta(Ventana, config)
+    if config.PreinstalledTab ~= false and config.PestanaPreinstalada ~= false then
+        addCompletePreinstalledTab(Window, config)
     end
 
-    function Ventana:CreateHomeTab(hSettings)
-        return crearHomeTabLuna(Ventana, hSettings)
+    function Window:CreateHomeTab(hSettings)
+        return createLunaHomeTab(Window, hSettings)
     end
 
-    local oldCrearCategoria = Ventana.CrearCategoria
-    function Ventana:CrearCategoria(catCfg)
-        local CatObj = oldCrearCategoria(self, catCfg)
-        local oldCrearTab = CatObj.CrearTab
-        function CatObj:CrearTab(tabCfg)
-            local TabObj = oldCrearTab(self, tabCfg)
-            registrarMetodosLunaAvanzados(TabObj)
+    local oldCreateCategory = Window.CreateCategory
+    function Window:CreateCategory(catCfg)
+        local CatObj = oldCreateCategory(self, catCfg)
+        local oldCreateTab = CatObj.CreateTab
+        function CatObj:CreateTab(tabCfg, iconParamOverride)
+            local TabObj = oldCreateTab(self, tabCfg, iconParamOverride)
+            registerAdvancedLunaMethods(TabObj)
             return TabObj
         end
+        CatObj.CrearTab = CatObj.CreateTab
         return CatObj
     end
+    Window.CrearCategoria = Window.CreateCategory
 
-    return Ventana
+    return Window
 end
+LouisHub.CrearVentana = LouisHub.CreateWindow
 
-function AlanLuna:Destroy()
-    local inst = _G.AlanLuna_Instancia
-    if inst and inst.Ventana and inst.Ventana._main and inst.Ventana._main.Parent then
-        pcall(function() inst.Ventana._main.Parent:Destroy() end)
+function LouisHub:Destroy()
+    local inst = _G.LouisHub_Instance
+    if inst and inst.Window and inst.Window._main and inst.Window._main.Parent then
+        pcall(function() inst.Window._main.Parent:Destroy() end)
     end
-    limpiarInstanciaPrevia()
+    cleanupPreviousInstance()
 end
+LouisHub.Destruir = LouisHub.Destroy
 
-AlanUI = AlanLuna
-Luna = AlanLuna
+-- Full Backward Compatibility Assignment
+AlanLuna = LouisHub
+AlanUI   = LouisHub
+Luna     = LouisHub
 
 if getgenv then
-    getgenv().AlanLuna = AlanLuna
-    getgenv().AlanUI = AlanLuna
-    getgenv().Luna = AlanLuna
+    getgenv().LouisHub = LouisHub
+    getgenv().AlanLuna = LouisHub
+    getgenv().AlanUI   = LouisHub
+    getgenv().Luna     = LouisHub
 end
 
-return AlanLuna
+return LouisHub
