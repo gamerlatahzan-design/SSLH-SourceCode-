@@ -9271,7 +9271,7 @@ local function crearHomeTabLuna(Ventana, HomeTabSettings)
     HomeTabSettings = Kwargify({
         Icon = 1,
         SupportedExecutors = {"Vega X", "Delta", "Nihon", "Xeno", "Synapse X", "Krnl", "Fluxus"},
-        DiscordInvite = "nebula"
+        DiscordInvite = "xhxMeyzana"
     }, HomeTabSettings or {})
 
     local catGeneral = Ventana.Categorias["General"] or Ventana:CrearCategoria("General")
