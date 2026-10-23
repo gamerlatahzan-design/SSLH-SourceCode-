@@ -2,13 +2,15 @@
 ╔══════════════════════════════════════════════════════════════════════╗
                               LouisHub
                 Master UI Suite: LouisHub Engine V4.0
-         PART 1A: POLYFILLS, SERVICES, CAPABILITIES & STATE
+                             by LouisHub
 ╚══════════════════════════════════════════════════════════════════════╝
 ]]
 
 -- ══════════════════════════════════════════════════════════════
---  SECTION 1: POLYFILLS & LOW-LEVEL RUNTIME COMPATIBILITY
+--  SECTION 1: POLYFILLS, METHOD NORMALIZER & AUTO-ALIAS ENGINE
 -- ══════════════════════════════════════════════════════════════
+
+-- FIX #10: Polyfill aman lingkungan task untuk kompatibilitas executor lawas/mobile
 if type(task) ~= "table" then task = {} end
 if type(task.wait) ~= "function" then
     task.wait = function(t)
@@ -53,18 +55,27 @@ if type(task.cancel) ~= "function" then
     end
 end
 
+-- FIX #11: Deep clone tabel untuk mencegah kebocoran referensi state antar-kontrol
 local function cloneTable(t)
     if type(t) ~= "table" then return {} end
     if type(table.clone) == "function" then return table.clone(t) end
     local copy = {}
-    for key, value in pairs(t) do copy[key] = value end
+    for key, value in pairs(t) do
+        if type(value) == "table" then
+            copy[key] = cloneTable(value)
+        else
+            copy[key] = value
+        end
+    end
     return copy
 end
+local clonarTabla = cloneTable
 
 local function copyDefault(v)
     if type(v) == "table" then return cloneTable(v) end
     return v
 end
+local copiarDefecto = copyDefault
 
 local function normalizeArgSet(...)
     if select('#', ...) >= 2 then
@@ -72,6 +83,7 @@ local function normalizeArgSet(...)
     end
     return (select(1, ...))
 end
+local normalizarArgSet = normalizeArgSet
 
 local function Kwargify(defaults, passed)
     passed = passed or {}
@@ -91,6 +103,188 @@ local function UnpackColor(Color)
     return Color3.fromRGB(Color.R, Color.G, Color.B)
 end
 
+-- FIX #4: Universal Safe Method Wrapper
+-- Memastikan pemanggilan fungsi dengan titik-dua (elem:Set(...)) maupun titik (elem.Set(...))
+-- berjalan valid tanpa menyebabkan argumen 'self' (tabel elemen) merusak pembacaan tipe data.
+local function WrapSafeMethod(targetObj, fn)
+    return function(...)
+        local argCount = select("#", ...)
+        if argCount > 0 then
+            local firstArg = select(1, ...)
+            if firstArg == targetObj then
+                -- Dipanggil dengan titik dua: elem:Method(...)
+                return fn(select(2, ...))
+            end
+        end
+        -- Dipanggil dengan titik: elem.Method(...)
+        return fn(...)
+    end
+end
+
+-- FIX #11: Kamus terjemahan dua arah (Inggris <-> Spanyol) untuk auto-aliasing otomatis
+local SPANISH_DICTIONARY = {
+    -- Window & Tabs
+    ["CreateWindow"]      = "CrearVentana",
+    ["CreateWindowSafely"]= "CrearVentanaConSeguridad",
+    ["CreateCategory"]    = "CrearCategoria",
+    ["CreateTab"]         = "CrearTab",
+    ["CreateSubTab"]      = "CrearSubTab",
+    ["CreateSection"]     = "CrearSeccion",
+    ["Select"]            = "Seleccionar",
+    ["Destroy"]           = "Destruir",
+    ["ToggleCollapse"]    = "AlternarColapso",
+    ["Breadcrumb"]        = "RutaNavegacion",
+    ["CurrentCategory"]   = "CategoriaActual",
+    ["CurrentTab"]        = "TabActual",
+    ["CurrentSubTab"]     = "SubTabActual",
+    ["Search"]            = "Buscar",
+
+    -- Controls
+    ["Button"]            = "Boton",
+    ["CreateButton"]      = "CrearBoton",
+    ["Toggle"]            = "Alternar",
+    ["CreateToggle"]      = "CrearToggle",
+    ["Checkbox"]          = "Casilla",
+    ["CreateCheckbox"]    = "CrearCasilla",
+    ["Slider"]            = "Deslizador",
+    ["CreateSlider"]      = "CrearSlider",
+    ["RangeSlider"]       = "DeslizadorRango",
+    ["CreateRangeSlider"] = "CrearRangeSlider",
+    ["NumberStepper"]     = "PasoNumero",
+    ["Input"]             = "Entrada",
+    ["CreateInput"]       = "CrearInput",
+    ["TagInput"]          = "EntradaEtiquetas",
+    ["RadioGroup"]        = "GrupoRadio",
+    ["Dropdown"]          = "Desplegable",
+    ["CreateDropdown"]    = "CrearDropdown",
+    ["ColorPicker"]       = "SelectorColor",
+    ["CreateColorPicker"] = "CrearColorPicker",
+    ["Keybind"]           = "Tecla",
+    ["CreateKeybind"]     = "CrearKeybind",
+    ["CreateBind"]        = "CrearBind",
+    ["Label"]             = "Etiqueta",
+    ["CreateLabel"]       = "CrearLabel",
+    ["Progress"]          = "Progreso",
+    ["Paragraph"]         = "Parrafo",
+    ["CreateParagraph"]   = "CrearParrafo",
+    ["Divider"]           = "Separador",
+    ["CreateDivider"]     = "CrearSeparador",
+    ["Image"]             = "Imagen",
+    ["Group"]             = "Grupo",
+
+    -- Methods & Element Actions
+    ["Set"]               = "Establecer",
+    ["Get"]               = "Obtener",
+    ["SetValue"]          = "EstablecerValor",
+    ["SetState"]          = "EstablecerEstado",
+    ["SetText"]           = "EstablecerTexto",
+    ["SetTexto"]          = "EstablecerTexto",
+    ["SetOption"]         = "EstablecerOpcion",
+    ["SetOptions"]        = "EstablecerOpciones",
+    ["Refresh"]           = "Refrescar",
+    ["ActualizarOpciones"]= "Refrescar",
+    ["Lock"]              = "Bloquear",
+    ["Unlock"]            = "Desbloquear",
+    ["IsLocked"]          = "EstaBloqueado",
+    ["SetLockedTitle"]    = "EstablecerTituloBloqueado",
+    ["Visible"]           = "Visible",
+    ["Show"]              = "Mostrar",
+    ["Hide"]              = "Ocultar",
+    ["Highlight"]         = "Resaltar",
+}
+
+local ENGLISH_DICTIONARY = {}
+for en, es in pairs(SPANISH_DICTIONARY) do
+    ENGLISH_DICTIONARY[es] = en
+end
+
+-- FIX #11: Pasang metatable __index ke target agar alias Spanyol selalu merujuk fungsi terbaru (bukan snapshot usang)
+local function AttachAutoAlias(targetTable)
+    local currentMt = getmetatable(targetTable) or {}
+    local originalIndex = currentMt.__index
+
+    currentMt.__index = function(tbl, key)
+        local direct = rawget(tbl, key)
+        if direct ~= nil then return direct end
+
+        if type(originalIndex) == "function" then
+            local val = originalIndex(tbl, key)
+            if val ~= nil then return val end
+        elseif type(originalIndex) == "table" then
+            local val = originalIndex[key]
+            if val ~= nil then return val end
+        end
+
+        local alias = SPANISH_DICTIONARY[key] or ENGLISH_DICTIONARY[key]
+        if alias then
+            local val = rawget(tbl, alias)
+            if val ~= nil then return val end
+            if type(originalIndex) == "table" then
+                return originalIndex[alias]
+            elseif type(originalIndex) == "function" then
+                return originalIndex(tbl, alias)
+            end
+        end
+        return nil
+    end
+
+    return setmetatable(targetTable, currentMt)
+end
+
+-- FIX #4 & #6: Factory pembuat objek kontrol universal dengan pembacaan properti dinamis
+local function CreateUnifiedElement(rawDef)
+    local elem = {}
+    local rawMethods = rawDef.Methods or {}
+    local dynamicGetters = rawDef.DynamicGetters or {}
+
+    -- Masukkan row & instance bila ada
+    if rawDef.Row then rawset(elem, "Row", rawDef.Row); rawset(elem, "Fila", rawDef.Row) end
+    if rawDef.Instance then rawset(elem, "Instance", rawDef.Instance); rawset(elem, "Instancia", rawDef.Instance) end
+
+    -- Bungkus semua method dengan WrapSafeMethod agar aman dipanggil "." maupun ":"
+    for methodName, fn in pairs(rawMethods) do
+        elem[methodName] = WrapSafeMethod(elem, fn)
+    end
+
+    -- Setup Metatable untuk Live Properties (CurrentValue, CurrentOption, Color, dll.)
+    local mt = {
+        __index = function(tbl, key)
+            if dynamicGetters[key] then
+                return dynamicGetters[key]()
+            end
+            -- FIX #6: Baca nilai dinamis secara live saat diakses via .CurrentValue dsb.
+            if key == "CurrentValue" or key == "Value" or key == "Valor" then
+                if rawMethods.Get then return rawMethods.Get() end
+            elseif key == "CurrentOption" or key == "Option" or key == "Opcion" then
+                if rawMethods.Get then return rawMethods.Get() end
+            elseif key == "CurrentBind" or key == "Bind" then
+                if rawMethods.Get then return rawMethods.Get() end
+            elseif key == "Color" or key == "CurrentColor" then
+                if rawMethods.Get then return rawMethods.Get() end
+            end
+
+            -- Terjemahan alias otomatis
+            local alias = SPANISH_DICTIONARY[key] or ENGLISH_DICTIONARY[key]
+            if alias and rawget(tbl, alias) ~= nil then
+                return rawget(tbl, alias)
+            end
+
+            return rawget(tbl, key)
+        end,
+        __newindex = function(tbl, key, val)
+            -- FIX #6: Mengubah .CurrentValue = x secara langsung akan memicu Set(x, true)
+            if (key == "CurrentValue" or key == "Value" or key == "CurrentOption" or key == "Color") and rawMethods.Set then
+                rawMethods.Set(val, true)
+                return
+            end
+            rawset(tbl, key, val)
+        end
+    }
+
+    setmetatable(elem, mt)
+    return elem
+end
+
 -- ══════════════════════════════════════════════════════════════
 --  SECTION 2: SERVICES & ENVIRONMENT INITIALIZATION
 -- ══════════════════════════════════════════════════════════════
@@ -105,6 +299,7 @@ local Lighting         = game:GetService("Lighting")
 local CoreGui          = game:GetService("CoreGui")
 local TextService      = game:GetService("TextService")
 local LocalPlayer      = Players.LocalPlayer
+
 if not LocalPlayer then
     pcall(function()
         LocalPlayer = Players.PlayerAdded:Wait()
@@ -117,6 +312,7 @@ local request = (syn and syn.request) or (http and http.request) or http_request
 local function isFilesystemAvailable()
     return type(writefile) == "function" and type(readfile) == "function"
 end
+local fsDisponible = isFilesystemAvailable
 
 local function getGuiParent()
     local ok, hui = pcall(function() return gethui() end)
@@ -129,6 +325,7 @@ local function getGuiParent()
     if okCore and cgui then return cgui end
     return nil
 end
+local obtenerPadreGui = getGuiParent
 
 local function protectGui(gui)
     pcall(function()
@@ -139,47 +336,105 @@ local function protectGui(gui)
         end
     end)
 end
+local protegerGui = protectGui
 
 -- ══════════════════════════════════════════════════════════════
---  SECTION 3: LOUISHUB NAMESPACE & AUTO-CLEANUP REGISTRY
+--  SECTION 3: LOUISHUB NAMESPACE, SIGNAL ENGINE & SINGLE LIFECYCLE
 -- ══════════════════════════════════════════════════════════════
 local LouisHub = {}
 LouisHub.Version = "4.0.0"
 LouisHub.DebugMode = false
 LouisHub.ShowUIErrors = true
+LouisHub.MostrarErroresEnUI = true
 LouisHub.Folder = "LouisHub/Config"
+LouisHub.GlassBlur = true -- FIX #12: Opsi toggling blur untuk device low-end / mobile
 
-_G.LouisHub = LouisHub
+-- Global Compatibility Aliases
+local AlanLuna = LouisHub
+local AlanUI   = LouisHub
+local Luna     = LouisHub
 
-local function cleanupPreviousInstance()
-    local previous = _G.LouisHub_Instance
+_G.LouisHub  = LouisHub
+_G.AlanLuna  = LouisHub
+_G.AlanUI    = LouisHub
+_G.Luna      = LouisHub
+
+-- FIX #10: Modul koneksi internal disimpan dalam registry global tunggal
+if type(_G.LouisHub_ModuleConnections) == "table" then
+    for _, c in ipairs(_G.LouisHub_ModuleConnections) do
+        pcall(function() if c and c.Connected then c:Disconnect() end end)
+    end
+end
+_G.LouisHub_ModuleConnections = {}
+
+-- FIX #10: Cleanup terisolasi. Hanya menghancurkan Window GUI utama, 
+-- tidak menghancurkan Notification/Popup/HUD/Floating button yang sedang aktif sebelum CreateWindow.
+local function cleanupPreviousWindowOnly()
+    local previous = _G.LouisHub_Instance or _G.AlanLuna_Instancia
     if type(previous) ~= "table" then return end
 
+    -- Bersihkan koneksi khusus Window lama
     for _, connection in ipairs(previous.Connections or {}) do
         pcall(function()
             if connection and connection.Connected then connection:Disconnect() end
         end)
     end
+    previous.Connections = {}
 
     for _, thread in ipairs(previous.Threads or {}) do
         pcall(function()
             if thread and coroutine.status(thread) ~= "dead" then task.cancel(thread) end
         end)
     end
-
-    for _, drawingObj in ipairs(previous.Drawings or {}) do
-        pcall(function() if drawingObj then drawingObj:Remove() end end)
-    end
+    previous.Threads = {}
 
     for _, inst in ipairs(previous.Instances or {}) do
         pcall(function() if inst and inst.Parent then inst:Destroy() end end)
     end
+    previous.Instances = {}
 
     pcall(function()
         local parent = getGuiParent()
         if parent then
+            for _, guiName in ipairs({"LouisHub_ScreenGui", "AlanLuna_ScreenGui"}) do
+                local old = parent:FindFirstChild(guiName)
+                if old then old:Destroy() end
+            end
+        end
+    end)
+end
+
+-- FIX #10: Cleanup total seluruh suite (hanya dipanggil saat LouisHub:Destroy())
+local function cleanupAllInstances()
+    cleanupPreviousWindowOnly()
+
+    -- Bersihkan koneksi background global
+    if type(_G.LouisHub_ModuleConnections) == "table" then
+        for _, c in ipairs(_G.LouisHub_ModuleConnections) do
+            pcall(function() if c and c.Connected then c:Disconnect() end end)
+        end
+        _G.LouisHub_ModuleConnections = {}
+    end
+    if type(_G.LouisHub_EventManagerConnections) == "table" then
+        for _, c in ipairs(_G.LouisHub_EventManagerConnections) do
+            pcall(function() if c and c.Connected then c:Disconnect() end end)
+        end
+        _G.LouisHub_EventManagerConnections = {}
+    end
+    if type(_G.LouisHub_CapabilitiesConnections) == "table" then
+        for _, c in ipairs(_G.LouisHub_CapabilitiesConnections) do
+            pcall(function() if c and c.Connected then c:Disconnect() end end)
+        end
+        _G.LouisHub_CapabilitiesConnections = {}
+    end
+
+    -- Hapus seluruh ScreenGui pendukung
+    pcall(function()
+        local parent = getGuiParent()
+        if parent then
             for _, guiName in ipairs({
-                "LouisHub_ScreenGui", "LouisHub_NotifGui", "LouisHub_TooltipOverlay", "LouisHub_PopupGui"
+                "LouisHub_ScreenGui", "LouisHub_NotifGui", "LouisHub_TooltipOverlay", "LouisHub_PopupGui",
+                "AlanLuna_ScreenGui", "AlanLuna_NotifGui", "AlanLuna_TooltipOverlay", "AlanLuna_PopupGui"
             }) do
                 local old = parent:FindFirstChild(guiName)
                 if old then old:Destroy() end
@@ -188,9 +443,8 @@ local function cleanupPreviousInstance()
     end)
 end
 
-cleanupPreviousInstance()
-
-_G.LouisHub_Instance = {
+-- Inisialisasi registry instance aktif
+_G.LouisHub_Instance = _G.LouisHub_Instance or {
     Connections = {},
     Threads     = {},
     Drawings    = {},
@@ -198,6 +452,7 @@ _G.LouisHub_Instance = {
     Window      = nil,
     Title       = "LouisHub",
 }
+_G.AlanLuna_Instancia = _G.LouisHub_Instance
 
 function LouisHub:RegisterConnection(connection)
     if _G.LouisHub_Instance and connection then
@@ -237,468 +492,14 @@ function LouisHub:RegisterInstance(instance)
     return instance
 end
 
--- ══════════════════════════════════════════════════════════════
---  SECTION 4: HARDWARE CAPABILITIES & ENVIRONMENT DIAGNOSTICS
--- ══════════════════════════════════════════════════════════════
-local function detectExecutor()
-    if type(getexecutorname) == "function" then
-        local ok, name = pcall(getexecutorname)
-        if ok and name and name ~= "" then return name end
-    end
-    local list = {
-        {function() return syn ~= nil end, "Synapse X"},
-        {function() return krnl ~= nil end, "Krnl"},
-        {function() return fluxus ~= nil end, "Fluxus"},
-        {function() return sirhurt ~= nil end, "SirHurt"},
-        {function() return PROTOSMASHER_LOADED ~= nil end, "ProtoSmasher"},
-        {function() return is_sirhurt_closure ~= nil end, "SirHurt (alt)"},
-        {function() return identifyexecutor ~= nil end, (identifyexecutor and identifyexecutor()) or "Identified Executor"},
-    }
-    for _, entry in ipairs(list) do
-        local ok2, matches = pcall(entry[1])
-        if ok2 and matches then return entry[2] end
-    end
-    return "Unknown"
-end
-
-local VALID_ENV_TYPES = {
-    PC = true, Mobile = true, Tablet = true,
-    Console = true, Studio = true, Unknown = true,
-}
-
-LouisHub.Capabilities = {
-    Filesystem   = isFilesystemAvailable(),
-    Drawing      = type(Drawing) == "table" and type(Drawing.new) == "function",
-    ProtectGUI   = (type(syn) == "table" and type(syn.protect_gui) == "function") or type(protectgui) == "function",
-    GetHUI       = type(gethui) == "function",
-    Keyboard     = UserInputService.KeyboardEnabled,
-    Gamepad      = UserInputService.GamepadEnabled,
-    IsStudio     = RunService:IsStudio(),
-    TouchEnabled = UserInputService.TouchEnabled,
-    MouseEnabled = UserInputService.MouseEnabled,
-    Platform     = (function()
-        local ok, p = pcall(function() return UserInputService:GetPlatform() end)
-        return (ok and p) or nil
-    end)(),
-    ViewportSize = (function()
-        local c = Workspace.CurrentCamera
-        return c and c.ViewportSize or Vector2.new(0, 0)
-    end)(),
-    Type         = "Unknown",
-    IsTouch      = false,
-    IsDesktop    = false,
-    IsTouchOnly  = false,
-}
-
-function LouisHub.Capabilities:PlatformName()
-    local p = self.Platform
-    if not p then return "Unknown" end
-    return p.Name or tostring(p)
-end
-
-function LouisHub:RecalculateEnvironmentDerivatives()
-    local C = self.Capabilities
-    local CONSOLE_PLATFORMS = {
-        XboxOne = true, XboxSeriesX = true, XboxSeriesS = true,
-        PS4 = true, PS5 = true, UWP = true,
-    }
-    local platformName = C.Platform and C.Platform.Name
-    local detectedType
-
-    if _G.LouisHub_ForcedType and VALID_ENV_TYPES[_G.LouisHub_ForcedType] then
-        detectedType = _G.LouisHub_ForcedType
-    elseif C.IsStudio then
-        detectedType = "Studio"
-    elseif platformName and CONSOLE_PLATFORMS[platformName] then
-        detectedType = "Console"
-    elseif C.MouseEnabled and C.Keyboard then
-        detectedType = "PC"
-    elseif C.TouchEnabled then
-        if C.ViewportSize.Y < 500 or C.ViewportSize.X < 600 then
-            detectedType = "Mobile"
-        else
-            detectedType = "Tablet"
-        end
-    elseif C.Keyboard then
-        detectedType = "PC"
-    else
-        detectedType = "Unknown"
-    end
-
-    C.Type        = detectedType
-    C.IsTouch     = (detectedType == "Mobile" or detectedType == "Tablet")
-    C.IsDesktop   = (detectedType == "PC" or detectedType == "Console")
-    C.IsTouchOnly = C.TouchEnabled and not C.MouseEnabled and not C.Keyboard
-
-    if self.Events and self.Events.TypeChanged then
-        self.Events.TypeChanged:Fire(detectedType)
-    end
-    return detectedType
-end
-
-LouisHub:RecalculateEnvironmentDerivatives()
-
-if type(_G.LouisHub_CapabilitiesConnections) == "table" then
-    for _, c in ipairs(_G.LouisHub_CapabilitiesConnections) do
-        pcall(function() if c and c.Connected then c:Disconnect() end end)
-    end
-end
-_G.LouisHub_CapabilitiesConnections = {}
-
-local function hookViewportCapabilities(cam)
-    if not cam then return end
-    local conn = cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-        LouisHub.Capabilities.ViewportSize = cam.ViewportSize
-        LouisHub:RecalculateEnvironmentDerivatives()
-    end)
-    table.insert(_G.LouisHub_CapabilitiesConnections, conn)
-end
-
-hookViewportCapabilities(Workspace.CurrentCamera)
-table.insert(_G.LouisHub_CapabilitiesConnections,
-    Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
-        local cam = Workspace.CurrentCamera
-        if not cam then return end
-        LouisHub.Capabilities.ViewportSize = cam.ViewportSize
-        LouisHub:RecalculateEnvironmentDerivatives()
-        hookViewportCapabilities(cam)
-    end)
-)
-
-LouisHub.Features = {
-    { name = "GUI",          capKey = nil,             test = function() return true end, level = "required" },
-    { name = "Filesystem",   capKey = "Filesystem",    level = "recommended", message = "Configurations will not save to disk." },
-    { name = "Drawing",      capKey = "Drawing",       level = "recommended", message = "Visual ESP components will not function." },
-    { name = "ProtectGUI",   capKey = "ProtectGUI",    level = "recommended", message = "GUI might be detected by client checks." },
-    { name = "GetHUI",       capKey = "GetHUI",        level = "recommended", message = "GUI might render behind CoreGui elements." },
-    { name = "Keyboard",     capKey = "Keyboard",      level = "optional",    message = "Keybinds will default to touch-cancel mode." },
-    { name = "Gamepad",      capKey = "Gamepad",       level = "optional",    message = "Gamepad shortcuts will be unavailable." },
-    { name = "Loadstring",   test = function() return type(loadstring) == "function" end, level = "optional", message = "External scripts cannot be evaluated." },
-    { name = "SetClipboard", test = function() return type(setclipboard) == "function" end, level = "optional", message = "Cannot copy text to system clipboard." },
-}
-
-local _featuresIndex = {}
-for _, f in ipairs(LouisHub.Features) do
-    _featuresIndex[f.name] = f
-end
-
-function LouisHub:VerifySupport(featureName)
-    local f = _featuresIndex[featureName]
-    if not f then
-        return { ok = false, level = "unknown", name = featureName, message = "Feature not recognized by LouisHub." }
-    end
-    local ok = false
-    if f.capKey then
-        ok = self.Capabilities[f.capKey] == true
-    elseif f.test then
-        local okTest, res = pcall(f.test)
-        ok = okTest and res == true
-    end
-    return { ok = ok, level = f.level, name = f.name, message = ok and nil or f.message }
-end
-
-function LouisHub:ForceType(envType)
-    if envType and not VALID_ENV_TYPES[envType] then
-        return false, "Invalid environment type. Valid: PC, Mobile, Tablet, Console, Studio, Unknown."
-    end
-    _G.LouisHub_ForcedType = envType
-    self:RecalculateEnvironmentDerivatives()
-    return true
-end
-
-function LouisHub:ReleaseForcedType()
-    return self:ForceType(nil)
-end
-
-function LouisHub:FullDiagnostics()
-    local C = self.Capabilities
-    local supportedCount, totalCount, warnings = 0, 0, {}
-    for _, f in ipairs(self.Features) do
-        totalCount = totalCount + 1
-        local r = self:VerifySupport(f.name)
-        if r.ok then
-            supportedCount = supportedCount + 1
-        elseif f.level ~= "required" then
-            table.insert(warnings, {
-                name    = f.name,
-                level   = f.level,
-                message = r.message,
-            })
-        end
-    end
-    return {
-        Type          = C.Type,
-        Platform      = C:PlatformName(),
-        IsStudio      = C.IsStudio,
-        Executor      = detectExecutor(),
-        Viewport      = C.ViewportSize,
-        ForcedType    = _G.LouisHub_ForcedType,
-        FeaturesOk    = supportedCount,
-        FeaturesTotal = totalCount,
-        Warnings      = warnings,
-        Capabilities  = C,
-    }
-end
+-- Pasang Auto-Alias ke namespace LouisHub
+AttachAutoAlias(LouisHub)
 
 -- ══════════════════════════════════════════════════════════════
---  SECTION 5: ERROR HANDLING & LOGGING ENGINE
--- ══════════════════════════════════════════════════════════════
-local MAX_ERROR_LOGS = 50
-LouisHub._Logs = {}
-
-function LouisHub:_LogError(context, message)
-    table.insert(self._Logs, {
-        Time    = os.time(),
-        Context = tostring(context or "?"),
-        Message = tostring(message or ""),
-    })
-    if #self._Logs > MAX_ERROR_LOGS then
-        table.remove(self._Logs, 1)
-    end
-    warn("[LouisHub] Error in '" .. tostring(context or "?") .. "': " .. tostring(message or ""))
-end
-
-function LouisHub:GetErrors()
-    local copy = {}
-    for i, entry in ipairs(self._Logs) do copy[i] = cloneTable(entry) end
-    return copy
-end
-
-local function silentTry(description, fn, ...)
-    local ok, err = pcall(fn, ...)
-    if not ok and LouisHub.DebugMode then
-        warn("[LouisHub] (DebugMode) '" .. description .. "' failed: " .. tostring(err))
-    end
-    return ok, err
-end
-
-local function warnDev(ctrlType, name, message)
-    warn(("[LouisHub] %s \"%s\": %s"):format(ctrlType, tostring(name or "?"), message))
-end
-
-local function executeWithFallback(callback, context, ...)
-    if not callback then return end
-    local args = {...}
-    local ok, err = pcall(function() return callback(table.unpack(args)) end)
-    if not ok then
-        LouisHub:_LogError(context, err)
-        local fullMsg = tostring(err)
-        local displayMsg = fullMsg:sub(1, 120)
-        if #fullMsg > 120 then
-            displayMsg = displayMsg .. "… (inspect LouisHub:GetErrors())"
-        end
-        if LouisHub.ShowUIErrors ~= false and LouisHub.Notify then
-            pcall(function()
-                LouisHub:Notify({
-                    Title    = "⚠️ Error in " .. (context or "control"),
-                    Content  = displayMsg,
-                    Duration = 6,
-                    Icon     = "warning"
-                })
-            end)
-        end
-        warn("[LouisHub] Callback error (" .. (context or "?") .. "):", err)
-    end
-    return ok
-end
-
-local function validateCallback(ctrlType, cfg)
-    if cfg.Callback ~= nil and type(cfg.Callback) ~= "function" then
-        warnDev(ctrlType, cfg.Text or cfg.Name, "'Callback' provided but is not a function (got " .. typeof(cfg.Callback) .. "). Ignored.")
-        cfg.Callback = nil
-    end
-end
-
--- ══════════════════════════════════════════════════════════════
---  SECTION 6: SIGNALS, GLOBAL FLAGS & STATE REGISTRY
--- ══════════════════════════════════════════════════════════════
-local function createSignal()
-    local connected = {}
-    local sig = {}
-    function sig:Connect(callback)
-        if type(callback) ~= "function" then
-            return {Disconnect = function() end}
-        end
-        local entry = {active = true, callback = callback}
-        table.insert(connected, entry)
-        return {
-            Disconnect = function() entry.active = false end,
-        }
-    end
-    function sig:Fire(...)
-        local snapshot = table.move(connected, 1, #connected, 1, {})
-        for _, entry in ipairs(snapshot) do
-            if entry.active then
-                local ok, err = pcall(entry.callback, ...)
-                if not ok then LouisHub:_LogError("Events", err) end
-            end
-        end
-    end
-    return sig
-end
-
-LouisHub.Events = {
-    FlagChanged         = createSignal(),
-    TabChanged          = createSignal(),
-    ThemeChanged        = createSignal(),
-    ControlRegistered   = createSignal(),
-    TypeChanged         = createSignal(),
-    HistoryChanged      = createSignal(),
-    CategoryChanged     = createSignal(),
-    SubTabChanged       = createSignal(),
-}
-
-local function newElementTable()
-    return setmetatable({}, {
-        __newindex = function(t, flag, elem)
-            rawset(t, flag, elem)
-            if type(elem) == "table" and type(elem.Get) == "function" then
-                local ok, val = pcall(function() return elem:Get() end)
-                if ok and val ~= nil then elem._default = copyDefault(val) end
-            end
-        end,
-    })
-end
-
-LouisHub.Elements = newElementTable()
-LouisHub.Options  = {}
-
-local activeSaveWindow = nil
-local hasPendingUnsavedChanges = false
-local isAutosaveLoopActive = false
-local _isLoadingFromFile = false
-
-local function markPendingChange()
-    if _isLoadingFromFile then return end
-    hasPendingUnsavedChanges = true
-end
-
-local function startAutosaveLoop()
-    if isAutosaveLoopActive then return end
-    isAutosaveLoopActive = true
-    LouisHub:RegisterThread(task.spawn(function()
-        while isAutosaveLoopActive do
-            task.wait(10)
-            if hasPendingUnsavedChanges and activeSaveWindow and activeSaveWindow.ConfigName and LouisHub.SaveManager then
-                hasPendingUnsavedChanges = false
-                pcall(function()
-                    LouisHub.SaveManager:SaveSilent(activeSaveWindow.ConfigName)
-                end)
-            end
-        end
-    end))
-end
-
-local _realFlags = {}
-local _nonPersistentFlags = {}
-local _uiFlags = {}
-local _registeredKeybinds = {}
-
-local function _decomposeKey(v)
-    if typeof(v) == "table" then
-        return v.KeyCode, v.Ctrl or false, v.Shift or false, v.Alt or false
-    end
-    return v, false, false, false
-end
-
-local function _formatKey(keyCode, ctrl, shift, alt)
-    if not keyCode or keyCode == Enum.KeyCode.Unknown then return "None" end
-    local parts = {}
-    if ctrl then table.insert(parts, "Ctrl") end
-    if shift then table.insert(parts, "Shift") end
-    if alt then table.insert(parts, "Alt") end
-    table.insert(parts, keyCode.Name)
-    return table.concat(parts, "+")
-end
-
-local function _keysInConflict(a, b)
-    local kA, cA, sA, aA = _decomposeKey(a)
-    local kB, cB, sB, aB = _decomposeKey(b)
-    if not kA or not kB then return false end
-    if kA == Enum.KeyCode.Unknown or kB == Enum.KeyCode.Unknown then return false end
-    return kA == kB and cA == cB and sA == sB and aA == aB
-end
-
-local function _checkKeybindConflict(ownEntry, newVal)
-    local conflicts = {}
-    for _, entry in ipairs(_registeredKeybinds) do
-        if entry ~= ownEntry then
-            local okVal, otherVal = pcall(function() return entry:GetValue() end)
-            if okVal and _keysInConflict(newVal, otherVal) then
-                table.insert(conflicts, entry.text or "Keybind")
-            end
-        end
-    end
-    if #conflicts > 0 then
-        local k, c, s, a = _decomposeKey(newVal)
-        pcall(function()
-            LouisHub:Notify({
-                Title    = "⚠️ Keybind in Use",
-                Content  = "'" .. _formatKey(k, c, s, a) .. "' is already assigned to: " .. table.concat(conflicts, ", "),
-                Duration = 4,
-                Icon     = "warning"
-            })
-        end)
-    end
-end
-
-LouisHub.Flags = setmetatable({}, {
-    __index = _realFlags,
-    __newindex = function(_, key, val)
-        if type(val) ~= "table" and _realFlags[key] == val then
-            return
-        end
-        _realFlags[key] = val
-        markPendingChange()
-        if LouisHub.Events and LouisHub.Events.FlagChanged then
-            LouisHub.Events.FlagChanged:Fire(key, val)
-        end
-    end,
-})
-
-function LouisHub:GetFlag(flag)
-    return LouisHub.Flags[flag]
-end
-
-function LouisHub:GetElement(flag)
-    return LouisHub.Elements[flag]
-end
-
-function LouisHub:UpdateLabel(flag, text)
-    local elem = self.Elements[flag]
-    if not elem then return false end
-    return pcall(function() elem:Set(text) end)
-end
-
-function LouisHub:MarkAsUI(flagOrTable)
-    if type(flagOrTable) == "table" then
-        for _, f in ipairs(flagOrTable) do _uiFlags[f] = true end
-    else
-        _uiFlags[flagOrTable] = true
-    end
-end
-
-function LouisHub:Try(flag, fallback)
-    local elem = self.Elements[flag]
-    if not elem then return fallback end
-    local ok, val = pcall(function() return elem:Get() end)
-    if not ok or val == nil then return fallback end
-    return val
-end
-
---[[
-╔══════════════════════════════════════════════════════════════════════╗
-                              LouisHub
-                Master UI Suite: LouisHub Engine V4.0
-             PART 1B: COMPLETE ICON MODULE (300+ ICONS)
-╚══════════════════════════════════════════════════════════════════════╝
-]]
-
--- ══════════════════════════════════════════════════════════════
---  SECTION 7: COMPLETE ICON MODULE (MATERIAL & LUCIDE MAPPINGS)
+--  SECTION 4: COMPLETE ICON MODULE (MATERIAL & LUCIDE MAPPINGS)
 -- ══════════════════════════════════════════════════════════════
 local IconModule = {
-    Lucide = nil,
+    LucideCache = nil, -- FIX #7: In-memory cache agar unduhan dan kompilasi Lucide hanya terjadi 1x
     Material = {
         ["perm_media"] = "http://www.roblox.com/asset/?id=6031215982",
         ["sticky_note_2"] = "http://www.roblox.com/asset/?id=6031265972",
@@ -1953,6 +1754,168 @@ local IconModule = {
         ["folder"] = "http://www.roblox.com/asset/?id=6031302932",
         ["drive_file_move"] = "http://www.roblox.com/asset/?id=6031302922",
         ["drive_file_rename_outline"] = "http://www.roblox.com/asset/?id=6031302994",
+        ["notifications_active"] = "http://www.roblox.com/asset/?id=6034304908",
+        ["sentiment_neutral"] = "http://www.roblox.com/asset/?id=6034230636",
+        ["sick"] = "http://www.roblox.com/asset/?id=6034230642",
+        ["poll"] = "http://www.roblox.com/asset/?id=6034267991",
+        ["emoji_events"] = "http://www.roblox.com/asset/?id=6034275726",
+        ["groups"] = "http://www.roblox.com/asset/?id=6034281935",
+        ["sports_soccer"] = "http://www.roblox.com/asset/?id=6034227075",
+        ["person_add"] = "http://www.roblox.com/asset/?id=6034287514",
+        ["mood_bad"] = "http://www.roblox.com/asset/?id=6034295706",
+        ["person_remove_alt_1"] = "http://www.roblox.com/asset/?id=6034287515",
+        ["king_bed"] = "http://www.roblox.com/asset/?id=6034281948",
+        ["architecture"] = "http://www.roblox.com/asset/?id=6034275730",
+        ["deck"] = "http://www.roblox.com/asset/?id=6034295703",
+        ["group_add"] = "http://www.roblox.com/asset/?id=6034281909",
+        ["sports_basketball"] = "http://www.roblox.com/asset/?id=6034230649",
+        ["emoji_symbols"] = "http://www.roblox.com/asset/?id=6034281899",
+        ["switch_account"] = "http://www.roblox.com/asset/?id=6034227138",
+        ["remove_moderator"] = "http://www.roblox.com/asset/?id=6034267998",
+        ["coronavirus"] = "http://www.roblox.com/asset/?id=6034275724",
+        ["people"] = "http://www.roblox.com/asset/?id=6034287513",
+        ["person"] = "http://www.roblox.com/asset/?id=6034287594",
+        ["elderly"] = "http://www.roblox.com/asset/?id=6034295698",
+        ["clean_hands"] = "http://www.roblox.com/asset/?id=6034275729",
+        ["emoji_flags"] = "http://www.roblox.com/asset/?id=6034304898",
+        ["psychology"] = "http://www.roblox.com/asset/?id=6034287516",
+        ["person_add_alt"] = "http://www.roblox.com/asset/?id=6034267994",
+        ["sports_volleyball"] = "http://www.roblox.com/asset/?id=6034227139",
+        ["domain"] = "http://www.roblox.com/asset/?id=6034275722",
+        ["emoji_objects"] = "http://www.roblox.com/asset/?id=6034281900",
+        ["ios_share"] = "http://www.roblox.com/asset/?id=6034281941",
+        ["history_edu"] = "http://www.roblox.com/asset/?id=6034281934",
+        ["share"] = "http://www.roblox.com/asset/?id=6034230648",
+        ["military_tech"] = "http://www.roblox.com/asset/?id=6034295711",
+        ["sports_kabaddi"] = "http://www.roblox.com/asset/?id=6034227141",
+        ["cake"] = "http://www.roblox.com/asset/?id=6034295702",
+        ["engineering"] = "http://www.roblox.com/asset/?id=6034281908",
+        ["emoji_food_beverage"] = "http://www.roblox.com/asset/?id=6034304883",
+        ["notifications_none"] = "http://www.roblox.com/asset/?id=6034308947",
+        ["emoji_people"] = "http://www.roblox.com/asset/?id=6034281904",
+        ["thumb_down_alt"] = "http://www.roblox.com/asset/?id=6034227069",
+        ["sentiment_very_satisfied"] = "http://www.roblox.com/asset/?id=6034230650",
+        ["nights_stay"] = "http://www.roblox.com/asset/?id=6034304881",
+        ["reduce_capacity"] = "http://www.roblox.com/asset/?id=6034268013",
+        ["add_moderator"] = "http://www.roblox.com/asset/?id=6034295699",
+        ["science"] = "http://www.roblox.com/asset/?id=6034230640",
+        ["pages"] = "http://www.roblox.com/asset/?id=6034304892",
+        ["sentiment_satisfied"] = "http://www.roblox.com/asset/?id=6034230668",
+        ["plus_one"] = "http://www.roblox.com/asset/?id=6034268012",
+        ["party_mode"] = "http://www.roblox.com/asset/?id=6034287521",
+        ["person_remove"] = "http://www.roblox.com/asset/?id=6034267996",
+        ["single_bed"] = "http://www.roblox.com/asset/?id=6034230651",
+        ["mood"] = "http://www.roblox.com/asset/?id=6034295704",
+        ["public"] = "http://www.roblox.com/asset/?id=6034287522",
+        ["sports_rugby"] = "http://www.roblox.com/asset/?id=6034227073",
+        ["sports_handball"] = "http://www.roblox.com/asset/?id=6034227074",
+        ["person_add_alt_1"] = "http://www.roblox.com/asset/?id=6034287519",
+        ["people_alt"] = "http://www.roblox.com/asset/?id=6034287518",
+        ["notifications_off"] = "http://www.roblox.com/asset/?id=6034304894",
+        ["whatshot"] = "http://www.roblox.com/asset/?id=6034287525",
+        ["emoji_transportation"] = "http://www.roblox.com/asset/?id=6034281894",
+        ["outdoor_grill"] = "http://www.roblox.com/asset/?id=6034304900",
+        ["sentiment_very_dissatisfied"] = "http://www.roblox.com/asset/?id=6034230659",
+        ["masks"] = "http://www.roblox.com/asset/?id=6034295710",
+        ["luggage"] = "http://www.roblox.com/asset/?id=6034295708",
+        ["sports_motorsports"] = "http://www.roblox.com/asset/?id=6034227071",
+        ["sports_esports"] = "http://www.roblox.com/asset/?id=6034227061",
+        ["location_city"] = "http://www.roblox.com/asset/?id=6034304889",
+        ["sports_golf"] = "http://www.roblox.com/asset/?id=6034227060",
+        ["sentiment_dissatisfied"] = "http://www.roblox.com/asset/?id=6034230637",
+        ["no_luggage"] = "http://www.roblox.com/asset/?id=6034304891",
+        ["fireplace"] = "http://www.roblox.com/asset/?id=6034281910",
+        ["emoji_nature"] = "http://www.roblox.com/asset/?id=6034281896",
+        ["group"] = "http://www.roblox.com/asset/?id=6034281901",
+        ["thumb_up_alt"] = "http://www.roblox.com/asset/?id=6034227076",
+        ["sports_tennis"] = "http://www.roblox.com/asset/?id=6034227068",
+        ["facebook"] = "http://www.roblox.com/asset/?id=6034281898",
+        ["sports_mma"] = "http://www.roblox.com/asset/?id=6034227072",
+        ["person_outline"] = "http://www.roblox.com/asset/?id=6034268008",
+        ["sports_baseball"] = "http://www.roblox.com/asset/?id=6034230652",
+        ["sports_cricket"] = "http://www.roblox.com/asset/?id=6034230660",
+        ["people_outline"] = "http://www.roblox.com/asset/?id=6034287528",
+        ["notifications_paused"] = "http://www.roblox.com/asset/?id=6034304896",
+        ["emoji_emotions"] = "http://www.roblox.com/asset/?id=6034275731",
+        ["follow_the_signs"] = "http://www.roblox.com/asset/?id=6034281911",
+        ["sanitizer"] = "http://www.roblox.com/asset/?id=6034287586",
+        ["self_improvement"] = "http://www.roblox.com/asset/?id=6034230634",
+        ["notifications"] = "http://www.roblox.com/asset/?id=6034308946",
+        ["public_off"] = "http://www.roblox.com/asset/?id=6034287538",
+        ["recommend"] = "http://www.roblox.com/asset/?id=6034287524",
+        ["sports_football"] = "http://www.roblox.com/asset/?id=6034227067",
+        ["sports_hockey"] = "http://www.roblox.com/asset/?id=6034227064",
+        ["school"] = "http://www.roblox.com/asset/?id=6034230641",
+        ["connect_without_contact"] = "http://www.roblox.com/asset/?id=6034275800",
+        ["sports"] = "http://www.roblox.com/asset/?id=6034230647",
+        ["construction"] = "http://www.roblox.com/asset/?id=6034275725",
+        ["inventory"] = "http://www.roblox.com/asset/?id=6035056487",
+        ["add_box"] = "http://www.roblox.com/asset/?id=6035047375",
+        ["how_to_reg"] = "http://www.roblox.com/asset/?id=6035053288",
+        ["unarchive"] = "http://www.roblox.com/asset/?id=6035078921",
+        ["block_flipped"] = "http://www.roblox.com/asset/?id=6035047378",
+        ["file_copy"] = "http://www.roblox.com/asset/?id=6035053293",
+        ["bolt"] = "http://www.roblox.com/asset/?id=6035047381",
+        ["remove_circle_outline"] = "http://www.roblox.com/asset/?id=6035067843",
+        ["move_to_inbox"] = "http://www.roblox.com/asset/?id=6035067838",
+        ["save_alt"] = "http://www.roblox.com/asset/?id=6035067842",
+        ["weekend"] = "http://www.roblox.com/asset/?id=6035078894",
+        ["where_to_vote"] = "http://www.roblox.com/asset/?id=6035078913",
+        ["biotech"] = "http://www.roblox.com/asset/?id=6035047385",
+        ["report_off"] = "http://www.roblox.com/asset/?id=6035067830",
+        ["clear"] = "http://www.roblox.com/asset/?id=6035047409",
+        ["redo"] = "http://www.roblox.com/asset/?id=6035056483",
+        ["link"] = "http://www.roblox.com/asset/?id=6035056475",
+        ["drafts"] = "http://www.roblox.com/asset/?id=6035053297",
+        ["push_pin"] = "http://www.roblox.com/asset/?id=6035056481",
+        ["reply"] = "http://www.roblox.com/asset/?id=6035067844",
+        ["undo"] = "http://www.roblox.com/asset/?id=6035078896",
+        ["archive"] = "http://www.roblox.com/asset/?id=6035047379",
+        ["add"] = "http://www.roblox.com/asset/?id=6035047377",
+        ["insights"] = "http://www.roblox.com/asset/?id=6035067839",
+        ["flag"] = "http://www.roblox.com/asset/?id=6035053279",
+        ["save"] = "http://www.roblox.com/asset/?id=6035067857",
+        ["text_format"] = "http://www.roblox.com/asset/?id=6035078890",
+        ["content_cut"] = "http://www.roblox.com/asset/?id=6035053280",
+        ["ballot"] = "http://www.roblox.com/asset/?id=6035047386",
+        ["remove"] = "http://www.roblox.com/asset/?id=6035067836",
+        ["calculate"] = "http://www.roblox.com/asset/?id=6035047384",
+        ["report"] = "http://www.roblox.com/asset/?id=6035067826",
+        ["markunread"] = "http://www.roblox.com/asset/?id=6035056476",
+        ["delete_sweep"] = "http://www.roblox.com/asset/?id=6035053301",
+        ["gesture"] = "http://www.roblox.com/asset/?id=6035053287",
+        ["link_off"] = "http://www.roblox.com/asset/?id=6035056484",
+        ["forward"] = "http://www.roblox.com/asset/?id=6035053298",
+        ["reply_all"] = "http://www.roblox.com/asset/?id=6035067824",
+        ["how_to_vote"] = "http://www.roblox.com/asset/?id=6035053295",
+        ["square_foot"] = "http://www.roblox.com/asset/?id=6035078918",
+        ["outlined_flag"] = "http://www.roblox.com/asset/?id=6035056486",
+        ["add_circle"] = "http://www.roblox.com/asset/?id=6035047380",
+        ["stacked_bar_chart"] = "http://www.roblox.com/asset/?id=6035078892",
+        ["policy"] = "http://www.roblox.com/asset/?id=6035056512",
+        ["backspace"] = "http://www.roblox.com/asset/?id=6035047397",
+        ["sort"] = "http://www.roblox.com/asset/?id=6035078888",
+        ["content_paste"] = "http://www.roblox.com/asset/?id=6035053285",
+        ["low_priority"] = "http://www.roblox.com/asset/?id=6035056491",
+        ["font_download"] = "http://www.roblox.com/asset/?id=6035053275",
+        ["shield"] = "http://www.roblox.com/asset/?id=6035078889",
+        ["waves"] = "http://www.roblox.com/asset/?id=6035078898",
+        ["select_all"] = "http://www.roblox.com/asset/?id=6035067834",
+        ["dynamic_feed"] = "http://www.roblox.com/asset/?id=6035053289",
+        ["mail"] = "http://www.roblox.com/asset/?id=6035056477",
+        ["amp_stories"] = "http://www.roblox.com/asset/?id=6035047382",
+        ["filter_list"] = "http://www.roblox.com/asset/?id=6035053294",
+        ["send"] = "http://www.roblox.com/asset/?id=6035067832",
+        ["create"] = "http://www.roblox.com/asset/?id=6035053304",
+        ["stream"] = "http://www.roblox.com/asset/?id=6035078897",
+        ["next_week"] = "http://www.roblox.com/asset/?id=6035067835",
+        ["inbox"] = "http://www.roblox.com/asset/?id=6035067831",
+        ["add_link"] = "http://www.roblox.com/asset/?id=6035047374",
+        ["content_copy"] = "http://www.roblox.com/asset/?id=6035053278",
+        ["remove_circle"] = "http://www.roblox.com/asset/?id=6035067837",
+        ["add_circle_outline"] = "http://www.roblox.com/asset/?id=6035047391",
+        ["block"] = "http://www.roblox.com/asset/?id=6035047387",
+        ["tag"] = "http://www.roblox.com/asset/?id=6035078895",
         ["beach_access"] = "http://www.roblox.com/asset/?id=6035107923",
         ["stroller"] = "http://www.roblox.com/asset/?id=6035161535",
         ["family_restroom"] = "http://www.roblox.com/asset/?id=6035121916",
@@ -2033,38 +1996,48 @@ local IconAliases = {
     ["crosshair"] = "my_location"
 }
 
+-- FIX #7: Resolusi ikon teroptimasi dengan cache memori lokal untuk Lucide Icons
 local function GetIcon(icon, source)
     if not icon or icon == "" then return nil end
     source = source or "Material"
     local strIcon = tostring(icon)
 
-    if source == "Custom" or string.find(strIcon, "rbxassetid://") then
+    -- Asset kustom langsung (rbxassetid:// atau ID numerik murni)
+    if source == "Custom" or string.find(strIcon, "rbxassetid://") or tonumber(strIcon) then
         return string.find(strIcon, "rbxassetid://") and strIcon or ("rbxassetid://" .. strIcon)
     elseif source == "Lucide" then
         if isStudio then
             return "rbxassetid://10723434557"
         else
-            local okData, iconData = pcall(function()
-                return game:HttpGet("https://raw.githubusercontent.com/latte-soft/lucide-roblox/refs/heads/master/lib/Icons.luau")
-            end)
-            if okData and iconData then
-                local okLoad, icons = pcall(loadstring(iconData))
-                if okLoad and type(icons) == "table" then
-                    local clean = string.match(string.lower(strIcon), "^%s*(.*)%s*$")
-                    local sizedicons = icons['48px']
-                    local r = sizedicons and sizedicons[clean]
-                    if r and type(r[1]) == "number" then
-                        return {
-                            id = r[1],
-                            imageRectSize = Vector2.new(r[2][1], r[2][2]),
-                            imageRectOffset = Vector2.new(r[3][1], r[3][2])
-                        }
+            -- FIX #7: Cek apakah modul Lucide sudah pernah di-cache sebelumnya
+            if not IconModule.LucideCache then
+                local okData, iconData = pcall(function()
+                    return game:HttpGet("https://raw.githubusercontent.com/latte-soft/lucide-roblox/refs/heads/master/lib/Icons.luau")
+                end)
+                if okData and iconData then
+                    local okLoad, icons = pcall(loadstring(iconData))
+                    if okLoad and type(icons) == "table" then
+                        IconModule.LucideCache = icons['48px'] or icons
                     end
+                end
+            end
+
+            -- Ambil data dari cache memori tanpa download ulang
+            if type(IconModule.LucideCache) == "table" then
+                local clean = string.match(string.lower(strIcon), "^%s*(.*)%s*$")
+                local r = IconModule.LucideCache[clean]
+                if r and type(r[1]) == "number" then
+                    return {
+                        id = r[1],
+                        imageRectSize = Vector2.new(r[2][1], r[2][2]),
+                        imageRectOffset = Vector2.new(r[3][1], r[3][2])
+                    }
                 end
             end
             return nil
         end
     else
+        -- Material Icons & Aliases
         local resolved = IconAliases[strIcon] or strIcon
         if IconModule.Material[resolved] then
             return IconModule.Material[resolved]
@@ -2072,22 +2045,14 @@ local function GetIcon(icon, source)
         return nil
     end
 end
-
-LouisHub.GetIcon = GetIcon
-
---[[
-╔══════════════════════════════════════════════════════════════════════╗
-                              LouisHub
-                Master UI Suite: LouisHub Engine V4.0
-         PART 1C: THEMES, GLASS BLUR, UTILITIES & TOOLTIPS
-╚══════════════════════════════════════════════════════════════════════╝
-]]
+local obtenerIcono = GetIcon
 
 -- ══════════════════════════════════════════════════════════════
---  SECTION 8: TWO-LAYER THEME SYSTEM (BASE THEMES & ACCENTS)
+--  SECTION 5: THEMES, GRADIENTS & PALETTES SYSTEM
 -- ══════════════════════════════════════════════════════════════
 local Themes = {}
 Themes.Default = "Dark"
+Themes.Predeterminado = "Dark"
 
 Themes.List = {
     Dark = {
@@ -2102,9 +2067,13 @@ Themes.List = {
         Border          = Color3.fromRGB(12, 13, 15),
         Panel           = Color3.fromRGB(18, 19, 22),
         PanelLight      = Color3.fromRGB(26, 28, 32),
+        PanelClaro      = Color3.fromRGB(26, 28, 32),
         Row             = Color3.fromRGB(32, 34, 38),
+        Fila            = Color3.fromRGB(32, 34, 38),
         Input           = Color3.fromRGB(15, 16, 19),
+        Entrada         = Color3.fromRGB(15, 16, 19),
         Muted           = Color3.fromRGB(60, 60, 60),
+        Apagado         = Color3.fromRGB(60, 60, 60),
     },
     White = {
         Background      = Color3.fromRGB(218, 218, 224),
@@ -2118,9 +2087,13 @@ Themes.List = {
         Border          = Color3.fromRGB(195, 195, 200),
         Panel           = Color3.fromRGB(252, 252, 254),
         PanelLight      = Color3.fromRGB(240, 240, 244),
+        PanelClaro      = Color3.fromRGB(240, 240, 244),
         Row             = Color3.fromRGB(232, 232, 237),
+        Fila            = Color3.fromRGB(232, 232, 237),
         Input           = Color3.fromRGB(220, 220, 226),
+        Entrada         = Color3.fromRGB(220, 220, 226),
         Muted           = Color3.fromRGB(180, 180, 180),
+        Apagado         = Color3.fromRGB(180, 180, 180),
     },
     Green = {
         Background      = Color3.fromRGB(58, 122, 68),
@@ -2134,9 +2107,13 @@ Themes.List = {
         Border          = Color3.fromRGB(15, 30, 18),
         Panel           = Color3.fromRGB(24, 40, 27),
         PanelLight      = Color3.fromRGB(32, 52, 36),
+        PanelClaro      = Color3.fromRGB(32, 52, 36),
         Row             = Color3.fromRGB(28, 46, 31),
+        Fila            = Color3.fromRGB(28, 46, 31),
         Input           = Color3.fromRGB(20, 34, 22),
+        Entrada         = Color3.fromRGB(20, 34, 22),
         Muted           = Color3.fromRGB(60, 60, 60),
+        Apagado         = Color3.fromRGB(60, 60, 60),
     },
     Purple = {
         Background      = Color3.fromRGB(78, 55, 120),
@@ -2150,9 +2127,13 @@ Themes.List = {
         Border          = Color3.fromRGB(18, 12, 28),
         Panel           = Color3.fromRGB(26, 20, 36),
         PanelLight      = Color3.fromRGB(34, 27, 46),
+        PanelClaro      = Color3.fromRGB(34, 27, 46),
         Row             = Color3.fromRGB(30, 24, 42),
+        Fila            = Color3.fromRGB(30, 24, 42),
         Input           = Color3.fromRGB(22, 17, 32),
+        Entrada         = Color3.fromRGB(22, 17, 32),
         Muted           = Color3.fromRGB(60, 60, 60),
+        Apagado         = Color3.fromRGB(60, 60, 60),
     },
     Red = {
         Background      = Color3.fromRGB(214, 70, 60),
@@ -2166,9 +2147,13 @@ Themes.List = {
         Border          = Color3.fromRGB(35, 8, 8),
         Panel           = Color3.fromRGB(34, 20, 20),
         PanelLight      = Color3.fromRGB(44, 27, 27),
+        PanelClaro      = Color3.fromRGB(44, 27, 27),
         Row             = Color3.fromRGB(38, 24, 24),
+        Fila            = Color3.fromRGB(38, 24, 24),
         Input           = Color3.fromRGB(28, 17, 17),
+        Entrada         = Color3.fromRGB(28, 17, 17),
         Muted           = Color3.fromRGB(60, 60, 60),
+        Apagado         = Color3.fromRGB(60, 60, 60),
     },
     Halloween = {
         Background      = Color3.fromRGB(32, 22, 45),
@@ -2182,11 +2167,23 @@ Themes.List = {
         Border          = Color3.fromRGB(12, 8, 20),
         Panel           = Color3.fromRGB(38, 26, 52),
         PanelLight      = Color3.fromRGB(50, 35, 68),
+        PanelClaro      = Color3.fromRGB(50, 35, 68),
         Row             = Color3.fromRGB(42, 30, 58),
+        Fila            = Color3.fromRGB(42, 30, 58),
         Input           = Color3.fromRGB(26, 17, 38),
+        Entrada         = Color3.fromRGB(26, 17, 38),
         Muted           = Color3.fromRGB(70, 60, 80),
+        Apagado         = Color3.fromRGB(70, 60, 80),
     }
 }
+
+-- Backward Compatibility Key Aliases
+Themes.List.Negro  = Themes.List.Dark
+Themes.List.Blanco = Themes.List.White
+Themes.List.Verde  = Themes.List.Green
+Themes.List.Morado = Themes.List.Purple
+Themes.List.Rojo   = Themes.List.Red
+Themes.Lista       = Themes.List
 
 local PresetGradients = {
     ["Nightlight (Classic)"] = {Color3.fromRGB(147, 255, 239), Color3.fromRGB(201, 211, 233), Color3.fromRGB(255, 167, 227)},
@@ -2204,8 +2201,6 @@ local PresetGradients = {
 local Theme = {}
 for k, v in pairs(Themes.List[Themes.Default]) do Theme[k] = v end
 LouisHub.Theme = Theme
-LouisHub.CurrentBaseTheme = Themes.Default
-LouisHub.CurrentAccentPreset = "Default"
 
 LouisHub.ThemeGradient = ColorSequence.new{
     ColorSequenceKeypoint.new(0.00, Theme.Accent),
@@ -2227,7 +2222,9 @@ local function compactRegistry(registry)
     end
     for i = #registry, j + 1, -1 do registry[i] = nil end
 end
+local compactarRegistro = compactRegistry
 
+-- Registrasi instance agar merespons pergantian tema secara dinamis
 function LouisHub:Register(instance, property, themeKey)
     local entry = {instance = instance, property = property, themeKey = themeKey}
     table.insert(themeRegistry, entry)
@@ -2242,15 +2239,18 @@ function LouisHub:Register(instance, property, themeKey)
         end)
     end
 end
+LouisHub.Registrar = LouisHub.Register
 
 -- ══════════════════════════════════════════════════════════════
---  SECTION 9: MOTION, TWEENING & SINGLETON GLASS BLUR MODULE
+--  SECTION 6: MOTION, TWEENING & SINGLETON GLASS BLUR MODULE
 -- ══════════════════════════════════════════════════════════════
 LouisHub.Motion = {
     Instant         = 0,
+    Directo         = 0,
     Press           = 0.14,
     Hover           = 0.25,
     HoverIntensity  = 0.20,
+    HoverIntensidad = 0.20,
     FlashIn         = 0.08,
     FlashOut        = 0.35,
     Expand          = 0.30,
@@ -2258,10 +2258,14 @@ LouisHub.Motion = {
     Page            = 0.30,
     Spin            = 0.60,
     EaseEnter       = Enum.EasingStyle.Exponential,
+    EaseEntrar      = Enum.EasingStyle.Exponential,
     EaseExit        = Enum.EasingStyle.Exponential,
+    EaseSalir       = Enum.EasingStyle.Exponential,
     EasePop         = Enum.EasingStyle.Back,
     EaseSmooth      = Enum.EasingStyle.Exponential,
+    EaseSuave       = Enum.EasingStyle.Exponential,
     EaseLinear      = Enum.EasingStyle.Linear,
+    EaseLineal      = Enum.EasingStyle.Linear,
 }
 
 local COLOR_FLASH_SUCCESS = Color3.fromRGB(46, 204, 113)
@@ -2311,7 +2315,8 @@ function Utils.Tween(obj, props, duration, style, direction, callback)
     return ok and tw or nil
 end
 
-function tween(object, goal, callback, tweenin)
+-- FIX #12: Deklarasikan sebagai local function agar tidak bocor ke environment global (_G)
+local function tween(object, goal, callback, tweenin)
     return Utils.Tween(
         object,
         goal,
@@ -2338,8 +2343,16 @@ local function ensureDOF()
     return SingletonDOF
 end
 
+-- FIX #12: GlassBlur adaptif. Jika dinonaktifkan via LouisHub.GlassBlur atau di mobile spesifikasi rendah,
+-- hindari pembuatan Part 3D berulang dan unhook RenderStep secara instan.
 local function BlurModule(Frame)
+    if not LouisHub.GlassBlur or (LouisHub.Capabilities and LouisHub.Capabilities.IsTouchOnly) then
+        return { Root = nil, Effect = nil, Uid = nil }
+    end
+
     local camera = Workspace.CurrentCamera
+    if not camera then return { Root = nil, Effect = nil, Uid = nil } end
+
     local MTREL = "Glass"
     local root = Instance.new('Folder', camera)
     root.Name = 'LouisHubBlur'
@@ -2436,7 +2449,7 @@ local function BlurModule(Frame)
 
     local parents = {}
     local function add(child)
-        if child:IsA('GuiObject') then
+        if child:IsA'GuiObject' then
             parents[#parents + 1] = child
             add(child.Parent)
         end
@@ -2517,7 +2530,7 @@ local function BlurModule(Frame)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  SECTION 10: CORE UTILITIES & TEXT SCALING ENGINE
+--  SECTION 7: BASE UTILITIES (COMPACT & RESTYLED VISUALS)
 -- ══════════════════════════════════════════════════════════════
 local _uiInstanceCounter = 0
 local function trackInstanceCreated(inst)
@@ -2554,6 +2567,7 @@ function Utils.AccentGradient(instance, rotation)
     end)
     return gradient
 end
+Utils.GradienteAcento = Utils.AccentGradient
 
 function Utils.Hover(eventObj, colorObj, intensity, duration, getBaseColor)
     if not eventObj or not colorObj then return end
@@ -2624,7 +2638,9 @@ function Utils.ReliableClick(object, callback, visualObj)
         callback()
     end))
 end
+Utils.ClickConfiable = Utils.ReliableClick
 
+-- FIX #3: Hitbox diperbaiki agar selalu berada tepat di atas target tanpa offset posisi yang salah
 function Utils.ExpandedHitbox(button, padding)
     padding = padding or 0
     if padding <= 0 or not button then return button end
@@ -2635,9 +2651,10 @@ function Utils.ExpandedHitbox(button, padding)
         Transparency = 1,
         Radius = false,
     })
-    hitbox.ZIndex = button.ZIndex + 1
+    hitbox.ZIndex = button.ZIndex + 5
     return hitbox
 end
+Utils.HitboxAmpliado = Utils.ExpandedHitbox
 
 function Utils.FlashFeedback(instance, isSuccess, normalColor)
     if not instance or not instance.Parent then return end
@@ -2656,21 +2673,21 @@ function Utils.Frame(cfg)
     cfg = cfg or {}
     local f = Instance.new("Frame")
     trackInstanceCreated(f)
-    f.Size = cfg.Size or UDim2.new(1, 0, 0, cfg.Height or 26)
-    f.Position = cfg.Position or UDim2.new(0, 0, 0, 0)
-    if cfg.Anchor then f.AnchorPoint = cfg.Anchor end
-    f.BackgroundColor3 = cfg.Color or Theme.Row
-    f.BackgroundTransparency = cfg.Transparency or 0.5
+    f.Size = cfg.Size or UDim2.new(1, 0, 0, cfg.Height or cfg.Alto or 26)
+    f.Position = cfg.Position or cfg.Posicion or UDim2.new(0, 0, 0, 0)
+    if cfg.Anchor or cfg.Ancla then f.AnchorPoint = cfg.Anchor or cfg.Ancla end
+    f.BackgroundColor3 = cfg.Color or Theme.Row or Theme.Fila
+    f.BackgroundTransparency = cfg.Transparency or cfg.Transparencia or 0.5
     f.BorderSizePixel = 0
-    f.ClipsDescendants = cfg.Clips or false
-    f.LayoutOrder = cfg.Order or 0
+    f.ClipsDescendants = cfg.Clips or cfg.Recortar or false
+    f.LayoutOrder = cfg.Order or cfg.Orden or 0
     if cfg.Visible ~= nil then f.Visible = cfg.Visible end
-    f.Parent = cfg.Parent
-    if cfg.Radius ~= false then Utils.Corner(f, cfg.Radius or 6) end
-    if cfg.Border ~= false then
-        local stroke = Utils.Stroke(f, cfg.BorderColor or Color3.fromRGB(64, 61, 76), cfg.BorderThickness or 1, cfg.BorderTransparency or 0.5)
-        if cfg.BorderThemeKey then
-            LouisHub:Register(stroke, "Color", cfg.BorderThemeKey)
+    f.Parent = cfg.Parent or cfg.Padre
+    if cfg.Radius ~= false and cfg.Radio ~= false then Utils.Corner(f, cfg.Radius or cfg.Radio or 6) end
+    if cfg.Border ~= false and cfg.Borde ~= false then
+        local stroke = Utils.Stroke(f, cfg.BorderColor or cfg.ColorBorde or Color3.fromRGB(64, 61, 76), cfg.BorderThickness or cfg.GrosorBorde or 1, cfg.BorderTransparency or cfg.TransparenciaBorde or 0.5)
+        if cfg.BorderThemeKey or cfg.ClaveTemaBorde then
+            LouisHub:Register(stroke, "Color", cfg.BorderThemeKey or cfg.ClaveTemaBorde)
         end
     end
     return f
@@ -2681,16 +2698,17 @@ function Utils.Row(parent, height, order, color)
         Parent = parent,
         Size = UDim2.new(1, 0, 0, height or 26),
         Order = order,
-        Color = color or Theme.Row,
+        Color = color or Theme.Row or Theme.Fila,
         Radius = 6,
         Transparency = 0.5,
         Border = true
     })
 end
+Utils.Fila = Utils.Row
 
 local textScaleRegistry = {}
 local deadTextScaleEntries = 0
-local textScales = { tabs = 1, general = 1, title = 1 }
+local textScales = { tabs = 1, general = 1, title = 1, titulo = 1 }
 
 local function hasHiddenAncestor(inst)
     local current = inst
@@ -2711,6 +2729,7 @@ function Utils.UIScaleFactor(inst)
     end
     return (f > 0) and f or 1
 end
+Utils.FactorEscalaUI = Utils.UIScaleFactor
 
 local function calculateAndApplyTextSize(entry)
     local inst = entry.instance
@@ -2781,47 +2800,49 @@ function Utils.Text(cfg)
     trackInstanceCreated(l)
     l.BackgroundTransparency = 1
     l.Size = cfg.Size or UDim2.new(1, -6, 1, 0)
-    l.Position = cfg.Position or UDim2.new(0, 6, 0, 0)
-    l.Font = cfg.Font or Enum.Font.GothamMedium
-    local baseSize = cfg.TextSize or cfg.SizeValue or 11
+    l.Position = cfg.Position or cfg.Posicion or UDim2.new(0, 6, 0, 0)
+    l.Font = cfg.Font or cfg.Fuente or Enum.Font.GothamMedium
+    local baseSize = cfg.TextSize or cfg.SizeValue or cfg.Tamano or 11
     l.TextSize = baseSize
     l.TextColor3 = cfg.Color or Theme.Text
-    l.TextXAlignment = cfg.Alignment or Enum.TextXAlignment.Left
-    l.TextTruncate = cfg.Truncate and Enum.TextTruncate.AtEnd or Enum.TextTruncate.None
-    l.TextWrapped = cfg.Wrapped or false
-    l.TextTransparency = cfg.TextTransparency or 0
+    l.TextXAlignment = cfg.Alignment or cfg.Alineacion or Enum.TextXAlignment.Left
+    l.TextTruncate = (cfg.Truncate or cfg.Truncar) and Enum.TextTruncate.AtEnd or Enum.TextTruncate.None
+    l.TextWrapped = cfg.Wrapped or cfg.Ajustar or false
+    l.TextTransparency = cfg.TextTransparency or cfg.TextoTransparencia or 0
     l.RichText = cfg.RichText or false
-    l.Text = cfg.Text or ""
-    l.LayoutOrder = cfg.Order or 0
-    l.Parent = cfg.Parent
+    l.Text = cfg.Text or cfg.Texto or ""
+    l.LayoutOrder = cfg.Order or cfg.Orden or 0
+    l.Parent = cfg.Parent or cfg.Padre
 
-    if cfg.ThemeColor then
-        LouisHub:Register(l, "TextColor3", cfg.ThemeColor)
+    if cfg.ThemeColor or cfg.ColorTema then
+        LouisHub:Register(l, "TextColor3", cfg.ThemeColor or cfg.ColorTema)
     elseif not cfg.Color then
         LouisHub:Register(l, "TextColor3", "Text")
     end
 
-    registerTextScale(l, baseSize, cfg.Category, cfg.Truncate)
+    registerTextScale(l, baseSize, cfg.Category or cfg.Categoria, cfg.Truncate or cfg.Truncar)
     return l
 end
+Utils.Texto = Utils.Text
 
 function Utils.BaseButton(cfg)
     cfg = cfg or {}
     local b = Instance.new("TextButton")
     trackInstanceCreated(b)
-    b.Size = cfg.Size or UDim2.new(1, 0, 0, cfg.Height or 26)
-    b.Position = cfg.Position or UDim2.new(0, 0, 0, 0)
-    if cfg.Anchor then b.AnchorPoint = cfg.Anchor end
-    b.BackgroundTransparency = cfg.Transparency == nil and 1 or cfg.Transparency
-    b.BackgroundColor3 = cfg.Color or Theme.Row
+    b.Size = cfg.Size or UDim2.new(1, 0, 0, cfg.Height or cfg.Alto or 26)
+    b.Position = cfg.Position or cfg.Posicion or UDim2.new(0, 0, 0, 0)
+    if cfg.Anchor or cfg.Ancla then b.AnchorPoint = cfg.Anchor or cfg.Ancla end
+    b.BackgroundTransparency = (cfg.Transparency == nil and cfg.Transparencia == nil) and 1 or (cfg.Transparency or cfg.Transparencia)
+    b.BackgroundColor3 = cfg.Color or Theme.Row or Theme.Fila
     b.AutoButtonColor = false
     b.Text = ""
     b.BorderSizePixel = 0
-    b.LayoutOrder = cfg.Order or 0
-    b.Parent = cfg.Parent
-    if cfg.Radius ~= false then Utils.Corner(b, cfg.Radius or 6) end
+    b.LayoutOrder = cfg.Order or cfg.Orden or 0
+    b.Parent = cfg.Parent or cfg.Padre
+    if cfg.Radius ~= false and cfg.Radio ~= false then Utils.Corner(b, cfg.Radius or cfg.Radio or 6) end
     return b
 end
+Utils.BotonBase = Utils.BaseButton
 
 function Utils.Defer(fn)
     local pending = false
@@ -2834,6 +2855,7 @@ function Utils.Defer(fn)
         end)
     end
 end
+Utils.Diferir = Utils.Defer
 
 function Utils.MakeDynamicRow(row, lbl, minHeight, padY)
     padY = padY or 5
@@ -2855,6 +2877,7 @@ function Utils.MakeDynamicRow(row, lbl, minHeight, padY)
     LouisHub:RegisterConnection(lbl:GetPropertyChangedSignal("AbsoluteSize"):Connect(Utils.Defer(recalculate)))
     task.defer(recalculate)
 end
+Utils.HacerFilaDinamica = Utils.MakeDynamicRow
 
 local EventManager = {}
 EventManager._active = nil
@@ -2864,6 +2887,7 @@ function EventManager:StartDrag(callback, onFinished)
     self._active = callback
     self._onFinished = onFinished
 end
+EventManager.Arrastrar = EventManager.StartDrag
 
 function EventManager:StopDrag()
     self._active = nil
@@ -2873,10 +2897,12 @@ function EventManager:StopDrag()
         pcall(cb)
     end
 end
+EventManager.DetenerArrastre = EventManager.StopDrag
 
 function EventManager:IsDragging()
     return self._active ~= nil
 end
+EventManager.HayArrastreActivo = EventManager.IsDragging
 
 if type(_G.LouisHub_EventManagerConnections) == "table" then
     for _, c in ipairs(_G.LouisHub_EventManagerConnections) do
@@ -2915,18 +2941,18 @@ function Utils.Draggable(trigger, target, eventMgr)
             dragStart    = Vector2.new(input.Position.X, input.Position.Y)
             targetStart  = target.Position
 
-            local connDragEnd
-            connDragEnd = input.Changed:Connect(function()
+            local connChanged
+            connChanged = input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     isDragging = false
                     if eventMgr then eventMgr:StopDrag() end
-                    if connDragEnd then
-                        connDragEnd:Disconnect()
-                        connDragEnd = nil
+                    if connChanged then
+                        connChanged:Disconnect()
+                        connChanged = nil
                     end
                 end
             end)
-            LouisHub:RegisterConnection(connDragEnd)
+            LouisHub:RegisterConnection(connChanged)
 
             if eventMgr then
                 eventMgr:StartDrag(function(inp)
@@ -2938,15 +2964,16 @@ function Utils.Draggable(trigger, target, eventMgr)
                     )
                 end, function()
                     isDragging = false
-                    if connDragEnd then
-                        connDragEnd:Disconnect()
-                        connDragEnd = nil
+                    if connChanged then
+                        connChanged:Disconnect()
+                        connChanged = nil
                     end
                 end)
             end
         end
     end)
 end
+Utils.Arrastrable = Utils.Draggable
 
 local activeNumberTweens = setmetatable({}, {__mode = "k"})
 
@@ -2994,6 +3021,7 @@ function Utils.TweenNumber(from, to, duration, callback, style, direction, key)
         if activeNumberTweens[lookupKey] == record then activeNumberTweens[lookupKey] = nil end
     end)
 end
+Utils.TweenNumero = Utils.TweenNumber
 
 function Utils.WrapInstance(inst)
     local proxy = setmetatable({}, {
@@ -3008,21 +3036,20 @@ function Utils.WrapInstance(inst)
         __newindex = function(_, k, val) inst[k] = val end,
     })
     rawset(proxy, "Instance", inst)
+    rawset(proxy, "Instancia", inst)
     return proxy
 end
+Utils.EnvolverInstancia = Utils.WrapInstance
 
+-- FIX #4 & #11: Pasang fitur Lock/Unlock, Show/Hide/Visible langsung ke elemen tanpa O(n^2) query
 function Utils.AttachLock(elem, row)
     local overlay, lblReason, badge
     local isLocked, lockReason = false, nil
     local BADGE_POS = UDim2.new(1, -6, 0.5, 0)
     local shakeToken = 0
     rawset(elem, "Row", row)
+    rawset(elem, "Fila", row)
     local stroke, highlightToken = nil, 0
-
-    local function withoutSelf(a, b)
-        if a == elem then return b end
-        return a
-    end
 
     local function refreshText()
         if lblReason then
@@ -3079,19 +3106,6 @@ function Utils.AttachLock(elem, row)
         end, badge)
     end
 
-    local function animateLockEntry()
-        local transOverlay = overlay.BackgroundTransparency
-        local transBadge   = badge.BackgroundTransparency
-        local transText    = lblReason.TextTransparency
-        overlay.BackgroundTransparency = 1
-        badge.BackgroundTransparency   = 1
-        lblReason.TextTransparency     = 1
-        badge.Position = UDim2.new(BADGE_POS.X.Scale, BADGE_POS.X.Offset + 20, BADGE_POS.Y.Scale, BADGE_POS.Y.Offset)
-        Utils.Tween(overlay, {BackgroundTransparency = transOverlay}, LouisHub.Motion.Expand)
-        Utils.Tween(badge, {BackgroundTransparency = transBadge, Position = BADGE_POS}, LouisHub.Motion.Expand, LouisHub.Motion.EasePop)
-        Utils.Tween(lblReason, {TextTransparency = transText}, LouisHub.Motion.Expand)
-    end
-
     local function lock(newReason, animate)
         local wasLocked = isLocked
         lockReason = newReason
@@ -3100,15 +3114,17 @@ function Utils.AttachLock(elem, row)
         overlay.Visible = true
         isLocked = true
         if animate and not wasLocked and row.AbsoluteSize.X > 0 then
-            animateLockEntry()
+            overlay.BackgroundTransparency = 1
+            badge.BackgroundTransparency   = 1
+            lblReason.TextTransparency     = 1
+            badge.Position = UDim2.new(BADGE_POS.X.Scale, BADGE_POS.X.Offset + 20, BADGE_POS.Y.Scale, BADGE_POS.Y.Offset)
+            Utils.Tween(overlay, {BackgroundTransparency = 0.35}, LouisHub.Motion.Expand)
+            Utils.Tween(badge, {BackgroundTransparency = 0, Position = BADGE_POS}, LouisHub.Motion.Expand, LouisHub.Motion.EasePop)
+            Utils.Tween(lblReason, {TextTransparency = 0}, LouisHub.Motion.Expand)
         end
     end
 
-    rawset(elem, "Lock", function(selfParam, reason)
-        lock(withoutSelf(selfParam, reason), true)
-    end)
-
-    rawset(elem, "Unlock", function()
+    local function unlock()
         local wasLocked = isLocked
         isLocked = false
         if overlay then overlay.Visible = false end
@@ -3129,22 +3145,32 @@ function Utils.AttachLock(elem, row)
                 if ghost.Parent then ghost:Destroy() end
             end)
         end
-    end)
+    end
 
-    rawset(elem, "IsLocked", function() return isLocked end)
+    rawset(elem, "Lock", WrapSafeMethod(elem, function(reason) lock(reason, true) end))
+    rawset(elem, "Unlock", WrapSafeMethod(elem, unlock))
+    rawset(elem, "IsLocked", WrapSafeMethod(elem, function() return isLocked end))
+    rawset(elem, "SetLockedTitle", WrapSafeMethod(elem, function(reason) lockReason = reason; refreshText() end))
 
-    rawset(elem, "SetLockedTitle", function(selfParam, reason)
-        lockReason = withoutSelf(selfParam, reason)
-        refreshText()
-    end)
+    -- Lifecycle & visibility methods seragam
+    rawset(elem, "Visible", WrapSafeMethod(elem, function(state)
+        if state ~= nil then
+            row.Visible = (state == true)
+        end
+        return row.Visible
+    end))
+    rawset(elem, "Show", WrapSafeMethod(elem, function() row.Visible = true end))
+    rawset(elem, "Hide", WrapSafeMethod(elem, function() row.Visible = false end))
+    rawset(elem, "Destroy", WrapSafeMethod(elem, function()
+        pcall(function() row:Destroy() end)
+    end))
 
-    rawset(elem, "Highlight", function(selfParam, opts)
-        local o = withoutSelf(selfParam, opts)
+    rawset(elem, "Highlight", WrapSafeMethod(elem, function(opts)
         local duration = 2
-        if type(o) == "number" then
-            duration = o
-        elseif type(o) == "table" and type(o.Duration) == "number" then
-            duration = o.Duration
+        if type(opts) == "number" then
+            duration = opts
+        elseif type(opts) == "table" and type(opts.Duration or opts.Duracion) == "number" then
+            duration = opts.Duration or opts.Duracion
         end
         duration = math.clamp(duration, 0.5, 10)
 
@@ -3168,47 +3194,11 @@ function Utils.AttachLock(elem, row)
             if targetStroke.Parent then targetStroke:Destroy() end
             if highlightToken == myToken then stroke = nil end
         end)
-    end)
+    end))
 
     return function(newReason) lock(newReason, false) end
 end
-
-function Utils.WrapLockableControl(Section, container, name)
-    local original = Section[name]
-    if type(original) ~= "function" then return end
-    Section[name] = function(self, cfg)
-        local previous = {}
-        for _, child in ipairs(container:GetDescendants()) do previous[child] = true end
-        if self._col1 then for _, child in ipairs(self._col1:GetDescendants()) do previous[child] = true end end
-        if self._col2 then for _, child in ipairs(self._col2:GetDescendants()) do previous[child] = true end end
-
-        local result = original(self, cfg)
-        local row = nil
-
-        local function findNewIn(parentObj)
-            if not parentObj then return end
-            for _, child in ipairs(parentObj:GetChildren()) do
-                if not previous[child] and child:IsA("GuiObject") then
-                    if not row or child.LayoutOrder > row.LayoutOrder then
-                        row = child
-                    end
-                end
-            end
-        end
-
-        findNewIn(container)
-        findNewIn(self._col1)
-        findNewIn(self._col2)
-
-        if not row then return result end
-        local elem = result
-        if typeof(result) == "Instance" then elem = Utils.WrapInstance(result) end
-        if type(elem) ~= "table" then return result end
-        local lockInitial = Utils.AttachLock(elem, row)
-        if type(cfg) == "table" and cfg.Locked then lockInitial(cfg.LockedTitle) end
-        return elem
-    end
-end
+Utils.AnexarBloqueo = Utils.AttachLock
 
 function Utils.FadeIn(root, duration, includeRoot)
     local targets = {}
@@ -3283,7 +3273,7 @@ end
 function Utils.AttachDescription(row, parent, order, text, zoneWidth)
     local panel = Utils.Frame({
         Parent = parent, Size = UDim2.new(1, 0, 0, 0),
-        Color = Theme.Row, Order = order, Radius = 6,
+        Color = Theme.Row or Theme.Fila, Order = order, Radius = 6,
     })
     panel.AutomaticSize = Enum.AutomaticSize.Y
     panel.Visible = false
@@ -3303,7 +3293,7 @@ function Utils.AttachDescription(row, parent, order, text, zoneWidth)
 
     local zone = Utils.BaseButton({
         Parent = row, Size = zoneWidth or UDim2.new(1, 0, 1, 0),
-        Color = Theme.Row, Transparency = 1, Radius = 6,
+        Color = Theme.Row or Theme.Fila, Transparency = 1, Radius = 6,
     })
     local arrow = Instance.new("ImageLabel")
     arrow.BackgroundTransparency = 1
@@ -3322,9 +3312,2478 @@ function Utils.AttachDescription(row, parent, order, text, zoneWidth)
     end)
     return panel
 end
+Utils.AnexarDescripcion = Utils.AttachDescription
 
 -- ══════════════════════════════════════════════════════════════
---  SECTION 11: TOOLTIP ENGINE (GLASS OVERLAY & TOUCH GESTURES)
+--  SECTION 8: STATE SYSTEM, PROXY AUTOSAVE & PENDING CONFIG
+-- ══════════════════════════════════════════════════════════════
+local _realFlags = {}
+local _nonPersistentFlags = {}
+local _uiFlags = {}
+local _registeredKeybinds = {}
+local _pendingConfig = {} -- FIX #9: Buffer untuk menyimpan konfigurasi file sebelum elemen terdaftar
+
+-- FIX #6 & #9: Metatable Elements otomatis menerapkan pending config saat elemen dibuat
+local function newElementTable()
+    return setmetatable({}, {
+        __index = function(t, flag)
+            return rawget(t, flag)
+        end,
+        __newindex = function(t, flag, elem)
+            rawset(t, flag, elem)
+            if type(elem) == "table" then
+                -- FIX #9: Jika ada config file yang telah dimuat sebelum elemen ini dibuat, terapkan nilainya
+                if _pendingConfig[flag] ~= nil then
+                    local loadedVal = _pendingConfig[flag]
+                    _pendingConfig[flag] = nil
+                    _realFlags[flag] = loadedVal
+                    if type(elem.Set) == "function" then
+                        pcall(elem.Set, loadedVal, false)
+                    end
+                elseif type(elem.Get) == "function" then
+                    local ok, val = pcall(elem.Get)
+                    if ok and val ~= nil then
+                        elem._defecto = copyDefault(val)
+                    end
+                end
+            end
+        end,
+    })
+end
+
+LouisHub.Elements = newElementTable()
+LouisHub.Elementos = LouisHub.Elements
+LouisHub.Options  = LouisHub.Elements -- FIX #6: Options merujuk langsung ke Elements agar tidak terjadi desinkronisasi
+
+local activeSaveWindow = nil
+local hasPendingUnsavedChanges = false
+local isAutosaveLoopActive = false
+local _isLoadingFromFile = false
+
+local function markPendingChange()
+    if _isLoadingFromFile then return end
+    hasPendingUnsavedChanges = true
+end
+
+local function startAutosaveLoop()
+    if isAutosaveLoopActive then return end
+    isAutosaveLoopActive = true
+    LouisHub:RegisterThread(task.spawn(function()
+        while isAutosaveLoopActive do
+            task.wait(10)
+            if hasPendingUnsavedChanges and activeSaveWindow and activeSaveWindow.NombreConfig and LouisHub.SaveManager then
+                hasPendingUnsavedChanges = false
+                pcall(function()
+                    LouisHub.SaveManager:SaveSilent(activeSaveWindow.NombreConfig)
+                end)
+            end
+        end
+    end))
+end
+
+local _windowsWithThemeSelectors = setmetatable({}, {__mode = "k"})
+
+-- FIX #7: Parsing KeyCode string ke Enum.KeyCode dan ekstraksi modifier
+local function _decomposeKey(v)
+    if typeof(v) == "table" then
+        local kc = v.KeyCode
+        if type(kc) == "string" then
+            kc = Enum.KeyCode[kc] or Enum.KeyCode.Unknown
+        end
+        return kc, v.Ctrl or false, v.Shift or false, v.Alt or false
+    elseif typeof(v) == "string" then
+        return Enum.KeyCode[v] or Enum.KeyCode.Unknown, false, false, false
+    end
+    return v, false, false, false
+end
+
+local function _formatKey(keyCode, ctrl, shift, alt)
+    if not keyCode or keyCode == Enum.KeyCode.Unknown then return "None" end
+    local parts = {}
+    if ctrl then table.insert(parts, "Ctrl") end
+    if shift then table.insert(parts, "Shift") end
+    if alt then table.insert(parts, "Alt") end
+    table.insert(parts, keyCode.Name or tostring(keyCode))
+    return table.concat(parts, "+")
+end
+
+local function _keysInConflict(a, b)
+    local kA, cA, sA, aA = _decomposeKey(a)
+    local kB, cB, sB, aB = _decomposeKey(b)
+    if not kA or not kB then return false end
+    if kA == Enum.KeyCode.Unknown or kB == Enum.KeyCode.Unknown then return false end
+    return kA == kB and cA == cB and sA == sB and aA == aB
+end
+
+local function _checkKeybindConflict(ownEntry, newVal)
+    local conflicts = {}
+    for _, entry in ipairs(_registeredKeybinds) do
+        if entry ~= ownEntry then
+            local okVal, otherVal = pcall(entry.GetValor or entry.GetValue)
+            if okVal and _keysInConflict(newVal, otherVal) then
+                table.insert(conflicts, entry.text or entry.texto or "Keybind")
+            end
+        end
+    end
+    if #conflicts > 0 then
+        local k, c, s, a = _decomposeKey(newVal)
+        pcall(function()
+            LouisHub:Notify({
+                Title    = "⚠️ Keybind in Use",
+                Content  = "'" .. _formatKey(k, c, s, a) .. "' is already assigned to: " .. table.concat(conflicts, ", "),
+                Duration = 4,
+                Icon     = "warning"
+            })
+        end)
+    end
+end
+
+local function _checkConflictsOnLoad()
+    if #_registeredKeybinds < 2 then return end
+    local bySignature = {}
+    for _, entry in ipairs(_registeredKeybinds) do
+        local ok, val = pcall(entry.GetValor or entry.GetValue)
+        if ok then
+            local k, c, s, a = _decomposeKey(val)
+            if k and k ~= Enum.KeyCode.Unknown then
+                local sig = (k.Name or tostring(k)) .. "|" .. tostring(c) .. "|" .. tostring(s) .. "|" .. tostring(a)
+                bySignature[sig] = bySignature[sig] or {
+                    k = k, c = c, s = s, a = a, texts = {},
+                }
+                table.insert(bySignature[sig].texts, entry.text or entry.texto or "Keybind")
+            end
+        end
+    end
+
+    for _, group in pairs(bySignature) do
+        if #group.texts >= 2 then
+            pcall(function()
+                LouisHub:Notify({
+                    Title    = "⚠️ Keybind Conflict",
+                    Content  = "'" .. _formatKey(group.k, group.c, group.s, group.a) .. "' is assigned to: " .. table.concat(group.texts, ", "),
+                    Duration = 6,
+                    Icon     = "warning"
+                })
+            end)
+        end
+    end
+end
+
+local function createSignal()
+    local connected = {}
+    local sig = {}
+    function sig:Connect(callback)
+        if type(callback) ~= "function" then
+            return {Disconnect = function() end}
+        end
+        local entry = {active = true, callback = callback}
+        table.insert(connected, entry)
+        return {
+            Disconnect = function() entry.active = false end,
+        }
+    end
+    function sig:Fire(...)
+        local snapshot = table.move(connected, 1, #connected, 1, {})
+        for _, entry in ipairs(snapshot) do
+            if entry.active then
+                local ok, err = pcall(entry.callback, ...)
+                if not ok then LouisHub:_LogError("Events", err) end
+            end
+        end
+    end
+    return sig
+end
+
+LouisHub.Events = {
+    FlagChanged         = createSignal(),
+    TabChanged          = createSignal(),
+    ThemeChanged        = createSignal(),
+    ControlRegistered   = createSignal(),
+    TypeChanged         = createSignal(),
+    HistoryChanged      = createSignal(),
+    CategoryChanged     = createSignal(),
+    SubTabChanged       = createSignal(),
+}
+AttachAutoAlias(LouisHub.Events)
+LouisHub.Eventos = LouisHub.Events
+
+LouisHub.Flags = setmetatable({}, {
+    __index = _realFlags,
+    __newindex = function(_, key, val)
+        if type(val) ~= "table" and _realFlags[key] == val then
+            return
+        end
+        _realFlags[key] = val
+        markPendingChange()
+        if LouisHub.Events and LouisHub.Events.FlagChanged then
+            LouisHub.Events.FlagChanged:Fire(key, val)
+        end
+    end,
+})
+
+function LouisHub:GetFlag(flag)
+    return LouisHub.Flags[flag]
+end
+
+function LouisHub:GetElement(flag)
+    return LouisHub.Elements[flag]
+end
+
+function LouisHub:UpdateLabel(flag, text)
+    local elem = self.Elements[flag]
+    if not elem then return false end
+    return pcall(elem.Set, text)
+end
+
+function LouisHub:MarkAsUI(flagOrTable)
+    if type(flagOrTable) == "table" then
+        for _, f in ipairs(flagOrTable) do _uiFlags[f] = true end
+    else
+        _uiFlags[flagOrTable] = true
+    end
+end
+
+function LouisHub:Try(flag, fallback)
+    local elem = self.Elements[flag]
+    if not elem then return fallback end
+    local ok, val = pcall(elem.Get)
+    if not ok or val == nil then return fallback end
+    return val
+end
+
+-- ══════════════════════════════════════════════════════════════
+--  SECTION 9: ERROR HANDLING & LOGGING ENGINE
+-- ══════════════════════════════════════════════════════════════
+local MAX_ERROR_LOGS = 50
+LouisHub._Logs = {}
+
+function LouisHub:_LogError(context, message)
+    table.insert(self._Logs, {
+        Time    = os.time(),
+        Momento = os.time(),
+        Context = tostring(context or "?"),
+        Contexto= tostring(context or "?"),
+        Message = tostring(message or ""),
+        Mensaje = tostring(message or ""),
+    })
+    if #self._Logs > MAX_ERROR_LOGS then
+        table.remove(self._Logs, 1)
+    end
+    warn("[LouisHub] Error in '" .. tostring(context or "?") .. "': " .. tostring(message or ""))
+end
+
+function LouisHub:GetErrors()
+    local copy = {}
+    for i, entry in ipairs(self._Logs) do copy[i] = cloneTable(entry) end
+    return copy
+end
+
+local function silentTry(description, fn, ...)
+    local ok, err = pcall(fn, ...)
+    if not ok and LouisHub.DebugMode then
+        warn("[LouisHub] (DebugMode) '" .. description .. "' failed: " .. tostring(err))
+    end
+    return ok, err
+end
+
+local function warnDev(ctrlType, name, message)
+    warn(("[LouisHub] %s \"%s\": %s"):format(ctrlType, tostring(name or "?"), message))
+end
+
+local function executeWithFallback(callback, context, ...)
+    if not callback then return end
+    local args = {...}
+    local ok, err = pcall(function() return callback(table.unpack(args)) end)
+    if not ok then
+        LouisHub:_LogError(context, err)
+        local fullMsg = tostring(err)
+        local displayMsg = fullMsg:sub(1, 120)
+        if #fullMsg > 120 then
+            displayMsg = displayMsg .. "… (inspect LouisHub:GetErrors())"
+        end
+        if LouisHub.ShowUIErrors ~= false and (LouisHub.Notify or LouisHub.Notificar) then
+            pcall(function()
+                LouisHub:Notify({
+                    Title    = "⚠️ Error in " .. (context or "control"),
+                    Content  = displayMsg,
+                    Duration = 6,
+                    Icon     = "warning"
+                })
+            end)
+        end
+        warn("[LouisHub] Callback error (" .. (context or "?") .. "):", err)
+    end
+    return ok
+end
+
+local function validateCallback(ctrlType, cfg)
+    if cfg.Callback ~= nil and type(cfg.Callback) ~= "function" then
+        warnDev(ctrlType, cfg.Text or cfg.Texto or cfg.Name, "'Callback' provided but is not a function (got " .. typeof(cfg.Callback) .. "). Ignored.")
+        cfg.Callback = nil
+    end
+end
+
+-- ══════════════════════════════════════════════════════════════
+--  SECTION 10: HARDWARE CAPABILITIES & ENVIRONMENT DIAGNOSTICS
+-- ══════════════════════════════════════════════════════════════
+local function detectExecutor()
+    if type(getexecutorname) == "function" then
+        local ok, name = pcall(getexecutorname)
+        if ok and name and name ~= "" then return name end
+    end
+    local list = {
+        {function() return syn ~= nil end, "Synapse X"},
+        {function() return krnl ~= nil end, "Krnl"},
+        {function() return fluxus ~= nil end, "Fluxus"},
+        {function() return sirhurt ~= nil end, "SirHurt"},
+        {function() return PROTOSMASHER_LOADED ~= nil end, "ProtoSmasher"},
+        {function() return identifyexecutor ~= nil end, (identifyexecutor and identifyexecutor()) or "Identified Executor"},
+    }
+    for _, entry in ipairs(list) do
+        local ok2, matches = pcall(entry[1])
+        if ok2 and matches then return entry[2] end
+    end
+    return "Unknown"
+end
+
+local VALID_ENV_TYPES = {
+    PC = true, Mobile = true, Movil = true, Tablet = true,
+    Console = true, Consola = true, Studio = true, Unknown = true, Desconocido = true,
+}
+
+LouisHub.Capabilities = {
+    Filesystem   = isFilesystemAvailable(),
+    Drawing      = type(Drawing) == "table" and type(Drawing.new) == "function",
+    ProtectGUI   = (type(syn) == "table" and type(syn.protect_gui) == "function") or type(protectgui) == "function",
+    GetHUI       = type(gethui) == "function",
+    Keyboard     = UserInputService.KeyboardEnabled,
+    Gamepad      = UserInputService.GamepadEnabled,
+    IsStudio     = RunService:IsStudio(),
+    TouchEnabled = UserInputService.TouchEnabled,
+    MouseEnabled = UserInputService.MouseEnabled,
+    Platform     = (function()
+        local ok, p = pcall(function() return UserInputService:GetPlatform() end)
+        return (ok and p) or nil
+    end)(),
+    ViewportSize = (function()
+        local c = Workspace.CurrentCamera
+        return c and c.ViewportSize or Vector2.new(0, 0)
+    end)(),
+    Type         = "Unknown",
+    IsTouch      = false,
+    IsDesktop    = false,
+    IsTouchOnly  = false,
+}
+AttachAutoAlias(LouisHub.Capabilities)
+LouisHub.Capacidades = LouisHub.Capabilities
+
+function LouisHub.Capabilities:PlatformName()
+    local p = self.Platform or self.Plataforma
+    if not p then return "Unknown" end
+    return p.Name or tostring(p)
+end
+
+function LouisHub:RecalculateEnvironmentDerivatives()
+    local C = self.Capabilities
+    local CONSOLE_PLATFORMS = {
+        XboxOne = true, XboxSeriesX = true, XboxSeriesS = true,
+        PS4 = true, PS5 = true, UWP = true,
+    }
+    local platformName = C.Platform and C.Platform.Name
+    local detectedType
+
+    if _G.LouisHub_ForcedType and VALID_ENV_TYPES[_G.LouisHub_ForcedType] then
+        detectedType = _G.LouisHub_ForcedType
+    elseif _G.AlanLuna_TipoForzado and VALID_ENV_TYPES[_G.AlanLuna_TipoForzado] then
+        detectedType = _G.AlanLuna_TipoForzado
+    elseif C.IsStudio then
+        detectedType = "Studio"
+    elseif platformName and CONSOLE_PLATFORMS[platformName] then
+        detectedType = "Console"
+    elseif C.MouseEnabled and C.Keyboard then
+        detectedType = "PC"
+    elseif C.TouchEnabled then
+        if C.ViewportSize.Y < 500 or C.ViewportSize.X < 600 then
+            detectedType = "Mobile"
+        else
+            detectedType = "Tablet"
+        end
+    elseif C.Keyboard then
+        detectedType = "PC"
+    else
+        detectedType = "Unknown"
+    end
+
+    C.Type        = detectedType
+    C.IsTouch     = (detectedType == "Mobile" or detectedType == "Tablet")
+    C.IsDesktop   = (detectedType == "PC" or detectedType == "Console")
+    C.IsTouchOnly = C.TouchEnabled and not C.MouseEnabled and not C.Keyboard
+
+    if self.Events and self.Events.TypeChanged then
+        self.Events.TypeChanged:Fire(detectedType)
+    end
+    return detectedType
+end
+
+LouisHub:RecalculateEnvironmentDerivatives()
+
+-- FIX #10: Daftarkan koneksi viewport ke registry global
+local function hookViewportCapabilities(cam)
+    if not cam then return end
+    local conn = cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+        LouisHub.Capabilities.ViewportSize = cam.ViewportSize
+        LouisHub:RecalculateEnvironmentDerivatives()
+    end)
+    table.insert(_G.LouisHub_CapabilitiesConnections, conn)
+end
+
+hookViewportCapabilities(Workspace.CurrentCamera)
+table.insert(_G.LouisHub_CapabilitiesConnections,
+    Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+        local cam = Workspace.CurrentCamera
+        if not cam then return end
+        LouisHub.Capabilities.ViewportSize = cam.ViewportSize
+        LouisHub:RecalculateEnvironmentDerivatives()
+        hookViewportCapabilities(cam)
+    end)
+)
+
+LouisHub.Features = {
+    { name = "GUI",          test = function() return true end, level = "required" },
+    { name = "Filesystem",   capKey = "Filesystem",   level = "recommended", message = "Configurations will not save to disk." },
+    { name = "Drawing",      capKey = "Drawing",      level = "recommended", message = "Visual ESP components will not function." },
+    { name = "ProtectGUI",   capKey = "ProtectGUI",   level = "recommended", message = "GUI might be detected by client checks." },
+    { name = "GetHUI",       capKey = "GetHUI",       level = "recommended", message = "GUI might render behind CoreGui elements." },
+    { name = "Keyboard",     capKey = "Keyboard",     level = "optional",    message = "Keybinds will default to touch-cancel mode." },
+    { name = "Gamepad",      capKey = "Gamepad",      level = "optional",    message = "Gamepad shortcuts will be unavailable." },
+    { name = "Loadstring",   test = function() return type(loadstring) == "function" end, level = "optional", message = "External scripts cannot be evaluated." },
+    { name = "SetClipboard", test = function() return type(setclipboard) == "function" end, level = "optional", message = "Cannot copy text to system clipboard." },
+}
+
+local _featuresIndex = {}
+for _, f in ipairs(LouisHub.Features) do
+    _featuresIndex[f.name] = f
+end
+
+function LouisHub:VerifySupport(featureName)
+    local f = _featuresIndex[featureName]
+    if not f then
+        return { ok = false, level = "unknown", name = featureName, message = "Feature not recognized by LouisHub." }
+    end
+    local ok = false
+    if f.capKey then
+        ok = self.Capabilities[f.capKey] == true
+    elseif f.test then
+        local okTest, res = pcall(f.test)
+        ok = okTest and res == true
+    end
+    return { ok = ok, level = f.level, name = f.name, message = ok and nil or f.message }
+end
+
+function LouisHub:ForceType(envType)
+    if envType and not VALID_ENV_TYPES[envType] then
+        return false, "Invalid environment type. Valid: PC, Mobile, Tablet, Console, Studio, Unknown."
+    end
+    _G.LouisHub_ForcedType = envType
+    _G.AlanLuna_TipoForzado = envType
+    self:RecalculateEnvironmentDerivatives()
+    return true
+end
+
+function LouisHub:ReleaseForcedType()
+    return self:ForceType(nil)
+end
+
+function LouisHub:FullDiagnostics()
+    local C = self.Capabilities
+    local supportedCount, totalCount, warnings = 0, 0, {}
+    for _, f in ipairs(self.Features) do
+        totalCount = totalCount + 1
+        local r = self:VerifySupport(f.name)
+        if r.ok then
+            supportedCount = supportedCount + 1
+        elseif f.level ~= "required" then
+            table.insert(warnings, {
+                name    = f.name,
+                level   = f.level,
+                message = r.message,
+            })
+        end
+    end
+    return {
+        Type          = C.Type,
+        Platform      = C:PlatformName(),
+        IsStudio      = C.IsStudio,
+        Executor      = detectExecutor(),
+        Viewport      = C.ViewportSize,
+        ForcedType    = _G.LouisHub_ForcedType,
+        FeaturesOk    = supportedCount,
+        FeaturesTotal = totalCount,
+        Warnings      = warnings,
+        Capabilities  = C,
+    }
+end
+
+-- ══════════════════════════════════════════════════════════════
+--  SECTION 11: UNDO / REDO HISTORY ENGINE
+-- ══════════════════════════════════════════════════════════════
+LouisHub._history = { undo = {}, redo = {}, lastValues = {}, pause = 0 }
+LouisHub._historial = LouisHub._history
+local MAX_HISTORY = 50
+
+local function notifyHistoryChanged()
+    local h = LouisHub._history
+    LouisHub.Events.HistoryChanged:Fire(#h.undo, #h.redo)
+end
+
+-- FIX #10: Rekam koneksi history ke registry global
+table.insert(_G.LouisHub_ModuleConnections, LouisHub.Events.FlagChanged:Connect(function(flag, val)
+    local h = LouisHub._history
+    local prev = h.lastValues[flag]
+    h.lastValues[flag] = copyDefault(val)
+    if h.pause > 0 or _uiFlags[flag] or _nonPersistentFlags[flag] then return end
+    local elem = LouisHub.Elements[flag]
+    if prev == nil and elem then prev = elem._defecto end
+    if prev == nil then return end
+    if type(val) ~= "table" and prev == val then return end
+
+    local now = os.clock()
+    local lastEntry = h.undo[#h.undo]
+    if lastEntry and #lastEntry.changes == 1 and lastEntry.changes[1].flag == flag and now - lastEntry.t < 0.6 then
+        lastEntry.changes[1].after = copyDefault(val)
+        lastEntry.t = now
+        if type(val) ~= "table" and lastEntry.changes[1].before == val then
+            table.remove(h.undo)
+        end
+    elseif lastEntry and now - lastEntry.t < 0.05 then
+        table.insert(lastEntry.changes, { flag = flag, before = copyDefault(prev), after = copyDefault(val) })
+        lastEntry.t = now
+    else
+        table.insert(h.undo, {
+            t = now,
+            changes = { { flag = flag, before = copyDefault(prev), after = copyDefault(val) } },
+        })
+        if #h.undo > MAX_HISTORY then table.remove(h.undo, 1) end
+    end
+    h.redo = {}
+    notifyHistoryChanged()
+end))
+
+local function applyHistoryChanges(changes, useBefore, inReverse)
+    local h = LouisHub._history
+    h.pause = h.pause + 1
+    local total = #changes
+    for i = 1, total do
+        local c = changes[inReverse and (total - i + 1) or i]
+        local elem = LouisHub.Elements[c.flag]
+        if elem and type(elem.Set) == "function" then
+            local source = useBefore and c.before or c.after
+            local val = copyDefault(source)
+            pcall(elem.Set, val, true)
+            h.lastValues[c.flag] = copyDefault(val)
+        end
+    end
+    h.pause = h.pause - 1
+end
+
+function LouisHub:Undo()
+    local h = self._history
+    local entry = table.remove(h.undo)
+    if not entry then return false end
+    applyHistoryChanges(entry.changes, true, true)
+    table.insert(h.redo, entry)
+    notifyHistoryChanged()
+    return true, entry
+end
+
+function LouisHub:Redo()
+    local h = self._history
+    local entry = table.remove(h.redo)
+    if not entry then return false end
+    applyHistoryChanges(entry.changes, false, false)
+    table.insert(h.undo, entry)
+    notifyHistoryChanged()
+    return true, entry
+end
+
+function LouisHub:CanUndo() return #self._history.undo > 0 end
+function LouisHub:CanRedo() return #self._history.redo > 0 end
+
+function LouisHub:ClearHistory()
+    local h = self._history
+    h.undo, h.redo, h.lastValues = {}, {}, {}
+    for flag, elem in pairs(self.Elements) do
+        if type(elem) == "table" and type(elem.Get) == "function" then
+            local ok, val = pcall(elem.Get)
+            if ok and val ~= nil then h.lastValues[flag] = copyDefault(val) end
+        end
+    end
+    notifyHistoryChanged()
+end
+
+-- ══════════════════════════════════════════════════════════════
+--  SECTION 12: UNIFIED SAVE MANAGER v4 (PENDING BUFFER & ROBUST LOAD)
+-- ══════════════════════════════════════════════════════════════
+local SAVE_FORMAT_VERSION = 4
+_G.LouisHub_NavigationState = { cat = nil, tab = nil, sub = nil }
+
+local function isColor3Type(v) return typeof and typeof(v) == "Color3" end
+local function isEnumType(v) return typeof and typeof(v) == "EnumItem" end
+
+local function packFlagsForSaving(flags, uiOnly)
+    local result = {
+        __version = SAVE_FORMAT_VERSION,
+        __navigation = _G.LouisHub_NavigationState
+    }
+    for key, val in pairs(flags) do
+        local skip = _nonPersistentFlags[key]
+            or (uiOnly and not _uiFlags[key])
+            or (not uiOnly and _uiFlags[key])
+        if not skip then
+            if isColor3Type(val) then
+                result[key] = {
+                    __color3 = true,
+                    R = math.floor(val.R * 255 + 0.5),
+                    G = math.floor(val.G * 255 + 0.5),
+                    B = math.floor(val.B * 255 + 0.5),
+                }
+            elseif isEnumType(val) then
+                result[key] = {
+                    __enum = true,
+                    EnumType = tostring(val.EnumType),
+                    Name = val.Name,
+                }
+            elseif type(val) == "table" and isEnumType(val.KeyCode) then
+                result[key] = {
+                    __keybindMods = true,
+                    KeyCode = val.KeyCode.Name,
+                    Ctrl = val.Ctrl or false,
+                    Shift = val.Shift or false,
+                    Alt = val.Alt or false,
+                }
+            else
+                result[key] = val
+            end
+        end
+    end
+    return result
+end
+
+local function unpackLoadedValue(val)
+    if type(val) == "table" and val.__color3 then
+        return Color3.fromRGB(val.R or 0, val.G or 0, val.B or 0)
+    end
+    if type(val) == "table" and val.__enum then
+        local ok, enumItem = pcall(function() return Enum[val.EnumType][val.Name] end)
+        return (ok and enumItem) or Enum.KeyCode.Unknown
+    end
+    if type(val) == "table" and val.__keybindMods then
+        local ok, keyCode = pcall(function() return Enum.KeyCode[val.KeyCode] end)
+        return {
+            KeyCode = ok and keyCode or Enum.KeyCode.Unknown,
+            Ctrl = val.Ctrl or false,
+            Shift = val.Shift or false,
+            Alt = val.Alt or false,
+        }
+    end
+    return val
+end
+
+local function prepareLoadedData(data)
+    if type(data) ~= "table" then return {} end
+
+    -- Kompatibilitas parser skrip Luna v1
+    if type(data.objects) == "table" then
+        local migrated = {}
+        for _, obj in ipairs(data.objects) do
+            if obj.flag then
+                if obj.state ~= nil then
+                    migrated[obj.flag] = obj.state
+                elseif obj.value ~= nil then
+                    migrated[obj.flag] = tonumber(obj.value) or obj.value
+                elseif obj.text ~= nil then
+                    migrated[obj.flag] = obj.text
+                elseif obj.color ~= nil then
+                    if type(obj.color) == "string" and obj.color:sub(1,1) == "#" then
+                        local r = tonumber(obj.color:sub(2, 3), 16) or 255
+                        local g = tonumber(obj.color:sub(4, 5), 16) or 255
+                        local b = tonumber(obj.color:sub(6, 7), 16) or 255
+                        migrated[obj.flag] = Color3.fromRGB(r, g, b)
+                    end
+                end
+            end
+        end
+        return migrated
+    end
+
+    data.__version = nil
+    if data.__navigation and type(data.__navigation) == "table" then
+        _G.LouisHub_NavigationState = data.__navigation
+        data.__navigation = nil
+    end
+
+    return data
+end
+
+LouisHub.SaveManager = {}
+local SM = LouisHub.SaveManager
+SM.Folder = "LouisHub/Config"
+SM.FolderUI = "LouisHub/Config/_ui"
+AttachAutoAlias(SM)
+
+local function ensureFolder()
+    if not (isFilesystemAvailable() and type(isfolder) == "function" and type(makefolder) == "function") then return end
+    local path = ""
+    for part in SM.Folder:gmatch("[^/]+") do
+        path = path == "" and part or (path .. "/" .. part)
+        if not isfolder(path) then pcall(makefolder, path) end
+    end
+end
+
+local function ensureFolderUI()
+    if not (isFilesystemAvailable() and type(isfolder) == "function" and type(makefolder) == "function") then return end
+    local path = ""
+    for part in SM.FolderUI:gmatch("[^/]+") do
+        path = path == "" and part or (path .. "/" .. part)
+        if not isfolder(path) then pcall(makefolder, path) end
+    end
+end
+
+function SM:Save(name)
+    name = name or "default"
+    if not isFilesystemAvailable() then
+        LouisHub:Notify({Title = "SaveManager", Content = "Executor missing filesystem support.", Duration = 4, Icon = "warning"})
+        return false, "No filesystem support"
+    end
+    ensureFolder()
+    local path = SM.Folder .. "/" .. name .. ".json"
+    local hadChanges = true
+    local ok, err = pcall(function()
+        local data = packFlagsForSaving(_realFlags)
+        local json = HttpService:JSONEncode(data)
+        if type(isfile) == "function" and isfile(path) then
+            local okRead, existingJson = pcall(readfile, path)
+            if okRead and existingJson == json then
+                hadChanges = false
+            end
+        end
+        if hadChanges then writefile(path, json) end
+    end)
+    if ok then
+        if hadChanges then
+            LouisHub:Notify({Title = "Config Saved", Content = name .. ".json", Duration = 3, Icon = "check_circle"})
+        else
+            LouisHub:Notify({Title = "✅ Already Up to Date", Content = name .. ".json has no changes", Duration = 3, Icon = "info"})
+        end
+    else
+        LouisHub:_LogError("SaveManager:Save", err)
+        LouisHub:Notify({Title = "❌ Save Error", Content = tostring(err):sub(1, 100), Duration = 5, Icon = "warning"})
+    end
+    return ok, err
+end
+
+function SM:SaveSilent(name)
+    name = name or "default"
+    if not isFilesystemAvailable() then return false end
+    ensureFolder()
+    local ok, err = pcall(function()
+        local data = packFlagsForSaving(_realFlags)
+        local json = HttpService:JSONEncode(data)
+        writefile(SM.Folder .. "/" .. name .. ".json", json)
+    end)
+    if not ok then LouisHub:_LogError("SaveManager:SaveSilent", err) end
+    return ok
+end
+
+-- FIX #9: Fungsi Load menerapkan nilai ke elemen yang ada DAN menyimpan ke pendingConfig untuk elemen di masa depan
+function SM:Load(name, fireCallbacks)
+    name = name or "default"
+    local path = SM.Folder .. "/" .. name .. ".json"
+    if not (isFilesystemAvailable() and type(isfile) == "function" and isfile(path)) then return false end
+
+    local okRead, content = pcall(readfile, path)
+    if not okRead then
+        LouisHub:_LogError("SaveManager:Load (read)", content)
+        return false
+    end
+    local okDecode, data = pcall(function() return HttpService:JSONDecode(content) end)
+    if not okDecode then
+        LouisHub:_LogError("SaveManager:Load (JSONDecode)", data)
+        return false
+    end
+    data = prepareLoadedData(data)
+
+    _isLoadingFromFile = true
+    local okLoop, errLoop = pcall(function()
+        for flag, rawVal in pairs(data) do
+            local val = unpackLoadedValue(rawVal)
+            LouisHub.Flags[flag] = val
+            local elem = LouisHub.Elements[flag]
+            if elem and type(elem.Set) == "function" then
+                pcall(elem.Set, val, fireCallbacks == true)
+            else
+                -- Simpan ke pending config agar tidak tertimpa saat skrip baru selesai yield / task.wait()
+                _pendingConfig[flag] = val
+            end
+        end
+    end)
+    _isLoadingFromFile = false
+    if not okLoop then LouisHub:_LogError("SaveManager:Load (loop)", errLoop) end
+    _checkConflictsOnLoad()
+    LouisHub:Notify({Title = "Config Loaded", Content = name .. ".json", Duration = 3, Icon = "check_circle"})
+    return true
+end
+
+function SM:LoadSilent(name, fireCallbacks)
+    name = name or "default"
+    local path = SM.Folder .. "/" .. name .. ".json"
+    if not (isFilesystemAvailable() and type(isfile) == "function" and isfile(path)) then return false end
+
+    local okRead, content = pcall(readfile, path)
+    if not okRead then return false end
+    local okDecode, data = pcall(function() return HttpService:JSONDecode(content) end)
+    if not okDecode then return false end
+    data = prepareLoadedData(data)
+
+    _isLoadingFromFile = true
+    pcall(function()
+        for flag, rawVal in pairs(data) do
+            local val = unpackLoadedValue(rawVal)
+            LouisHub.Flags[flag] = val
+            local elem = LouisHub.Elements[flag]
+            if elem and type(elem.Set) == "function" then
+                pcall(elem.Set, val, fireCallbacks == true)
+            else
+                _pendingConfig[flag] = val
+            end
+        end
+    end)
+    _isLoadingFromFile = false
+    _checkConflictsOnLoad()
+    return true
+end
+
+function SM:List()
+    if not (isFilesystemAvailable() and type(listfiles) == "function") then return {} end
+    ensureFolder()
+    local result = {}
+    local ok, files = pcall(listfiles, SM.Folder)
+    if ok then
+        for _, path in ipairs(files) do
+            local name = path:match("([^/\\]+)%.json$")
+            if name and not name:match("^_") then table.insert(result, name) end
+        end
+    end
+    return result
+end
+
+function SM:Delete(name)
+    if type(name) ~= "string" or name == "" then return false end
+    if not (isFilesystemAvailable() and type(isfile) == "function" and type(delfile) == "function") then return false end
+    local path = SM.Folder .. "/" .. name .. ".json"
+    if not isfile(path) then return false end
+    return (pcall(delfile, path))
+end
+
+function SM:SaveUI(name)
+    name = name or "default"
+    if not isFilesystemAvailable() then return false end
+    ensureFolderUI()
+    local path = SM.FolderUI .. "/" .. name .. ".json"
+    local ok = pcall(function()
+        local data = packFlagsForSaving(_realFlags, true)
+        writefile(path, HttpService:JSONEncode(data))
+    end)
+    return ok
+end
+
+function SM:LoadUI(name)
+    name = name or "default"
+    local path = SM.FolderUI .. "/" .. name .. ".json"
+    if not (isFilesystemAvailable() and type(isfile) == "function" and isfile(path)) then return false end
+    local okRead, content = pcall(readfile, path)
+    if not okRead then return false end
+    local okDecode, data = pcall(function() return HttpService:JSONDecode(content) end)
+    if not okDecode then return false end
+    data = prepareLoadedData(data)
+
+    _isLoadingFromFile = true
+    pcall(function()
+        for flag, rawVal in pairs(data) do
+            if _uiFlags[flag] then
+                local val = unpackLoadedValue(rawVal)
+                LouisHub.Flags[flag] = val
+                if LouisHub.Elements[flag] then
+                    pcall(LouisHub.Elements[flag].Set, val, false)
+                else
+                    _pendingConfig[flag] = val
+                end
+            end
+        end
+    end)
+    _isLoadingFromFile = false
+    _checkConflictsOnLoad()
+    return true
+end
+
+function LouisHub:SaveConfig(path) return self.SaveManager:Save(path) end
+function LouisHub:LoadConfig(path, fire) return self.SaveManager:Load(path, fire) end
+function LouisHub:RefreshConfigList() return self.SaveManager:List() end
+
+function LouisHub:LoadAutoloadConfig()
+    if not isFilesystemAvailable() then return false end
+    local path = self.Folder .. "/autoload.txt"
+    if type(isfile) == "function" and isfile(path) then
+        local ok, n = pcall(readfile, path)
+        if ok and n and n ~= "" then
+            return self.SaveManager:Load(n, true)
+        end
+    end
+    return false
+end
+
+-- ══════════════════════════════════════════════════════════════
+--  SECTION 13: CONDITIONAL VISIBILITY & AUTO-UPDATING LABELS
+-- ══════════════════════════════════════════════════════════════
+local _autoUpdateLabels = setmetatable({}, {__mode = "k"})
+
+table.insert(_G.LouisHub_ModuleConnections, RunService.Heartbeat:Connect(function()
+    local now = os.clock()
+    for entry, cfg in pairs(_autoUpdateLabels) do
+        if not (entry and entry.Parent) then
+            _autoUpdateLabels[entry] = nil
+        elseif now >= cfg.nextTime then
+            cfg.nextTime = now + cfg.interval
+            local ok, newVal = pcall(cfg.fn)
+            if ok and newVal ~= nil then
+                pcall(cfg.apply, newVal)
+            elseif not ok then
+                LouisHub:_LogError("Label auto-update ('" .. tostring(cfg.flag) .. "')", newVal)
+            end
+        end
+    end
+end))
+
+local visibilityRegistry = setmetatable({}, {__mode = "k"})
+
+local function checkConditionalVisibility(row)
+    local condition = visibilityRegistry[row]
+    if not condition then return true end
+    local ok, res = pcall(condition)
+    if not ok then
+        LouisHub:_LogError("VisibleIf", res)
+        return true
+    end
+    return res and true or false
+end
+
+local function registerConditionalVisibility(row, visibleIf)
+    if type(visibleIf) ~= "function" or not row then return end
+    visibilityRegistry[row] = visibleIf
+    row.Visible = checkConditionalVisibility(row)
+end
+
+local function reevaluateConditionalVisibility()
+    for row, _ in pairs(visibilityRegistry) do
+        if row and row.Parent then
+            row.Visible = checkConditionalVisibility(row)
+        end
+    end
+end
+
+table.insert(_G.LouisHub_ModuleConnections, LouisHub.Events.FlagChanged:Connect(reevaluateConditionalVisibility))
+
+local searchIndex = {}
+local registeredSections = {}
+
+local function registerSearchable(row, text, visibleIf)
+    table.insert(searchIndex, {row = row, text = (text or ""):lower()})
+    registerConditionalVisibility(row, visibleIf)
+end
+
+-- ══════════════════════════════════════════════════════════════
+--  SECTION 14: THEME MANAGER (HYBRID STYLES & PRESET GRADIENTS)
+-- ══════════════════════════════════════════════════════════════
+LouisHub.ThemeManager = {}
+local TM = LouisHub.ThemeManager
+TM.Themes = Themes.List
+AttachAutoAlias(TM)
+
+function TM:ApplyTheme(nameOrTable)
+    local isPreset = false
+    local presetColors = nil
+
+    if type(nameOrTable) == "string" and string.sub(nameOrTable, 1, 10) == "Gradient: " then
+        local rawName = string.sub(nameOrTable, 11)
+        if PresetGradients[rawName] then
+            isPreset = true
+            presetColors = PresetGradients[rawName]
+            Theme.Accent      = presetColors[1]
+            Theme.AccentLight = presetColors[2]
+            Theme.Highlight   = presetColors[3]
+            LouisHub.ThemeGradient = ColorSequence.new{
+                ColorSequenceKeypoint.new(0.00, presetColors[1]),
+                ColorSequenceKeypoint.new(0.50, presetColors[2]),
+                ColorSequenceKeypoint.new(1.00, presetColors[3])
+            }
+        end
+    end
+
+    if not isPreset then
+        local tbl = type(nameOrTable) == "string" and self.Themes[nameOrTable] or nameOrTable
+        if not tbl then return end
+        for k, v in pairs(tbl) do Theme[k] = v end
+        LouisHub.ThemeGradient = ColorSequence.new{
+            ColorSequenceKeypoint.new(0.00, Theme.Accent),
+            ColorSequenceKeypoint.new(0.50, Theme.AccentLight),
+            ColorSequenceKeypoint.new(1.00, Theme.Highlight)
+        }
+    end
+
+    local animate = LouisHub._windowRevealed == true or LouisHub._ventanaRevelada == true
+    local hiddenPages = {}
+    if animate then
+        local active = _G.LouisHub_Instance
+        local win = active and (active.Window or active.Ventana)
+        if win and win.Tabs then
+            for _, tab in ipairs(win.Tabs) do
+                local page = tab.Page or tab.Pagina
+                if page and not page.Visible then
+                    table.insert(hiddenPages, page)
+                end
+            end
+        end
+    end
+
+    local function isInHiddenPage(inst)
+        for _, page in ipairs(hiddenPages) do
+            if inst:IsDescendantOf(page) then return true end
+        end
+        return false
+    end
+
+    for i = #themeRegistry, 1, -1 do
+        local entry = themeRegistry[i]
+        if entry.instance and entry.instance.Parent then
+            local newVal
+            if type(entry.themeKey) == "function" then
+                local ok, res = pcall(entry.themeKey)
+                if ok then newVal = res end
+            else
+                newVal = Theme[entry.themeKey]
+            end
+            if newVal ~= nil then
+                silentTry(
+                    "ThemeManager: apply " .. tostring(entry.property),
+                    function()
+                        local inst, prop = entry.instance, entry.property
+                        if animate and typeof(newVal) == "Color3"
+                        and typeof(inst[prop]) == "Color3"
+                        and not isInHiddenPage(inst) then
+                            Utils.Tween(inst, {[prop] = newVal}, LouisHub.Motion.Page, LouisHub.Motion.EaseSmooth)
+                        else
+                            inst[prop] = newVal
+                        end
+                    end
+                )
+            end
+        else
+            entry.dead = true
+        end
+    end
+
+    local appliedName = type(nameOrTable) == "string" and nameOrTable or nil
+    for win in pairs(_windowsWithThemeSelectors) do
+        if win._SyncThemeSelector or win._SincronizarSelectorTemas then
+            local fn = win._SyncThemeSelector or win._SincronizarSelectorTemas
+            pcall(fn, appliedName)
+        end
+    end
+
+    LouisHub.Events.ThemeChanged:Fire(appliedName)
+end
+
+function TM:AddTheme(name, tbl)
+    if type(name) == "string" and type(tbl) == "table" then
+        self.Themes[name] = tbl
+    end
+end
+
+-- ══════════════════════════════════════════════════════════════
+--  SECTION 15: NOTIFICATIONS ENGINE (GLASS BLUR & MOTION)
+-- ══════════════════════════════════════════════════════════════
+local notifGuiRef = nil
+local notifContainer = nil
+local MAX_SIMULTANEOUS_NOTIFS = 4
+local notifQueue = {}
+local activeNotifCount = 0
+
+-- FIX #10: Container notifikasi dibuat independen agar tidak terhapus saat CreateWindow dipanggil
+local function ensureNotificationContainer()
+    if notifContainer and notifContainer.Parent then return notifContainer end
+    local parent = getGuiParent()
+    if not notifGuiRef or not notifGuiRef.Parent then
+        notifGuiRef = (parent and (parent:FindFirstChild("LouisHub_NotifGui") or parent:FindFirstChild("AlanLuna_NotifGui"))) or Instance.new("ScreenGui")
+        notifGuiRef.Name = "LouisHub_NotifGui"
+        notifGuiRef.ResetOnSpawn = false
+        notifGuiRef.IgnoreGuiInset = true
+        notifGuiRef.DisplayOrder = 10000000
+        notifGuiRef.Parent = parent
+        protectGui(notifGuiRef)
+        LouisHub:RegisterInstance(notifGuiRef)
+    end
+
+    notifContainer = notifGuiRef:FindFirstChild("LouisHub_Notifications")
+    if not notifContainer then
+        notifContainer = Instance.new("Frame")
+        notifContainer.Name = "LouisHub_Notifications"
+        notifContainer.BackgroundTransparency = 1
+        notifContainer.Size = UDim2.new(0, 310, 1, -20)
+        notifContainer.Position = UDim2.new(1, -320, 0, 10)
+        notifContainer.ZIndex = 10000
+        notifContainer.Parent = notifGuiRef
+
+        local listLayout = Instance.new("UIListLayout")
+        listLayout.Name = "UIListLayout"
+        listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        listLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+        listLayout.Padding = UDim.new(0, 8)
+        listLayout.Parent = notifContainer
+    end
+    return notifContainer
+end
+
+local NOTIF_TYPE_COLORS = {
+    Success = Color3.fromRGB(46, 204, 113),
+    Warning = Color3.fromRGB(241, 196, 15),
+    Error   = Color3.fromRGB(231, 76, 60),
+    Info    = Color3.fromRGB(90, 140, 210),
+}
+
+local function showNotificationCard(data)
+    activeNotifCount = activeNotifCount + 1
+    local container = ensureNotificationContainer()
+
+    local title = data.Title or data.Titulo or "Notification"
+    local content = data.Content or data.Texto or ""
+    local iconName = data.Icon or data.Icono or "info"
+    local source = data.ImageSource or "Material"
+    local duration = data.Duration or data.Duracion or math.min(math.max((#content * 0.08) + 2.5, 3), 10)
+    local nType = data.Type or data.Tipo
+    local accentCol = (nType and NOTIF_TYPE_COLORS[nType]) or Theme.Accent
+
+    local card = Instance.new("Frame")
+    card.Name = title
+    card.BackgroundColor3 = Theme.Panel
+    card.BackgroundTransparency = 1
+    card.BorderSizePixel = 0
+    card.ClipsDescendants = true
+    card.Size = UDim2.new(1, 0, 0, 0)
+    card.ZIndex = 10001
+    card.Parent = container
+
+    Utils.Corner(card, 8)
+    local stroke = Utils.Stroke(card, accentCol, 1, 1)
+
+    local blurData = BlurModule(card)
+
+    local shadow = Instance.new("ImageLabel")
+    shadow.Name = "Shadow"
+    shadow.BackgroundTransparency = 1
+    shadow.Image = "rbxassetid://1316045217"
+    shadow.ImageColor3 = Color3.new(0, 0, 0)
+    shadow.ImageTransparency = 1
+    shadow.ScaleType = Enum.ScaleType.Slice
+    shadow.SliceCenter = Rect.new(10, 10, 118, 118)
+    shadow.Size = UDim2.new(1, 14, 1, 14)
+    shadow.Position = UDim2.new(0, -7, 0, -7)
+    shadow.ZIndex = 10000
+    shadow.Parent = card
+
+    local iconImg = Instance.new("ImageLabel")
+    iconImg.Name = "Icon"
+    iconImg.BackgroundTransparency = 1
+    iconImg.ImageTransparency = 1
+    iconImg.Size = UDim2.new(0, 22, 0, 22)
+    iconImg.Position = UDim2.new(0, 10, 0, 10)
+    iconImg.ZIndex = 10002
+    iconImg.Parent = card
+
+    -- FIX #7: Menggunakan modul ikon ter-cache
+    local iconData = GetIcon(iconName, source)
+    if type(iconData) == "table" then
+        iconImg.Image = "rbxassetid://" .. tostring(iconData.id)
+        iconImg.ImageRectSize = iconData.imageRectSize
+        iconImg.ImageRectOffset = iconData.imageRectOffset
+    elseif type(iconData) == "string" then
+        iconImg.Image = iconData
+    else
+        iconImg.Visible = false
+    end
+
+    local offsetX = iconImg.Visible and 38 or 12
+    local reduceWidth = iconImg.Visible and -44 or -24
+
+    local titleLbl = Instance.new("TextLabel")
+    titleLbl.Name = "Title"
+    titleLbl.BackgroundTransparency = 1
+    titleLbl.TextTransparency = 1
+    titleLbl.Font = Enum.Font.GothamBold
+    titleLbl.TextSize = 13
+    titleLbl.TextColor3 = Theme.Highlight
+    titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+    titleLbl.Size = UDim2.new(1, reduceWidth, 0, 20)
+    titleLbl.Position = UDim2.new(0, offsetX, 0, 10)
+    titleLbl.Text = title
+    titleLbl.ZIndex = 10002
+    titleLbl.Parent = card
+
+    local descLbl = Instance.new("TextLabel")
+    descLbl.Name = "Description"
+    descLbl.BackgroundTransparency = 1
+    descLbl.TextTransparency = 1
+    descLbl.Font = Enum.Font.Gotham
+    descLbl.TextSize = 11
+    descLbl.TextColor3 = Theme.Text
+    descLbl.TextXAlignment = Enum.TextXAlignment.Left
+    descLbl.TextWrapped = true
+    descLbl.Size = UDim2.new(1, reduceWidth, 0, 0)
+    descLbl.Position = UDim2.new(0, offsetX, 0, 30)
+    descLbl.Text = content
+    descLbl.ZIndex = 10002
+    descLbl.Parent = card
+
+    local boundsY = TextService:GetTextSize(content, 11, Enum.Font.Gotham, Vector2.new(250, 1000)).Y
+    local totalHeight = math.max(48, boundsY + 42)
+    descLbl.Size = UDim2.new(1, reduceWidth, 0, boundsY)
+
+    Utils.Tween(card, {Size = UDim2.new(1, 0, 0, totalHeight)}, 0.45, LouisHub.Motion.EaseEnter)
+    Utils.Tween(card, {BackgroundTransparency = 0.45}, 0.35, LouisHub.Motion.EaseEnter)
+    Utils.Tween(titleLbl, {TextTransparency = 0}, 0.3, LouisHub.Motion.EaseEnter)
+    if iconImg.Visible then Utils.Tween(iconImg, {ImageTransparency = 0}, 0.3, LouisHub.Motion.EaseEnter) end
+    Utils.Tween(descLbl, {TextTransparency = 0.15}, 0.3, LouisHub.Motion.EaseEnter)
+    Utils.Tween(stroke, {Transparency = 0.6}, 0.35, LouisHub.Motion.EaseEnter)
+    Utils.Tween(shadow, {ImageTransparency = 0.8}, 0.35, LouisHub.Motion.EaseEnter)
+
+    local function close()
+        if not (card and card.Parent) then return end
+        Utils.Tween(card, {BackgroundTransparency = 1}, 0.3, LouisHub.Motion.EaseExit)
+        Utils.Tween(stroke, {Transparency = 1}, 0.3, LouisHub.Motion.EaseExit)
+        Utils.Tween(titleLbl, {TextTransparency = 1}, 0.25, LouisHub.Motion.EaseExit)
+        Utils.Tween(descLbl, {TextTransparency = 1}, 0.25, LouisHub.Motion.EaseExit)
+        if iconImg.Visible then Utils.Tween(iconImg, {ImageTransparency = 1}, 0.25, LouisHub.Motion.EaseExit) end
+        Utils.Tween(shadow, {ImageTransparency = 1}, 0.25, LouisHub.Motion.EaseExit)
+        Utils.Tween(card, {Size = UDim2.new(1, 0, 0, 0)}, 0.35, LouisHub.Motion.EaseExit)
+
+        task.delay(0.36, function()
+            pcall(function() card:Destroy() end)
+            activeNotifCount = math.max(0, activeNotifCount - 1)
+            local nextCard = table.remove(notifQueue, 1)
+            if nextCard then showNotificationCard(nextCard) end
+        end)
+    end
+
+    task.delay(duration, close)
+end
+
+function LouisHub:Notify(data)
+    data = data or {}
+    if activeNotifCount >= MAX_SIMULTANEOUS_NOTIFS then
+        local priority = data.Priority or data.Prioridad or 0
+        local pos = #notifQueue + 1
+        for i, queued in ipairs(notifQueue) do
+            if (queued.Priority or queued.Prioridad or 0) < priority then
+                pos = i
+                break
+            end
+        end
+        table.insert(notifQueue, pos, data)
+        return
+    end
+    showNotificationCard(data)
+end
+LouisHub.Notificar = LouisHub.Notify
+LouisHub.Notification = LouisHub.Notify
+
+-- ══════════════════════════════════════════════════════════════
+--  SECTION 16: MODAL CONFIRMATION DIALOG SYSTEM
+-- ══════════════════════════════════════════════════════════════
+function LouisHub:Confirm(cfg)
+    cfg = cfg or {}
+    local parent = getGuiParent()
+    local gui = self._guiConfirm or (parent and (parent:FindFirstChild("LouisHub_ScreenGui") or parent:FindFirstChild("AlanLuna_ScreenGui"))) or (parent and (parent:FindFirstChild("LouisHub_NotifGui") or parent:FindFirstChild("AlanLuna_NotifGui")))
+    if not (gui and gui.Parent) then
+        self:_LogError("Confirm", "No active window available to display modal")
+        return nil
+    end
+
+    local buttons = {}
+    if type(cfg.Buttons or cfg.Botones) == "table" and #(cfg.Buttons or cfg.Botones) > 0 then
+        for _, b in ipairs(cfg.Buttons or cfg.Botones) do table.insert(buttons, cloneTable(b)) end
+    else
+        if cfg.CancelButton or cfg.BotonCancelar then
+            local b = cloneTable(cfg.CancelButton or cfg.BotonCancelar)
+            b.Text = b.Text or b.Texto or "Cancel"
+            b.Variant = b.Variant or b.Variante or "neutral"
+            table.insert(buttons, b)
+        end
+        local accept = cloneTable(cfg.AcceptButton or cfg.BotonAceptar or {})
+        accept.Text = accept.Text or accept.Texto or "Accept"
+        accept.Variant = accept.Variant or accept.Variante or "primary"
+        table.insert(buttons, accept)
+    end
+
+    self._openModals = (self._openModals or 0) + 1
+    local zBase = 500 + (self._openModals - 1) * 10
+    local titleErr = cfg.Title or cfg.Titulo or "Confirm"
+
+    local backdrop = Utils.Frame({
+        Parent = gui, Size = UDim2.new(1, 0, 1, 0),
+        Color = Color3.new(0, 0, 0), Transparency = 0.5, Radius = false,
+        Border = false,
+    })
+    backdrop.ZIndex = zBase
+    backdrop.Active = true
+
+    local blurData = BlurModule(backdrop)
+
+    local closed = false
+    backdrop.Destroying:Connect(function()
+        if closed then return end
+        closed = true
+        self._openModals = math.max(0, (self._openModals or 1) - 1)
+    end)
+
+    local card = Utils.Frame({
+        Parent = backdrop, Size = UDim2.new(0, 300, 0, 0),
+        Position = UDim2.new(0.5, 0, 0.5, 0), Anchor = Vector2.new(0.5, 0.5),
+        Color = Theme.Panel, Radius = 8,
+        Border = true, BorderColor = Theme.Border, BorderThickness = 1,
+        BorderThemeKey = "Border",
+        Transparency = 0.25,
+    })
+    card.ZIndex = zBase + 1
+    card.Active = true
+    card.AutomaticSize = Enum.AutomaticSize.Y
+    LouisHub:Register(card, "BackgroundColor3", "Panel")
+
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 10)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = card
+
+    local pad = Instance.new("UIPadding")
+    pad.PaddingLeft, pad.PaddingRight = UDim.new(0, 14), UDim.new(0, 14)
+    pad.PaddingTop, pad.PaddingBottom = UDim.new(0, 14), UDim.new(0, 14)
+    pad.Parent = card
+
+    local order = 0
+    local iconParam = cfg.Icon or cfg.Icono
+    if iconParam then
+        order = order + 1
+        local iconAsset = GetIcon(iconParam, "Material")
+        if iconAsset then
+            local iconHolder = Instance.new("Frame")
+            iconHolder.BackgroundTransparency = 1
+            iconHolder.Size = UDim2.new(1, 0, 0, 28)
+            iconHolder.LayoutOrder = order
+            iconHolder.ZIndex = zBase + 2
+            iconHolder.Parent = card
+
+            local imgIco = Instance.new("ImageLabel")
+            imgIco.BackgroundTransparency = 1
+            imgIco.Size = UDim2.new(0, 26, 0, 26)
+            imgIco.AnchorPoint = Vector2.new(0.5, 0.5)
+            imgIco.Position = UDim2.new(0.5, 0, 0.5, 0)
+            imgIco.ZIndex = zBase + 3
+            if type(iconAsset) == "table" then
+                imgIco.Image = "rbxassetid://" .. tostring(iconAsset.id)
+                imgIco.ImageRectSize = iconAsset.imageRectSize
+                imgIco.ImageRectOffset = iconAsset.imageRectOffset
+            else
+                imgIco.Image = iconAsset
+            end
+            imgIco.Parent = iconHolder
+        else
+            local lblIcon = Utils.Text({
+                Parent = card, Text = tostring(iconParam),
+                Size = UDim2.new(1, 0, 0, 26), Order = order,
+                Alignment = Enum.TextXAlignment.Center, TextSize = 22,
+            })
+            lblIcon.ZIndex = zBase + 2
+        end
+    end
+
+    local titleParam = cfg.Title or cfg.Titulo
+    if titleParam then
+        order = order + 1
+        local lblTitle = Utils.Text({
+            Parent = card, Text = tostring(titleParam),
+            Size = UDim2.new(1, 0, 0, 0), Order = order,
+            Font = Enum.Font.GothamBold, TextSize = 14, Wrapped = true,
+            Alignment = iconParam and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left,
+            Color = Theme.Highlight,
+        })
+        lblTitle.AutomaticSize = Enum.AutomaticSize.Y
+        lblTitle.ZIndex = zBase + 2
+        LouisHub:Register(lblTitle, "TextColor3", "Highlight")
+    end
+
+    local contentParam = cfg.Content or cfg.Contenido
+    if contentParam then
+        order = order + 1
+        local lblBody = Utils.Text({
+            Parent = card, Text = tostring(contentParam),
+            Size = UDim2.new(1, 0, 0, 0), Order = order,
+            Wrapped = true, TextSize = 11, TextTransparency = 0.15,
+            Alignment = iconParam and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left,
+        })
+        lblBody.AutomaticSize = Enum.AutomaticSize.Y
+        lblBody.ZIndex = zBase + 2
+    end
+
+    local total = #buttons
+    local vertical = total > 3
+    order = order + 1
+    local buttonRow = Utils.Frame({
+        Parent = card, Size = UDim2.new(1, 0, 0, vertical and 0 or 30),
+        Transparency = 1, Order = order, Radius = false, Border = false,
+    })
+    buttonRow.ZIndex = zBase + 2
+    if vertical then buttonRow.AutomaticSize = Enum.AutomaticSize.Y end
+
+    local layoutButtons = Instance.new("UIListLayout")
+    layoutButtons.FillDirection = vertical and Enum.FillDirection.Vertical or Enum.FillDirection.Horizontal
+    layoutButtons.Padding = UDim.new(0, 6)
+    layoutButtons.SortOrder = Enum.SortOrder.LayoutOrder
+    layoutButtons.Parent = buttonRow
+
+    local white = Color3.fromRGB(255, 255, 255)
+    local function close()
+        if backdrop.Parent then backdrop:Destroy() end
+    end
+    local function press(i)
+        local btn = buttons[i]
+        if not btn then return end
+        close()
+        if type(btn.Callback) == "function" then
+            executeWithFallback(btn.Callback, btn.Text or btn.Texto or titleErr)
+        end
+    end
+
+    for i, btnData in ipairs(buttons) do
+        local variant = btnData.Variant or btnData.Variante or "neutral"
+        local btnWidth = vertical and UDim2.new(1, 0, 0, 30)
+            or UDim2.new(1 / total, -math.ceil(6 * (total - 1) / total), 1, 0)
+        local color, themeKey, textColor, hasBorder = Theme.Row, "Row", nil, false
+        local transparency = 0.3
+        if variant == "primary" then
+            color, themeKey, textColor = Theme.Accent, "Accent", white
+        elseif variant == "danger" then
+            color, themeKey, textColor = Color3.fromRGB(180, 50, 50), nil, white
+        elseif variant == "tertiary" then
+            color, themeKey, hasBorder, transparency = Theme.Panel, nil, true, 1
+        end
+
+        local btn = Utils.BaseButton({
+            Parent = buttonRow, Size = btnWidth,
+            Color = color, Transparency = transparency, Radius = 6,
+        })
+        btn.LayoutOrder = i
+        btn.ZIndex = zBase + 3
+        if themeKey then LouisHub:Register(btn, "BackgroundColor3", themeKey) end
+        if hasBorder then
+            local stroke = Utils.Stroke(btn, Theme.Border, 1, 0)
+            LouisHub:Register(stroke, "Color", "Border")
+        else
+            Utils.Hover(btn, btn)
+        end
+
+        local lbl = Utils.Text({
+            Parent = btn, Text = tostring(btnData.Text or btnData.Texto or "OK"),
+            Alignment = Enum.TextXAlignment.Center, TextSize = 11,
+            Font = Enum.Font.GothamMedium, Color = textColor, Truncate = true,
+        })
+        lbl.ZIndex = zBase + 4
+
+        btn.MouseButton1Click:Connect(function() press(i) end)
+    end
+
+    Utils.ModalEntry(backdrop, card)
+
+    local resObj = { Close = close, Press = press, Backdrop = backdrop }
+    AttachAutoAlias(resObj)
+    return resObj
+end
+
+-- ══════════════════════════════════════════════════════════════
+--  SECTION 17: INTERACTIVE POPUP SYSTEM (STACKABLE GLASS MODALS)
+-- ══════════════════════════════════════════════════════════════
+LouisHub._openModals = 0
+
+function LouisHub:Popup(cfg)
+    cfg = cfg or {}
+    local parent = getGuiParent()
+    local sg = (parent and (parent:FindFirstChild("LouisHub_ScreenGui") or parent:FindFirstChild("AlanLuna_ScreenGui"))) or (parent and (parent:FindFirstChild("LouisHub_NotifGui") or parent:FindFirstChild("AlanLuna_NotifGui")))
+    if not sg then
+        sg = Instance.new("ScreenGui")
+        sg.Name = "LouisHub_PopupGui"
+        sg.ResetOnSpawn = false
+        sg.IgnoreGuiInset = true
+        sg.DisplayOrder = 999999
+        sg.Parent = parent
+        protectGui(sg)
+        LouisHub:RegisterInstance(sg)
+    end
+
+    self._openModals = (self._openModals or 0) + 1
+    local zBase = 500 + (self._openModals - 1) * 10
+
+    local backdrop = Instance.new("TextButton")
+    backdrop.Name = "PopupBackdrop"
+    backdrop.Size = UDim2.new(1, 0, 1, 0)
+    backdrop.BackgroundColor3 = Color3.new(0, 0, 0)
+    backdrop.BackgroundTransparency = 1
+    backdrop.AutoButtonColor = false
+    backdrop.Text = ""
+    backdrop.ZIndex = zBase
+    backdrop.Parent = sg
+
+    local blurData = BlurModule(backdrop)
+
+    local cardWidth = math.clamp(cfg.Width or cfg.Ancho or 340, 300, 420)
+    local card = Instance.new("Frame")
+    card.Name = "PopupCard"
+    card.Size = UDim2.new(0, cardWidth, 0, 0)
+    card.Position = UDim2.new(0.5, 0, 0.5, 0)
+    card.AnchorPoint = Vector2.new(0.5, 0.5)
+    card.BackgroundColor3 = Theme.Panel
+    card.BackgroundTransparency = 0.25
+    card.BorderSizePixel = 0
+    card.ClipsDescendants = true
+    card.Active = true
+    card.AutomaticSize = Enum.AutomaticSize.Y
+    card.ZIndex = zBase + 1
+    card.Parent = backdrop
+
+    Utils.Corner(card, 8)
+    local cardStroke = Utils.Stroke(card, Theme.Accent, 1, 0.4)
+    LouisHub:Register(cardStroke, "Color", "Accent")
+
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 10)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = card
+
+    local pad = Instance.new("UIPadding")
+    pad.PaddingLeft   = UDim.new(0, 14)
+    pad.PaddingRight  = UDim.new(0, 14)
+    pad.PaddingTop    = UDim.new(0, 14)
+    pad.PaddingBottom = UDim.new(0, 14)
+    pad.Parent = card
+
+    local order = 0
+    local iconParam = cfg.Icon or cfg.Icono
+    if iconParam then
+        order = order + 1
+        local iconFrame = Instance.new("ImageLabel")
+        iconFrame.BackgroundTransparency = 1
+        iconFrame.Size = UDim2.new(0, 26, 0, 26)
+        iconFrame.LayoutOrder = order
+        iconFrame.ZIndex = zBase + 2
+        local ic = GetIcon(iconParam, "Material")
+        if type(ic) == "table" then
+            iconFrame.Image = "rbxassetid://" .. tostring(ic.id)
+            iconFrame.ImageRectSize = ic.imageRectSize
+            iconFrame.ImageRectOffset = ic.imageRectOffset
+            iconFrame.Parent = card
+        elseif type(ic) == "string" then
+            iconFrame.Image = ic
+            iconFrame.Parent = card
+        end
+    end
+
+    local titleParam = cfg.Title or cfg.Titulo
+    if titleParam then
+        order = order + 1
+        local lblTitle = Utils.Text({
+            Parent = card,
+            Text = tostring(titleParam),
+            Size = UDim2.new(1, 0, 0, 22),
+            Font = Enum.Font.GothamBold,
+            TextSize = 14,
+            Color = Theme.Highlight,
+            Order = order,
+        })
+        lblTitle.ZIndex = zBase + 2
+        LouisHub:Register(lblTitle, "TextColor3", "Highlight")
+    end
+
+    local contentContainer = nil
+    local contentParam = cfg.Content or cfg.Contenido
+    if contentParam then
+        order = order + 1
+        if type(contentParam) == "function" then
+            contentContainer = Instance.new("Frame")
+            contentContainer.BackgroundTransparency = 1
+            contentContainer.Size = UDim2.new(1, 0, 0, 0)
+            contentContainer.AutomaticSize = Enum.AutomaticSize.Y
+            contentContainer.LayoutOrder = order
+            contentContainer.ZIndex = zBase + 2
+            contentContainer.Parent = card
+            pcall(contentParam, contentContainer)
+        else
+            local lblBody = Utils.Text({
+                Parent = card,
+                Text = tostring(contentParam),
+                Size = UDim2.new(1, 0, 0, 0),
+                Wrapped = true,
+                TextSize = 11,
+                Color = Theme.Text,
+                Order = order,
+            })
+            lblBody.AutomaticSize = Enum.AutomaticSize.Y
+            lblBody.ZIndex = zBase + 2
+            LouisHub:Register(lblBody, "TextColor3", "Text")
+        end
+    end
+
+    local buttons = cfg.Buttons or cfg.Botones or { { Text = "OK", Variant = "primary" } }
+    order = order + 1
+
+    local buttonRow = Instance.new("Frame")
+    buttonRow.BackgroundTransparency = 1
+    buttonRow.Size = UDim2.new(1, 0, 0, 28)
+    buttonRow.LayoutOrder = order
+    buttonRow.ZIndex = zBase + 2
+    buttonRow.Parent = card
+
+    local bLayout = Instance.new("UIListLayout")
+    bLayout.FillDirection = Enum.FillDirection.Horizontal
+    bLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+    bLayout.Padding = UDim.new(0, 6)
+    bLayout.Parent = buttonRow
+
+    local closed = false
+    local function closeModal()
+        if closed then return end
+        closed = true
+        LouisHub._openModals = math.max(0, (LouisHub._openModals or 1) - 1)
+        Utils.Tween(backdrop, {BackgroundTransparency = 1}, 0.25, LouisHub.Motion.EaseExit)
+        Utils.Tween(card, {Position = UDim2.new(0.5, 0, 0.6, 0), BackgroundTransparency = 1}, 0.25, LouisHub.Motion.EaseExit)
+        task.delay(0.26, function()
+            pcall(function() backdrop:Destroy() end)
+            if cfg.OnClose or cfg.AlCerrar then pcall(cfg.OnClose or cfg.AlCerrar) end
+        end)
+    end
+
+    for _, bDef in ipairs(buttons) do
+        local btn = Utils.BaseButton({
+            Parent = buttonRow,
+            Size = UDim2.new(0, 75, 1, 0),
+            Color = Theme.Row,
+            Transparency = 0.3,
+            Radius = 6
+        })
+        btn.ZIndex = zBase + 3
+
+        local bColor = Theme.Row
+        local tColor = Theme.Text
+        local variant = bDef.Variant or bDef.Variante
+        if variant == "primary" then
+            bColor = Theme.Accent
+            tColor = Color3.fromRGB(255, 255, 255)
+        elseif variant == "danger" then
+            bColor = Color3.fromRGB(180, 50, 50)
+            tColor = Color3.fromRGB(255, 255, 255)
+        end
+        btn.BackgroundColor3 = bColor
+        Utils.Hover(btn, btn)
+
+        local bLbl = Utils.Text({
+            Parent = btn,
+            Text = bDef.Text or bDef.Texto or "Button",
+            Alignment = Enum.TextXAlignment.Center,
+            TextSize = 11,
+            Color = tColor,
+            Size = UDim2.new(1, 0, 1, 0),
+            Position = UDim2.new(0, 0, 0, 0)
+        })
+        bLbl.ZIndex = zBase + 4
+
+        btn.MouseButton1Click:Connect(function()
+            if bDef.Callback then executeWithFallback(bDef.Callback, bDef.Text or bDef.Texto or "PopupBtn") end
+            closeModal()
+        end)
+    end
+
+    if (cfg.Closable ~= false and cfg.Cerrable ~= false) then
+        backdrop.MouseButton1Click:Connect(function()
+            closeModal()
+        end)
+    end
+
+    local autoCloseTime = cfg.AutoClose or cfg.AutoCerrar
+    if autoCloseTime and tonumber(autoCloseTime) then
+        task.delay(tonumber(autoCloseTime), closeModal)
+    end
+
+    local cardScale = Instance.new("UIScale")
+    cardScale.Scale = 0.9
+    cardScale.Parent = card
+    Utils.Tween(backdrop, {BackgroundTransparency = 0.5}, 0.3, LouisHub.Motion.EaseEnter)
+    Utils.Tween(cardScale, {Scale = 1}, 0.35, LouisHub.Motion.EasePop)
+
+    local popObj = {
+        Close = closeModal,
+        Update = function(_, newText)
+            if contentContainer and contentContainer:FindFirstChildOfClass("TextLabel") then
+                contentContainer:FindFirstChildOfClass("TextLabel").Text = tostring(newText)
+            end
+        end,
+        Container = contentContainer or card,
+        Backdrop = backdrop,
+    }
+    AttachAutoAlias(popObj)
+    return popObj
+end
+
+-- ══════════════════════════════════════════════════════════════
+--  SECTION 18: HUD STATS OVERLAY ENGINE
+-- ══════════════════════════════════════════════════════════════
+local activeHUDs = {}
+
+function LouisHub:HUD(cfg)
+    cfg = cfg or {}
+    local name = cfg.Name or cfg.Nombre or "HUD"
+    if activeHUDs[name] then return activeHUDs[name] end
+
+    local parent = getGuiParent()
+    local sg = (parent and (parent:FindFirstChild("LouisHub_ScreenGui") or parent:FindFirstChild("AlanLuna_ScreenGui"))) or (parent and (parent:FindFirstChild("LouisHub_NotifGui") or parent:FindFirstChild("AlanLuna_NotifGui")))
+    if not sg then
+        sg = Instance.new("ScreenGui")
+        sg.Name = "LouisHub_ScreenGui"
+        sg.ResetOnSpawn = false
+        sg.IgnoreGuiInset = true
+        sg.Parent = parent
+        protectGui(sg)
+        LouisHub:RegisterInstance(sg)
+    end
+
+    -- FIX #10: HUD ditempatkan pada layer overlay mandiri
+    local hudFolder = sg:FindFirstChild("LouisHub_HudOverlay") or Instance.new("Folder")
+    hudFolder.Name = "LouisHub_HudOverlay"
+    hudFolder.Parent = sg
+
+    local anchorPoints = {
+        TopLeft     = Vector2.new(0, 0),
+        TopRight    = Vector2.new(1, 0),
+        BottomLeft  = Vector2.new(0, 1),
+        BottomRight = Vector2.new(1, 1),
+        Top         = Vector2.new(0.5, 0)
+    }
+
+    local positions = {
+        TopLeft     = UDim2.new(0, 15, 0, 15),
+        TopRight    = UDim2.new(1, -15, 0, 15),
+        BottomLeft  = UDim2.new(0, 15, 1, -15),
+        BottomRight = UDim2.new(1, -15, 1, -15),
+        Top         = UDim2.new(0.5, 0, 0, 15)
+    }
+
+    local posKey = type(cfg.Position or cfg.Posicion) == "string" and (cfg.Position or cfg.Posicion) or "TopLeft"
+    local posInit = (typeof(cfg.Position or cfg.Posicion) == "UDim2" and (cfg.Position or cfg.Posicion)) or positions[posKey] or positions.TopLeft
+    local anchorFinal = anchorPoints[posKey] or Vector2.new(0, 0)
+
+    local hudFrame = Utils.Frame({
+        Parent = hudFolder,
+        Size = UDim2.new(0, 200, 0, 30),
+        Position = posInit,
+        Anchor = anchorFinal,
+        Color = Theme.Panel,
+        Transparency = 0.35,
+        Radius = 8,
+        Border = true,
+        BorderColor = Theme.Border,
+        BorderThemeKey = "Border"
+    })
+    hudFrame.Name = "HUD_" .. name
+    hudFrame.AutomaticSize = Enum.AutomaticSize.XY
+    hudFrame.Active = true
+
+    local blurData = BlurModule(hudFrame)
+
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.FillDirection = Enum.FillDirection.Horizontal
+    listLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    listLayout.Padding = UDim.new(0, 8)
+    listLayout.Parent = hudFrame
+
+    local pad = Instance.new("UIPadding")
+    pad.PaddingLeft   = UDim.new(0, 8)
+    pad.PaddingRight  = UDim.new(0, 8)
+    pad.PaddingTop    = UDim.new(0, 4)
+    pad.PaddingBottom = UDim.new(0, 4)
+    pad.Parent = hudFrame
+
+    if cfg.Draggable ~= false then
+        Utils.Draggable(hudFrame, hudFrame, LouisHub.EventManager)
+    end
+
+    local items = {}
+
+    for _, eDef in ipairs(cfg.Elements or cfg.Elementos or {}) do
+        local itemFrame = Instance.new("Frame")
+        itemFrame.BackgroundTransparency = 1
+        itemFrame.Size = UDim2.new(0, 0, 1, 0)
+        itemFrame.AutomaticSize = Enum.AutomaticSize.X
+        itemFrame.Parent = hudFrame
+
+        local iLayout = Instance.new("UIListLayout")
+        iLayout.FillDirection = Enum.FillDirection.Horizontal
+        iLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+        iLayout.Padding = UDim.new(0, 4)
+        iLayout.Parent = itemFrame
+
+        local icoParam = eDef.Icon or eDef.Icono
+        if icoParam then
+            local ico = Instance.new("ImageLabel")
+            ico.BackgroundTransparency = 1
+            ico.Size = UDim2.new(0, 14, 0, 14)
+            local icAsset = GetIcon(icoParam, "Material")
+            if type(icAsset) == "table" then
+                ico.Image = "rbxassetid://" .. tostring(icAsset.id)
+                ico.ImageRectSize = icAsset.imageRectSize
+                ico.ImageRectOffset = icAsset.imageRectOffset
+                ico.Parent = itemFrame
+            elseif type(icAsset) == "string" then
+                ico.Image = icAsset
+                ico.Parent = itemFrame
+            end
+        end
+
+        local valParam = eDef.Value or eDef.Valor or "--"
+        local sufParam = eDef.Suffix or eDef.Sufijo or ""
+        local preParam = eDef.Label and (eDef.Label .. ": ") or ""
+
+        local valLbl = Utils.Text({
+            Parent = itemFrame,
+            Text = tostring(preParam) .. tostring(valParam) .. tostring(sufParam),
+            TextSize = 10,
+            Color = Theme.Text,
+            Size = UDim2.new(0, 0, 1, 0)
+        })
+        valLbl.AutomaticSize = Enum.AutomaticSize.X
+
+        local barFill = nil
+        local typeParam = eDef.Type or eDef.Tipo
+        if typeParam == "bar" then
+            local maxVal = tonumber(eDef.Max) or 100
+            if maxVal <= 0 then maxVal = 100 end
+            local curVal = tonumber(valParam) or 0
+
+            local bBg = Utils.Frame({
+                Parent = itemFrame,
+                Size = UDim2.new(0, 40, 0, 6),
+                Color = Theme.Input,
+                Radius = 3,
+                Border = false
+            })
+            barFill = Utils.Frame({
+                Parent = bBg,
+                Size = UDim2.new(math.clamp(curVal / maxVal, 0, 1), 0, 1, 0),
+                Color = Theme.Accent,
+                Radius = 3,
+                Border = false
+            })
+            Utils.AccentGradient(barFill)
+        end
+
+        items[eDef.Flag] = { Label = valLbl, Bar = barFill, Def = eDef }
+    end
+
+    -- FIX #4: Seluruh method HUD dibungkus WrapSafeMethod agar aman dipanggil "." maupun ":"
+    local rawHUD = {}
+
+    local function setHUDVal(flag, val)
+        local it = items[flag]
+        if not it then return end
+        local suf = it.Def.Suffix or it.Def.Sufijo or ""
+        local pre = it.Def.Label and (it.Def.Label .. ": ") or ""
+        it.Label.Text = pre .. tostring(val) .. suf
+        if it.Bar and it.Def.Max then
+            local maxVal = tonumber(it.Def.Max) or 100
+            if maxVal <= 0 then maxVal = 100 end
+            local num = tonumber(val) or 0
+            Utils.Tween(it.Bar, {Size = UDim2.new(math.clamp(num / maxVal, 0, 1), 0, 1, 0)}, 0.2)
+        end
+    end
+
+    rawHUD.Set = setHUDVal
+    rawHUD.Bind = function(flag, fn, interval)
+        interval = interval or 0.5
+        LouisHub:RegisterThread(task.spawn(function()
+            while hudFrame and hudFrame.Parent do
+                if hudFrame.Visible then
+                    local ok, res = pcall(fn)
+                    if ok and res ~= nil then setHUDVal(flag, res) end
+                end
+                task.wait(interval)
+            end
+        end))
+    end
+    rawHUD.Show = function() hudFrame.Visible = true end
+    rawHUD.Hide = function() hudFrame.Visible = false end
+    rawHUD.Toggle = function() hudFrame.Visible = not hudFrame.Visible end
+    rawHUD.Destroy = function()
+        activeHUDs[name] = nil
+        pcall(function() hudFrame:Destroy() end)
+    end
+
+    local HUDObj = {}
+    for k, v in pairs(rawHUD) do
+        HUDObj[k] = WrapSafeMethod(HUDObj, v)
+    end
+    AttachAutoAlias(HUDObj)
+
+    if cfg.Update or cfg.Actualizar then pcall(cfg.Update or cfg.Actualizar, HUDObj) end
+
+    activeHUDs[name] = HUDObj
+    return HUDObj
+end
+
+-- ══════════════════════════════════════════════════════════════
+--  SECTION 19: FLOATING ACTION BUTTON ENGINE (QUICK TOGGLES)
+-- ══════════════════════════════════════════════════════════════
+local floatingButtonSlots = {}
+
+function LouisHub:FloatingButton(cfg)
+    cfg = cfg or {}
+    local name = cfg.Name or cfg.Nombre or ("FloatBtn_" .. math.random(1e5, 1e6))
+    local parent = getGuiParent()
+    local sg = (parent and (parent:FindFirstChild("LouisHub_ScreenGui") or parent:FindFirstChild("AlanLuna_ScreenGui"))) or (parent and (parent:FindFirstChild("LouisHub_NotifGui") or parent:FindFirstChild("AlanLuna_NotifGui")))
+    if not sg then
+        sg = Instance.new("ScreenGui")
+        sg.Name = "LouisHub_ScreenGui"
+        sg.ResetOnSpawn = false
+        sg.IgnoreGuiInset = true
+        sg.Parent = parent
+        protectGui(sg)
+        LouisHub:RegisterInstance(sg)
+    end
+
+    local extFolder = sg:FindFirstChild("LouisHub_ExternalOverlay") or Instance.new("Folder")
+    extFolder.Name = "LouisHub_ExternalOverlay"
+    extFolder.Parent = sg
+
+    local posSlot = type(cfg.Position or cfg.Posicion) == "string" and (cfg.Position or cfg.Posicion) or "RightCenter"
+    floatingButtonSlots[posSlot] = (floatingButtonSlots[posSlot] or 0) + 1
+    local slotIndex = floatingButtonSlots[posSlot]
+
+    local positions = {
+        RightCenter = UDim2.new(1, -55, 0.5, -25 + (slotIndex - 1) * 54),
+        LeftCenter  = UDim2.new(0, 15, 0.5, -25 + (slotIndex - 1) * 54),
+        BottomRight = UDim2.new(1, -55, 1, -65 - (slotIndex - 1) * 54)
+    }
+
+    local posFinal = (typeof(cfg.Position or cfg.Posicion) == "UDim2" and (cfg.Position or cfg.Posicion)) or positions[posSlot] or positions.RightCenter
+
+    local btn = Utils.BaseButton({
+        Parent = extFolder,
+        Size = UDim2.new(0, 46, 0, 46),
+        Position = posFinal,
+        Color = Theme.Panel,
+        Transparency = 0.35,
+        Radius = 23,
+    })
+    btn.Name = name
+    btn.Active = true
+    btn.ZIndex = 50000
+
+    local blurData = BlurModule(btn)
+    local stroke = Utils.Stroke(btn, Theme.Border, 1.5, 0.3)
+    LouisHub:Register(stroke, "Color", "Border")
+
+    local icon = Instance.new("ImageLabel")
+    icon.BackgroundTransparency = 1
+    icon.Size = UDim2.new(0, 22, 0, 22)
+    icon.Position = UDim2.new(0.5, -11, 0.5, -11)
+    icon.ZIndex = 50002
+    local icAsset = GetIcon(cfg.Icon or cfg.Icono or "crosshair", "Material")
+    if type(icAsset) == "table" then
+        icon.Image = "rbxassetid://" .. tostring(icAsset.id)
+        icon.ImageRectSize = icAsset.imageRectSize
+        icon.ImageRectOffset = icAsset.imageRectOffset
+    elseif type(icAsset) == "string" then
+        icon.Image = icAsset
+    end
+    icon.Parent = btn
+
+    Utils.Draggable(btn, btn, LouisHub.EventManager)
+
+    local state = false
+    local inCooldown = false
+    local mode = cfg.Mode or cfg.Modo or "Toggle"
+
+    local pulseTween = nil
+    local function setVisualState(on)
+        if on then
+            Utils.Tween(btn, {BackgroundColor3 = Theme.Accent, BackgroundTransparency = 0.15}, 0.25)
+            Utils.Tween(stroke, {Color = Theme.Highlight, Transparency = 0}, 0.25)
+            pulseTween = TweenService:Create(stroke, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Transparency = 0.7})
+            pulseTween:Play()
+        else
+            if pulseTween then pulseTween:Cancel(); pulseTween = nil end
+            Utils.Tween(btn, {BackgroundColor3 = Theme.Panel, BackgroundTransparency = 0.35}, 0.25)
+            Utils.Tween(stroke, {Color = Theme.Border, Transparency = 0.4}, 0.25)
+        end
+    end
+
+    local function trigger(forceState)
+        if mode == "Toggle" then
+            if forceState ~= nil then
+                state = (forceState == true)
+            else
+                state = not state
+            end
+            setVisualState(state)
+            if cfg.Callback then executeWithFallback(cfg.Callback, name, state) end
+            if state and cfg.CallbackOn then executeWithFallback(cfg.CallbackOn, name) end
+            if not state and cfg.CallbackOff then executeWithFallback(cfg.CallbackOff, name) end
+        elseif mode == "Once" and not inCooldown then
+            inCooldown = true
+            state = true
+            setVisualState(true)
+            if cfg.Callback then executeWithFallback(cfg.Callback, name, true) end
+            if cfg.CallbackOn then executeWithFallback(cfg.CallbackOn, name) end
+
+            local dur = cfg.Duration or cfg.Duracion or 2
+            local cd  = cfg.Cooldown or 3
+
+            local pRing = Instance.new("Frame")
+            pRing.Size = UDim2.new(1, 0, 0, 3)
+            pRing.Position = UDim2.new(0, 0, 1, -3)
+            pRing.BackgroundColor3 = Theme.Highlight
+            pRing.BorderSizePixel = 0
+            pRing.ZIndex = 50003
+            pRing.Parent = btn
+
+            Utils.Tween(pRing, {Size = UDim2.new(0, 0, 0, 3)}, dur, Enum.EasingStyle.Linear)
+
+            task.delay(dur, function()
+                pcall(function() pRing:Destroy() end)
+                state = false
+                setVisualState(false)
+                if cfg.Callback then executeWithFallback(cfg.Callback, name, false) end
+                if cfg.CallbackOff then executeWithFallback(cfg.CallbackOff, name) end
+
+                local cdLbl = Utils.Text({
+                    Parent = btn,
+                    Text = tostring(cd),
+                    Size = UDim2.new(1, 0, 1, 0),
+                    Position = UDim2.new(0, 0, 0, 0),
+                    Alignment = Enum.TextXAlignment.Center,
+                    TextSize = 14,
+                    Font = Enum.Font.GothamBold,
+                    Color = Color3.fromRGB(255, 100, 100)
+                })
+                cdLbl.ZIndex = 50004
+                icon.ImageTransparency = 0.8
+
+                for s = cd, 1, -1 do
+                    cdLbl.Text = tostring(s)
+                    task.wait(1)
+                end
+                pcall(function() cdLbl:Destroy() end)
+                icon.ImageTransparency = 0
+                inCooldown = false
+            end)
+        end
+    end
+
+    Utils.ReliableClick(btn, function() trigger() end)
+
+    local keyParam = cfg.Key or cfg.Tecla
+    if keyParam then
+        LouisHub:RegisterConnection(UserInputService.InputBegan:Connect(function(inp, gpe)
+            if gpe then return end
+            if inp.KeyCode == keyParam then trigger() end
+        end))
+    end
+
+    -- FIX #4: Method wrapper seragam untuk FloatingButton
+    local rawBtnMethods = {
+        Activate = function() trigger(true) end,
+        Deactivate = function() trigger(false) end,
+        Toggle   = function() trigger() end,
+        GetState = function() return state end,
+        SetPosition = function(p)
+            if typeof(p) == "UDim2" then btn.Position = p end
+        end,
+        Destroy = function()
+            if pulseTween then pulseTween:Cancel() end
+            pcall(function() btn:Destroy() end)
+        end
+    }
+
+    local ExtObj = {}
+    for k, v in pairs(rawBtnMethods) do
+        ExtObj[k] = WrapSafeMethod(ExtObj, v)
+    end
+    AttachAutoAlias(ExtObj)
+
+    return ExtObj
+end
+LouisHub.BotonExterno = LouisHub.FloatingButton
+
+-- ══════════════════════════════════════════════════════════════
+--  SECTION 21: CONTROL HELPERS (DRAGGABLES & EXPANDABLES)
+-- ══════════════════════════════════════════════════════════════
+
+-- FIX #3: Hitbox Slider diperbaiki agar menjadi child terpusat atau memiliki scale posisi 0
+local function createDraggableBar(cfg)
+    local minVal = cfg.Min or 0
+    local maxVal = cfg.Max or 100
+    local rangeDiff = math.max(maxVal - minVal, 0.0001)
+
+    local background = Utils.Frame({
+        Parent = cfg.Parent or cfg.Padre, Size = cfg.Size, Position = cfg.Position or cfg.Posicion,
+        Color = Theme.Input, Radius = 4, Transparency = 0.4,
+    })
+    LouisHub:Register(background, "BackgroundColor3", "Input")
+
+    local dragRing = Utils.Stroke(background, Theme.AccentLight, 1.5, 1)
+    LouisHub:Register(dragRing, "Color", "AccentLight")
+
+    local function markDrag(active)
+        Utils.Tween(dragRing, {Transparency = active and 0 or 1}, LouisHub.Motion.Hover)
+    end
+
+    local curVal = cfg.Value or cfg.Valor or minVal
+    local fill = Utils.Frame({
+        Parent = background,
+        Size = UDim2.new(math.clamp((curVal - minVal) / rangeDiff, 0, 1), 0, 1, 0),
+        Color = Theme.Accent, Radius = 4, Transparency = 0,
+        Border = false,
+    })
+    LouisHub:Register(fill, "BackgroundColor3", "Accent")
+    Utils.AccentGradient(fill, 0)
+
+    local stepVal = cfg.Step or cfg.Increment or cfg.Incremento
+    if (cfg.Steps or cfg.Pasos) and stepVal and stepVal > 0 then
+        local totalSteps = math.floor(rangeDiff / stepVal + 0.5)
+        if totalSteps >= 2 and totalSteps <= 40 then
+            for i = 1, totalSteps - 1 do
+                local rel = i / totalSteps
+                local tickMark = Utils.Frame({
+                    Parent = background, Size = UDim2.new(0, 1.5, 1, 0),
+                    Position = UDim2.new(rel, -1, 0, 0),
+                    Color = Theme.Border, Transparency = 0.4, Radius = false, Border = false,
+                })
+                tickMark.ZIndex = 2
+                LouisHub:Register(tickMark, "BackgroundColor3", "Border")
+            end
+        end
+    end
+
+    local function setVisual(val)
+        local rel = math.clamp((val - minVal) / rangeDiff, 0, 1)
+        local duration = EventManager:IsDragging() and LouisHub.Motion.Instant or LouisHub.Motion.Page
+        Utils.Tween(fill, {Size = UDim2.new(rel, 0, 1, 0)}, duration, LouisHub.Motion.EaseEnter)
+    end
+
+    local function calculateAndApply(input)
+        local totalWidth = math.max(background.AbsoluteSize.X, 1)
+        local rel = math.clamp((input.Position.X - background.AbsolutePosition.X) / totalWidth, 0, 1)
+        local v = minVal + rel * rangeDiff
+        Utils.Tween(fill, {Size = UDim2.new(rel, 0, 1, 0)}, LouisHub.Motion.Instant)
+        if cfg.OnChange then cfg.OnChange(v) elseif cfg.OnCambio then cfg.OnCambio(v) end
+    end
+
+    -- FIX #3: Hitbox diposisikan presisi relatif terhadap background (bukan Scale = 1 yang terlempar keluar layar)
+    local inputTarget = background
+    local hitboxH = cfg.HitboxHeight or cfg.AltoHitbox
+    if hitboxH and hitboxH > 0 then
+        local hitbox = Utils.BaseButton({
+            Parent = background,
+            Size = UDim2.new(1, 0, 0, hitboxH),
+            Position = UDim2.new(0, 0, 0.5, 0),
+            Anchor = Vector2.new(0, 0.5),
+            Transparency = 1,
+            Radius = false,
+        })
+        hitbox.ZIndex = background.ZIndex + 5
+        inputTarget = hitbox
+    end
+
+    inputTarget.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if EventManager:IsDragging() then return end
+
+            calculateAndApply(input)
+
+            local GESTURE_THRESHOLD = 10
+            local startPos = Vector2.new(input.Position.X, input.Position.Y)
+            local isDecided = false
+            local isDragging = false
+
+            local ancestorScroll = background:FindFirstAncestorWhichIsA("ScrollingFrame")
+            local scrollWasEnabled = ancestorScroll and ancestorScroll.ScrollingEnabled
+
+            local function candidate(movedInput)
+                if not isDecided then
+                    local curPos = Vector2.new(movedInput.Position.X, movedInput.Position.Y)
+                    local delta = curPos - startPos
+                    if delta.Magnitude < GESTURE_THRESHOLD then return end
+                    isDecided = true
+                    if math.abs(delta.X) > math.abs(delta.Y) then
+                        isDragging = true
+                        if ancestorScroll then ancestorScroll.ScrollingEnabled = false end
+                        markDrag(true)
+                    else
+                        EventManager:StopDrag()
+                        return
+                    end
+                end
+                if isDragging then
+                    calculateAndApply(movedInput)
+                end
+            end
+
+            EventManager:StartDrag(candidate, function()
+                if isDragging then markDrag(false) end
+                if ancestorScroll then ancestorScroll.ScrollingEnabled = scrollWasEnabled end
+            end)
+        end
+    end)
+
+    return background, fill, setVisual, (inputTarget ~= background) and inputTarget or nil
+end
+
+local function createDraggableRangeBar(cfg)
+    local minVal = cfg.Min or 0
+    local maxVal = cfg.Max or 100
+    local rangeDiff = math.max(maxVal - minVal, 0.0001)
+
+    local background = Utils.Frame({
+        Parent = cfg.Parent or cfg.Padre, Size = cfg.Size, Position = cfg.Position or cfg.Posicion,
+        Color = Theme.Input, Radius = 4, Transparency = 0.4,
+    })
+    LouisHub:Register(background, "BackgroundColor3", "Input")
+
+    local function relX(v)
+        return math.clamp((v - minVal) / rangeDiff, 0, 1)
+    end
+
+    local curMin = cfg.MinValue or cfg.ValorMin or minVal
+    local curMax = cfg.MaxValue or cfg.ValorMax or maxVal
+
+    local fill = Utils.Frame({
+        Parent = background,
+        Position = UDim2.new(relX(curMin), 0, 0, 0),
+        Size = UDim2.new(relX(curMax) - relX(curMin), 0, 1, 0),
+        Color = Theme.Accent, Radius = 4, Transparency = 0,
+        Border = false,
+    })
+    LouisHub:Register(fill, "BackgroundColor3", "Accent")
+    Utils.AccentGradient(fill, 0)
+
+    local HANDLE_DIAMETER = cfg.HandleDiameter or cfg.DiametroManija or 14
+    local function createHandle()
+        local h = Utils.Frame({
+            Parent = background,
+            Size = UDim2.new(0, HANDLE_DIAMETER, 0, HANDLE_DIAMETER),
+            Anchor = Vector2.new(0.5, 0.5),
+            Color = Theme.Highlight, Radius = 999, Transparency = 0,
+        })
+        h.ZIndex = 3
+        LouisHub:Register(h, "BackgroundColor3", "Highlight")
+        local ring = Utils.Stroke(h, Theme.AccentLight, 1.5, 1)
+        LouisHub:Register(ring, "Color", "AccentLight")
+        return h, ring
+    end
+    local handleMin, ringMin = createHandle()
+    local handleMax, ringMax = createHandle()
+
+    local function positionHandle(handle, v)
+        handle.Position = UDim2.new(relX(v), 0, 0.5, 0)
+    end
+    positionHandle(handleMin, curMin)
+    positionHandle(handleMax, curMax)
+
+    local function markHandleDrag(ring, active)
+        Utils.Tween(ring, {Transparency = active and 0 or 1}, LouisHub.Motion.Hover)
+    end
+
+    local function setVisual(vMin, vMax)
+        positionHandle(handleMin, vMin)
+        positionHandle(handleMax, vMax)
+        fill.Position = UDim2.new(relX(vMin), 0, 0, 0)
+        fill.Size = UDim2.new(relX(vMax) - relX(vMin), 0, 1, 0)
+    end
+
+    local function calculateValue(input)
+        local totalWidth = math.max(background.AbsoluteSize.X, 1)
+        local rel = math.clamp((input.Position.X - background.AbsolutePosition.X) / totalWidth, 0, 1)
+        return minVal + rel * rangeDiff
+    end
+
+    background.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if EventManager:IsDragging() then return end
+
+            local GESTURE_THRESHOLD = 10
+            local startPos = Vector2.new(input.Position.X, input.Position.Y)
+            local isDecided = false
+            local isDragging = false
+            local isMovingMin = nil
+
+            local getMinFn = cfg.GetMin or cfg.ObtenerMin
+            local getMaxFn = cfg.GetMax or cfg.ObtenerMax
+            local changeFn = cfg.OnChange or cfg.OnCambio
+
+            local scrollAncestor = background:FindFirstAncestorWhichIsA("ScrollingFrame")
+            local scrollWasEnabled = scrollAncestor and scrollAncestor.ScrollingEnabled
+
+            local function pickHandle(initInput)
+                local touchVal = calculateValue(initInput)
+                local vMin, vMax = getMinFn(), getMaxFn()
+                local distMin, distMax = math.abs(touchVal - vMin), math.abs(touchVal - vMax)
+                if distMin < distMax then
+                    isMovingMin = true
+                elseif distMax < distMin then
+                    isMovingMin = false
+                else
+                    isMovingMin = touchVal <= vMin
+                end
+            end
+
+            pickHandle(input)
+            local vInitial = calculateValue(input)
+            local currentMin, currentMax = getMinFn(), getMaxFn()
+            if isMovingMin then
+                vInitial = math.min(vInitial, currentMax)
+                positionHandle(handleMin, vInitial)
+                if changeFn then changeFn(vInitial, currentMax) end
+            else
+                vInitial = math.max(vInitial, currentMin)
+                positionHandle(handleMax, vInitial)
+                if changeFn then changeFn(currentMin, vInitial) end
+            end
+            local rMin, rMax = getMinFn(), getMaxFn()
+            fill.Position = UDim2.new(relX(rMin), 0, 0, 0)
+            fill.Size = UDim2.new(relX(rMax) - relX(rMin), 0, 1, 0)
+
+            local function candidate(movedInput)
+                if not isDecided then
+                    local curPos = Vector2.new(movedInput.Position.X, movedInput.Position.Y)
+                    local delta = curPos - startPos
+                    if delta.Magnitude < GESTURE_THRESHOLD then return end
+                    isDecided = true
+                    if math.abs(delta.X) > math.abs(delta.Y) then
+                        isDragging = true
+                        if scrollAncestor then scrollAncestor.ScrollingEnabled = false end
+                        markHandleDrag(isMovingMin and ringMin or ringMax, true)
+                    else
+                        EventManager:StopDrag()
+                        return
+                    end
+                end
+                if not isDragging then return end
+
+                local v = calculateValue(movedInput)
+                local vMin, vMax = getMinFn(), getMaxFn()
+                if isMovingMin then
+                    v = math.min(v, vMax)
+                    positionHandle(handleMin, v)
+                    if changeFn then changeFn(v, vMax) end
+                else
+                    v = math.max(v, vMin)
+                    positionHandle(handleMax, v)
+                    if changeFn then changeFn(vMin, v) end
+                end
+                local vMinReal, vMaxReal = getMinFn(), getMaxFn()
+                fill.Position = UDim2.new(relX(vMinReal), 0, 0, 0)
+                fill.Size = UDim2.new(relX(vMaxReal) - relX(vMinReal), 0, 1, 0)
+            end
+
+            EventManager:StartDrag(candidate, function()
+                if isDragging then
+                    markHandleDrag(isMovingMin and ringMin or ringMax, false)
+                end
+                if scrollAncestor then scrollAncestor.ScrollingEnabled = scrollWasEnabled end
+            end)
+        end
+    end)
+
+    return background, setVisual
+end
+
+local function makeExpandable(frame, closedHeight, getOpenHeight, onCloseCallback)
+    local isOpen = false
+    local closeConnections = {}
+
+    local function isOutside(input)
+        local pos = frame.AbsolutePosition
+        local sz = frame.AbsoluteSize
+        local x, y = input.Position.X, input.Position.Y
+        return x < pos.X or x > pos.X + sz.X or y < pos.Y or y > pos.Y + sz.Y
+    end
+
+    local function cleanCloseConnections()
+        for _, conn in ipairs(closeConnections) do
+            LouisHub:DisconnectAndClean(conn)
+        end
+        closeConnections = {}
+    end
+
+    local function toggle()
+        isOpen = not isOpen
+        local h = isOpen and getOpenHeight() or closedHeight
+        Utils.Tween(frame, {Size = UDim2.new(1, 0, 0, h)}, LouisHub.Motion.Expand)
+
+        cleanCloseConnections()
+
+        if isOpen then
+            local MOVE_THRESHOLD = LouisHub.Capabilities.IsTouch and 18 or 10
+            local startData = nil
+            table.insert(closeConnections, LouisHub:RegisterConnection(
+                UserInputService.InputBegan:Connect(function(input)
+                    if input.UserInputType ~= Enum.UserInputType.MouseButton1 and
+                       input.UserInputType ~= Enum.UserInputType.Touch then return end
+                    if frame.Parent and isOutside(input) then
+                        startData = {
+                            inputType = input.UserInputType,
+                            pos = Vector2.new(input.Position.X, input.Position.Y),
+                        }
+                    else
+                        startData = nil
+                    end
+                end)
+            ))
+            table.insert(closeConnections, LouisHub:RegisterConnection(
+                UserInputService.InputEnded:Connect(function(input)
+                    if not startData or input.UserInputType ~= startData.inputType then return end
+                    local moved = (Vector2.new(input.Position.X, input.Position.Y) - startData.pos).Magnitude > MOVE_THRESHOLD
+                    startData = nil
+                    if moved then return end
+                    if frame.Parent and isOpen then
+                        toggle()
+                        if onCloseCallback then pcall(onCloseCallback) end
+                    end
+                end)
+            ))
+        else
+            if onCloseCallback then pcall(onCloseCallback) end
+        end
+
+        return isOpen
+    end
+    return toggle
+end
+
+-- ══════════════════════════════════════════════════════════════
+--  SECTION 22: TOOLTIP ENGINE (GLASS OVERLAY & TOUCH GESTURES)
 -- ══════════════════════════════════════════════════════════════
 local overlayGui, helpPanel, lblHelp, globalCloseConnection
 
@@ -3531,160 +5990,7 @@ local function addTextTooltip(row, labelText, helpText, lblInstance, rightOffset
 end
 
 -- ══════════════════════════════════════════════════════════════
---  SECTION 12: THEME MANAGER (DUAL LAYER REFACTOR)
--- ══════════════════════════════════════════════════════════════
-LouisHub.ThemeManager = {}
-local TM = LouisHub.ThemeManager
-TM.Themes = Themes.List
-
-local _windowsWithThemeSelectors = setmetatable({}, {__mode = "k"})
-
-local function broadcastThemeUpdate()
-    local animate = LouisHub._windowRevealed == true
-    local hiddenPages = {}
-    if animate then
-        local active = _G.LouisHub_Instance
-        local win = active and active.Window
-        if win and win.Tabs then
-            for _, tab in ipairs(win.Tabs) do
-                local page = tab.Page
-                if page and not page.Visible then
-                    table.insert(hiddenPages, page)
-                end
-            end
-        end
-    end
-
-    local function isInHiddenPage(inst)
-        for _, page in ipairs(hiddenPages) do
-            if inst:IsDescendantOf(page) then return true end
-        end
-        return false
-    end
-
-    for i = #themeRegistry, 1, -1 do
-        local entry = themeRegistry[i]
-        if entry.instance and entry.instance.Parent then
-            local newVal
-            if type(entry.themeKey) == "function" then
-                local ok, res = pcall(entry.themeKey)
-                if ok then newVal = res end
-            else
-                newVal = Theme[entry.themeKey]
-            end
-            if newVal ~= nil then
-                silentTry(
-                    "ThemeManager: apply " .. tostring(entry.property),
-                    function()
-                        local inst, prop = entry.instance, entry.property
-                        if animate and typeof(newVal) == "Color3"
-                        and typeof(inst[prop]) == "Color3"
-                        and not isInHiddenPage(inst) then
-                            Utils.Tween(inst, {[prop] = newVal}, LouisHub.Motion.Page, LouisHub.Motion.EaseSmooth)
-                        else
-                            inst[prop] = newVal
-                        end
-                    end
-                )
-            end
-        else
-            entry.dead = true
-        end
-    end
-
-    for win in pairs(_windowsWithThemeSelectors) do
-        if win._SyncThemeSelector then
-            pcall(win._SyncThemeSelector, LouisHub.CurrentBaseTheme)
-        end
-    end
-
-    LouisHub.Events.ThemeChanged:Fire(LouisHub.CurrentBaseTheme, LouisHub.CurrentAccentPreset)
-end
-
-function TM:ApplyBaseTheme(themeName)
-    local baseData = self.Themes[themeName]
-    if not baseData then return end
-    LouisHub.CurrentBaseTheme = themeName
-
-    for k, v in pairs(baseData) do
-        Theme[k] = v
-    end
-
-    LouisHub.CurrentAccentPreset = "Default"
-    LouisHub.ThemeGradient = ColorSequence.new{
-        ColorSequenceKeypoint.new(0.00, Theme.Accent),
-        ColorSequenceKeypoint.new(0.50, Theme.AccentLight),
-        ColorSequenceKeypoint.new(1.00, Theme.Highlight)
-    }
-
-    broadcastThemeUpdate()
-end
-
-function TM:ApplyAccentGradient(presetOrColors)
-    local colors = nil
-    if type(presetOrColors) == "string" then
-        if PresetGradients[presetOrColors] then
-            colors = PresetGradients[presetOrColors]
-            LouisHub.CurrentAccentPreset = presetOrColors
-        end
-    elseif type(presetOrColors) == "table" and #presetOrColors >= 3 then
-        colors = presetOrColors
-        LouisHub.CurrentAccentPreset = "Custom"
-    end
-
-    if not colors then return end
-
-    Theme.Accent      = colors[1]
-    Theme.AccentLight = colors[2]
-    Theme.Highlight   = colors[3]
-
-    LouisHub.ThemeGradient = ColorSequence.new{
-        ColorSequenceKeypoint.new(0.00, colors[1]),
-        ColorSequenceKeypoint.new(0.50, colors[2]),
-        ColorSequenceKeypoint.new(1.00, colors[3])
-    }
-
-    broadcastThemeUpdate()
-end
-
-function TM:ApplyTheme(nameOrTable)
-    if type(nameOrTable) == "string" then
-        if string.sub(nameOrTable, 1, 10) == "Gradient: " then
-            local gradName = string.sub(nameOrTable, 11)
-            self:ApplyAccentGradient(gradName)
-            return
-        end
-        if self.Themes[nameOrTable] then
-            self:ApplyBaseTheme(nameOrTable)
-            return
-        end
-    elseif type(nameOrTable) == "table" then
-        for k, v in pairs(nameOrTable) do Theme[k] = v end
-        LouisHub.ThemeGradient = ColorSequence.new{
-            ColorSequenceKeypoint.new(0.00, Theme.Accent),
-            ColorSequenceKeypoint.new(0.50, Theme.AccentLight),
-            ColorSequenceKeypoint.new(1.00, Theme.Highlight)
-        }
-        broadcastThemeUpdate()
-    end
-end
-
-function TM:AddTheme(name, tbl)
-    if type(name) == "string" and type(tbl) == "table" then
-        self.Themes[name] = tbl
-    end
-end
-
---[[
-╔══════════════════════════════════════════════════════════════════════╗
-                              LouisHub
-                Master UI Suite: LouisHub Engine V4.0
-         PART 2A: WINDOW FRAME, RESPONSIVE SIZING & TOPBAR
-╚══════════════════════════════════════════════════════════════════════╝
-]]
-
--- ══════════════════════════════════════════════════════════════
---  SECTION 13: WINDOW CREATION, RESPONSIVE ENGINE & HEADER
+--  SECTION 20: MAIN WINDOW & CATEGORY/TAB/SUBTAB NAVIGATION
 -- ══════════════════════════════════════════════════════════════
 local function getTextWidth(text, size)
     return TextService:GetTextSize(
@@ -3692,26 +5998,19 @@ local function getTextWidth(text, size)
     ).X
 end
 
-local searchIndex = {}
-local registeredSections = {}
-
-local function registerSearchable(row, text, visibleIf)
-    table.insert(searchIndex, {row = row, text = (text or ""):lower()})
-    if type(visibleIf) == "function" then
-        registerConditionalVisibility(row, visibleIf)
-    end
-end
-
+-- FIX #11: Single clean CreateWindow implementation without redundant wrapping
 function LouisHub:CreateWindow(config)
     config = config or {}
-    local title        = config.Title or config.Name or "LouisHub"
-    local subtitle     = (config.Subtitle or "by LouisHub") .. "  •  v" .. LouisHub.Version
-    local sizeX        = config.SizeX or 620
-    local sizeY        = config.SizeY or 380
-    local toggleKey    = config.ToggleKey or config.Bind or Enum.KeyCode.RightControl
-    local isHorizontal = config.Orientation == "horizontal"
+    local title     = config.Title or config.Titulo or config.Name or "LouisHub"
+    local subtitle  = (config.Subtitle or config.Subtitulo or "by LouisHub") .. "  •  v" .. LouisHub.Version
+    local sizeX     = config.SizeX or config.TamanoX or 620
+    local sizeY     = config.SizeY or config.TamanoY or 380
+    local toggleKey = config.ToggleKey or config.TeclaToggle or config.Bind or Enum.KeyCode.RightControl
+    local isHorizontal = (config.Orientation or config.Orientacion) == "horizontal"
 
-    cleanupPreviousInstance()
+    -- FIX #10: Hanya membersihkan window lama, tidak menghapus overlay yang ada
+    cleanupPreviousWindowOnly()
+
     _G.LouisHub_Instance = {
         Connections = {},
         Threads     = {},
@@ -3720,6 +6019,7 @@ function LouisHub:CreateWindow(config)
         Window      = nil,
         Title       = title,
     }
+    _G.AlanLuna_Instancia = _G.LouisHub_Instance
 
     local parentGui = getGuiParent()
     local sg = Instance.new("ScreenGui")
@@ -3830,7 +6130,7 @@ function LouisHub:CreateWindow(config)
         end)
     )
 
-    -- ── RESTORE PILL MINIMIZER ───────────────────────────────────
+    -- RESTORE PILL MINIMIZER
     local pillText = "⚡ " .. title
     local pillWidth = math.clamp(getTextWidth(pillText, 12) + 40, 130, 260)
 
@@ -3914,7 +6214,7 @@ function LouisHub:CreateWindow(config)
 
     pillRestore.MouseButton1Click:Connect(function() toggleWindow(true) end)
 
-    -- ── HEADER / TOPBAR ─────────────────────────────────────────
+    -- HEADER / TOPBAR
     local titleBar = Utils.Frame({
         Parent = main, Size = UDim2.new(1, 0, 0, 32),
         Color = Theme.Background, Radius = 10, Transparency = 0.35,
@@ -3968,19 +6268,13 @@ function LouisHub:CreateWindow(config)
         Size = UDim2.new(1, 0, 1, 0), Position = UDim2.new(0, 0, 0, 0),
         Alignment = Enum.TextXAlignment.Center, TextSize = 12, Font = Enum.Font.GothamBold,
     })
-    btnClose.MouseButton1Down:Connect(function()
-        Utils.Tween(btnClose, {BackgroundTransparency = 0.75}, LouisHub.Motion.FlashIn)
-    end)
-    btnClose.MouseButton1Up:Connect(function()
-        Utils.Tween(btnClose, {BackgroundTransparency = 1}, LouisHub.Motion.Hover)
-    end)
 
     local function showConfirmDestroy()
         LouisHub:Confirm({
-            Title   = "⚠️ Close Interface?",
-            Content = "Are you sure you want to destroy this interface? All active overlays and connections will be terminated.",
-            Icon    = "warning",
-            Buttons = {
+            Title    = "⚠️ Close Interface?",
+            Content  = "Are you sure you want to destroy this interface? All active overlays and connections will be terminated.",
+            Icon     = "warning",
+            Buttons  = {
                 { Text = "Cancel", Variant = "neutral" },
                 {
                     Text = "Destroy", Variant = "danger",
@@ -4004,19 +6298,13 @@ function LouisHub:CreateWindow(config)
         Alignment = Enum.TextXAlignment.Center, Font = Enum.Font.GothamBold,
         TextSize = 13, Color = Theme.TextDark,
     })
-    btnMin.MouseButton1Down:Connect(function()
-        Utils.Tween(btnMin, {BackgroundTransparency = 0.7}, LouisHub.Motion.FlashIn)
-    end)
-    btnMin.MouseButton1Up:Connect(function()
-        Utils.Tween(btnMin, {BackgroundTransparency = 1}, LouisHub.Motion.Hover)
-    end)
     Utils.ReliableClick(btnMin, function() toggleWindow(false) end)
 
-    -- ── BREADCRUMB & CONTENT CONTAINERS ─────────────────────────
+    -- SIDEBAR & HORIZONTAL BAR
     local sideBar = Instance.new("ScrollingFrame")
     sideBar.Size                = UDim2.new(0, 155, 1, -33)
     sideBar.Position            = UDim2.new(0, 0, 0, 33)
-    sideBar.BackgroundColor3    = Theme.PanelLight
+    sideBar.BackgroundColor3    = Theme.PanelLight or Theme.PanelClaro
     sideBar.BackgroundTransparency = 0.4
     sideBar.BorderSizePixel     = 0
     sideBar.Visible             = not isHorizontal
@@ -4042,7 +6330,7 @@ function LouisHub:CreateWindow(config)
     local horizBar = Instance.new("ScrollingFrame")
     horizBar.Size                = UDim2.new(1, 0, 0, 34)
     horizBar.Position            = UDim2.new(0, 0, 0, 33)
-    horizBar.BackgroundColor3    = Theme.PanelLight
+    horizBar.BackgroundColor3    = Theme.PanelLight or Theme.PanelClaro
     horizBar.BackgroundTransparency = 0.4
     horizBar.BorderSizePixel     = 0
     horizBar.Visible             = isHorizontal
@@ -4105,23 +6393,14 @@ function LouisHub:CreateWindow(config)
         Categories   = {},
         Tabs         = {},
         _main        = main,
-        ConfigName   = config.ConfigName or "autosave",
+        NombreConfig = config.ConfigName or config.NombreConfig or "autosave",
         Bind         = toggleKey,
         State        = true,
     }
+    AttachAutoAlias(Window)
 
-    function Window:Toggle()
-        toggleWindow(not isWindowOpen)
-    end
-
-    function Window:SetState(state)
-        toggleWindow(state == true)
-    end
-
-    function Window:Destroy()
-        LouisHub:Destroy()
-    end
-
+    local catOrder = 0
+    local isFirstGlobalTab = true
     local activeCategoryName = nil
     local activeTabName = nil
     local activeSubTabName = nil
@@ -4149,7 +6428,7 @@ function LouisHub:CreateWindow(config)
     function Window:CurrentTab() return activeTabName end
     function Window:CurrentSubTab() return activeSubTabName end
 
-    -- ── SEARCH ENGINE ───────────────────────────────────────────
+    -- SEARCH ENGINE
     local function filterSearch(text)
         text = (text or ""):lower()
         local isSearching = text ~= ""
@@ -4183,24 +6462,24 @@ function LouisHub:CreateWindow(config)
                 for _, sub in pairs(t.SubTabs) do
                     for _, s in ipairs(sub.Sections) do
                         local secMatched = false
-                        for _, child in ipairs(s.container:GetChildren()) do
+                        for _, child in ipairs(s.contenedor:GetChildren()) do
                             if child:IsA("GuiObject") and child.Visible then
                                 secMatched = true
                                 break
                             end
                         end
-                        s.frame.Visible = (text == "") or secMatched
+                        s.marco.Visible = (text == "") or secMatched
                         if secMatched then tabMatched = true end
                     end
                 end
-                t.Button.Visible = (text == "") or tabMatched
+                t.BotonLat.Visible = (text == "") or tabMatched
                 if tabMatched then
                     catMatched = true
                     if not firstMatchedTab then firstMatchedTab = t end
                 end
             end
-            if cat.HeaderSide then
-                cat.HeaderSide.Visible = (text == "") or catMatched
+            if cat.HeaderLat then
+                cat.HeaderLat.Visible = (text == "") or catMatched
                 if isSearching and catMatched and cat.Collapsed then
                     cat:ToggleCollapse(false)
                 end
@@ -4212,11 +6491,9 @@ function LouisHub:CreateWindow(config)
         end
     end
 
-    function Window:Search(text)
-        filterSearch(text)
-    end
+    function Window:Search(text) filterSearch(text) end
 
-    if config.SearchBox ~= false then
+    if config.SearchBox ~= false and config.Buscador ~= false then
         local searchId = 0
         local function hookSearchBox(box)
             box:GetPropertyChangedSignal("Text"):Connect(function()
@@ -4231,7 +6508,7 @@ function LouisHub:CreateWindow(config)
 
         local function createSearchTextBox()
             local box = Instance.new("TextBox")
-            box.BackgroundColor3 = Theme.Input
+            box.BackgroundColor3 = Theme.Input or Theme.Entrada
             box.BackgroundTransparency = 0.4
             box.PlaceholderText  = "🔍 Search..."
             box.Text             = ""
@@ -4258,37 +6535,19 @@ function LouisHub:CreateWindow(config)
         searchBoxHoriz.ZIndex   = 10
         searchBoxHoriz.Visible  = isHorizontal
         searchBoxHoriz.Parent   = main
-        Window._searchBoxHoriz  = searchBoxHoriz
+        Window._searchBoxHoriz = searchBoxHoriz
     end
 
---[[
-╔══════════════════════════════════════════════════════════════════════╗
-                              LouisHub
-                Master UI Suite: LouisHub Engine V4.0
-         PART 2B: CATEGORY, TAB & TWO-COLUMN SUBTAB ENGINE
-╚══════════════════════════════════════════════════════════════════════╝
-]]
-
--- ══════════════════════════════════════════════════════════════
---  SECTION 14: CATEGORIES, TABS & TWO-COLUMN SUBTAB SYSTEM
--- ══════════════════════════════════════════════════════════════
-    local catOrder = 0
-    local isFirstGlobalTab = true
-
-    local _controlInjector = nil
-    function LouisHub:_SetControlInjector(fn)
-        _controlInjector = fn
-    end
-
+    -- CREATE CATEGORY
     function Window:CreateCategory(catCfg)
         if type(catCfg) == "string" then catCfg = { Name = catCfg } end
         catCfg = catCfg or {}
-        local catName = catCfg.Name or "General"
+        local catName = catCfg.Name or catCfg.Nombre or "General"
         if self.Categories[catName] then return self.Categories[catName] end
 
         catOrder = catOrder + 1
         local isSystem = (catName == "System")
-        local isCollapsed = (catCfg.Collapsed == true) and not isSystem
+        local isCollapsed = (catCfg.Collapsed == true or catCfg.Colapsada == true) and not isSystem
 
         local headerSide = Utils.Frame({
             Parent = sideBar, Size = UDim2.new(1, 0, 0, 22),
@@ -4312,7 +6571,7 @@ function LouisHub:CreateWindow(config)
         arrowIcon.Parent = headerSide
         LouisHub:Register(arrowIcon, "ImageColor3", "TextDark")
 
-        local icoParam = catCfg.Icon
+        local icoParam = catCfg.Icon or catCfg.Icono
         local lblCat = Utils.Text({
             Parent = headerSide,
             Text = (icoParam and (icoParam .. " ") or "") .. string.upper(catName),
@@ -4343,9 +6602,10 @@ function LouisHub:CreateWindow(config)
             Name        = catName,
             Collapsed   = isCollapsed,
             Tabs        = {},
-            HeaderSide  = headerSide,
+            HeaderLat   = headerSide,
             Container   = tabsContainer,
         }
+        AttachAutoAlias(CategoryObj)
 
         function CategoryObj:ToggleCollapse(forceState)
             if isSystem then return end
@@ -4369,8 +6629,8 @@ function LouisHub:CreateWindow(config)
                 tabCfg = { Name = tabCfg, Icon = iconParamOverride }
             end
             tabCfg = tabCfg or {}
-            local tabName = tabCfg.Name or "Tab"
-            local tabIcon = tabCfg.Icon or "▪"
+            local tabName = tabCfg.Name or tabCfg.Nombre or "Tab"
+            local tabIcon = tabCfg.Icon or tabCfg.Icono or "▪"
             local showTitle = tabCfg.ShowTitle ~= false
 
             local internalOrder = #self.Container:GetChildren()
@@ -4392,7 +6652,8 @@ function LouisHub:CreateWindow(config)
             indicatorSide.BackgroundTransparency = 1
             LouisHub:Register(indicatorSide, "BackgroundColor3", "Accent")
 
-            local icAsset = GetIcon(tabIcon, "Material")
+            local icAsset = GetIcon(tabIcon, tabCfg.ImageSource or "Material")
+            local iconObj
             if icAsset then
                 local img = Instance.new("ImageLabel")
                 img.BackgroundTransparency = 1
@@ -4406,15 +6667,17 @@ function LouisHub:CreateWindow(config)
                     img.Image = icAsset
                 end
                 img.Parent = btnSide
+                iconObj = img
             else
-                Utils.Text({
+                local txtIco = Utils.Text({
                     Parent = btnSide, Text = tabIcon,
                     Size = UDim2.new(0, 18, 1, 0), Position = UDim2.new(0, 4, 0, 0),
                     Alignment = Enum.TextXAlignment.Center, TextSize = 11,
                 })
+                iconObj = txtIco
             end
 
-            Utils.Text({
+            local lblTab = Utils.Text({
                 Parent = btnSide, Text = tabName,
                 Size = UDim2.new(1, -26, 1, 0), Position = UDim2.new(0, 24, 0, 0),
                 Font = Enum.Font.GothamMedium, TextSize = 10.5,
@@ -4439,7 +6702,7 @@ function LouisHub:CreateWindow(config)
             indicatorHoriz.BackgroundTransparency = 1
             LouisHub:Register(indicatorHoriz, "BackgroundColor3", "Accent")
 
-            Utils.Text({
+            local lblH = Utils.Text({
                 Parent = btnHoriz, Text = tabName,
                 Size = UDim2.new(1, 0, 1, 0), Alignment = Enum.TextXAlignment.Center,
                 TextSize = 10, Font = Enum.Font.GothamMedium, Category = "tabs",
@@ -4482,30 +6745,33 @@ function LouisHub:CreateWindow(config)
             })
 
             local TabObj = {
-                Name            = tabName,
-                Category        = catName,
-                Button          = btnSide,
-                ButtonHoriz     = btnHoriz,
-                IndicatorSide   = indicatorSide,
-                IndicatorHoriz  = indicatorHoriz,
-                Page            = tabPage,
-                SubTabBar       = subTabBar,
-                SubTabContainer = subTabContainer,
-                SubTabs         = {},
-                SubTabsOrder    = {},
+                Name           = tabName,
+                Category       = catName,
+                Button         = btnSide,
+                BotonLat       = btnSide,
+                BotonHoriz     = btnHoriz,
+                IndicadorLat   = indicatorSide,
+                IndicadorHoriz = indicatorHoriz,
+                Page           = tabPage,
+                SubTabBar      = subTabBar,
+                SubTabContainer= subTabContainer,
+                SubTabs        = {},
+                SubTabsOrder   = {},
+                _currentSection= nil, -- FIX #1: Reference section scoped ke masing-masing TabObj
             }
+            AttachAutoAlias(TabObj)
 
             function TabObj:Select()
                 for _, catIter in pairs(Window.Categories) do
                     for _, tIter in pairs(catIter.Tabs) do
                         tIter.Page.Visible = false
-                        Utils.Tween(tIter.IndicatorSide,  {BackgroundTransparency = 1}, 0.2)
-                        Utils.Tween(tIter.IndicatorHoriz, {BackgroundTransparency = 1}, 0.2)
+                        Utils.Tween(tIter.IndicadorLat,   {BackgroundTransparency = 1}, 0.2)
+                        Utils.Tween(tIter.IndicadorHoriz, {BackgroundTransparency = 1}, 0.2)
                     end
                 end
                 self.Page.Visible = true
-                Utils.Tween(self.IndicatorSide,  {BackgroundTransparency = 0}, 0.2)
-                Utils.Tween(self.IndicatorHoriz, {BackgroundTransparency = 0}, 0.2)
+                Utils.Tween(self.IndicadorLat,   {BackgroundTransparency = 0}, 0.2)
+                Utils.Tween(self.IndicadorHoriz, {BackgroundTransparency = 0}, 0.2)
 
                 activeCategoryName = self.Category
                 activeTabName = self.Name
@@ -4523,15 +6789,11 @@ function LouisHub:CreateWindow(config)
             Utils.ReliableClick(hitboxSide, function() TabObj:Select() end, btnSide)
             Utils.ReliableClick(btnHoriz, function() TabObj:Select() end)
 
-            -- ── TWO-COLUMN SUBTAB ENGINE ─────────────────────────────
+            -- SUBTAB CREATION
             function TabObj:CreateSubTab(subCfg)
                 if type(subCfg) == "string" then subCfg = { Name = subCfg } end
                 subCfg = subCfg or {}
-                local subName      = subCfg.Name or "Main"
-                local layoutMode   = subCfg.Layout or "Single"
-                local isTwoColumn  = (layoutMode == "TwoColumn")
-                local allowMobile  = subCfg.MobileStack ~= false
-
+                local subName = subCfg.Name or subCfg.Nombre or "Main"
                 if self.SubTabs[subName] then return self.SubTabs[subName] end
 
                 local subBtn = Utils.BaseButton({
@@ -4543,153 +6805,41 @@ function LouisHub:CreateWindow(config)
                 sPad.PaddingLeft, sPad.PaddingRight = UDim.new(0, 8), UDim.new(0, 8)
                 sPad.Parent = subBtn
 
-                Utils.Text({
+                local sLbl = Utils.Text({
                     Parent = subBtn, Text = subName,
                     Size = UDim2.new(1, 0, 1, 0), Alignment = Enum.TextXAlignment.Center,
                     TextSize = 10, Font = Enum.Font.GothamMedium,
                 })
 
-                local mainSubPage = Instance.new("ScrollingFrame")
-                mainSubPage.Name                   = "SubPage_" .. subName
-                mainSubPage.Size                   = UDim2.new(1, 0, 1, 0)
-                mainSubPage.BackgroundTransparency = 1
-                mainSubPage.BorderSizePixel        = 0
-                mainSubPage.ScrollBarThickness     = 3
-                mainSubPage.ScrollBarImageColor3   = Theme.Accent
-                mainSubPage.CanvasSize             = UDim2.new(0, 0, 0, 0)
-                mainSubPage.AutomaticCanvasSize    = Enum.AutomaticSize.Y
-                mainSubPage.Visible                = (#self.SubTabsOrder == 0)
-                mainSubPage.Parent                 = self.SubTabContainer
+                local subPage = Instance.new("ScrollingFrame")
+                subPage.Name = "SubPage_" .. subName
+                subPage.Size = UDim2.new(1, 0, 1, 0)
+                subPage.BackgroundTransparency = 1
+                subPage.BorderSizePixel = 0
+                subPage.ScrollBarThickness = 3
+                subPage.ScrollBarImageColor3 = Theme.Accent
+                subPage.CanvasSize = UDim2.new(0, 0, 0, 0)
+                subPage.AutomaticCanvasSize = Enum.AutomaticSize.Y
+                subPage.Visible = (#self.SubTabsOrder == 0)
+                subPage.Parent = self.SubTabContainer
 
                 local pLayout = Instance.new("UIListLayout")
-                pLayout.Padding   = UDim.new(0, 8)
+                pLayout.Padding   = UDim.new(0, 10)
                 pLayout.SortOrder = Enum.SortOrder.LayoutOrder
-                pLayout.Parent    = mainSubPage
+                pLayout.Parent    = subPage
 
                 local pPad = Instance.new("UIPadding")
                 pPad.PaddingTop, pPad.PaddingBottom = UDim.new(0, 6), UDim.new(0, 10)
                 pPad.PaddingLeft, pPad.PaddingRight = UDim.new(0, 8), UDim.new(0, 8)
-                pPad.Parent = mainSubPage
-
-                local leftColumnContainer  = nil
-                local rightColumnContainer = nil
-                local updateResponsiveLayout = nil
-
-                if isTwoColumn then
-                    mainSubPage.ScrollingEnabled = false
-                    mainSubPage.ScrollBarThickness = 0
-                    pLayout.Padding = UDim.new(0, 0)
-                    pPad.PaddingTop, pPad.PaddingBottom = UDim.new(0, 0), UDim.new(0, 0)
-                    pPad.PaddingLeft, pPad.PaddingRight = UDim.new(0, 4), UDim.new(0, 4)
-
-                    local dualHolder = Instance.new("Frame")
-                    dualHolder.Name = "TwoColumnHolder"
-                    dualHolder.BackgroundTransparency = 1
-                    dualHolder.Size = UDim2.new(1, 0, 1, 0)
-                    dualHolder.Parent = mainSubPage
-
-                    local function createPanel(name, xPos)
-                        local panel = Instance.new("ScrollingFrame")
-                        panel.Name                   = name
-                        panel.Size                   = UDim2.new(0.5, -4, 1, 0)
-                        panel.Position               = xPos
-                        panel.BackgroundTransparency = 1
-                        panel.BorderSizePixel        = 0
-                        panel.ScrollBarThickness     = 3
-                        panel.ScrollBarImageColor3   = Theme.Accent
-                        panel.CanvasSize             = UDim2.new(0, 0, 0, 0)
-                        panel.AutomaticCanvasSize    = Enum.AutomaticSize.Y
-                        panel.ScrollingDirection     = Enum.ScrollingDirection.Y
-                        panel.Parent                 = dualHolder
-
-                        local l = Instance.new("UIListLayout")
-                        l.Padding = UDim.new(0, 8)
-                        l.SortOrder = Enum.SortOrder.LayoutOrder
-                        l.Parent = panel
-
-                        local pad = Instance.new("UIPadding")
-                        pad.PaddingTop, pad.PaddingBottom = UDim.new(0, 6), UDim.new(0, 10)
-                        pad.PaddingLeft, pad.PaddingRight = UDim.new(0, 4), UDim.new(0, 4)
-                        pad.Parent = panel
-
-                        LouisHub:Register(panel, "ScrollBarImageColor3", "Accent")
-                        return panel
-                    end
-
-                    leftColumnContainer  = createPanel("LeftPanel", UDim2.new(0, 0, 0, 0))
-                    rightColumnContainer = createPanel("RightPanel", UDim2.new(0.5, 4, 0, 0))
-
-                    updateResponsiveLayout = function()
-                        if not (mainSubPage and mainSubPage.Parent and dualHolder and dualHolder.Parent) then return end
-                        local cam = Workspace.CurrentCamera
-                        local vw = cam and cam.ViewportSize.X or 800
-                        local isMobileViewport = (vw < 600) or LouisHub.Capabilities.IsTouch
-
-                        if allowMobile and isMobileViewport then
-                            mainSubPage.ScrollingEnabled = true
-                            mainSubPage.ScrollBarThickness = 3
-                            dualHolder.Size = UDim2.new(1, 0, 0, 0)
-                            dualHolder.AutomaticSize = Enum.AutomaticSize.Y
-
-                            leftColumnContainer.Size = UDim2.new(1, 0, 0, 0)
-                            leftColumnContainer.Position = UDim2.new(0, 0, 0, 0)
-                            leftColumnContainer.AutomaticSize = Enum.AutomaticSize.Y
-                            leftColumnContainer.ScrollingEnabled = false
-                            leftColumnContainer.ScrollBarThickness = 0
-
-                            rightColumnContainer.Size = UDim2.new(1, 0, 0, 0)
-                            rightColumnContainer.Position = UDim2.new(0, 0, 0, 0)
-                            rightColumnContainer.AutomaticSize = Enum.AutomaticSize.Y
-                            rightColumnContainer.ScrollingEnabled = false
-                            rightColumnContainer.ScrollBarThickness = 0
-
-                            local hLayout = dualHolder:FindFirstChildOfClass("UIListLayout")
-                            if not hLayout then
-                                hLayout = Instance.new("UIListLayout")
-                                hLayout.Padding = UDim.new(0, 8)
-                                hLayout.SortOrder = Enum.SortOrder.LayoutOrder
-                                hLayout.Parent = dualHolder
-                            end
-                            leftColumnContainer.LayoutOrder = 1
-                            rightColumnContainer.LayoutOrder = 2
-                        else
-                            local hLayout = dualHolder:FindFirstChildOfClass("UIListLayout")
-                            if hLayout then hLayout:Destroy() end
-
-                            mainSubPage.ScrollingEnabled = false
-                            mainSubPage.ScrollBarThickness = 0
-                            dualHolder.Size = UDim2.new(1, 0, 1, 0)
-                            dualHolder.AutomaticSize = Enum.AutomaticSize.None
-
-                            leftColumnContainer.Size = UDim2.new(0.5, -4, 1, 0)
-                            leftColumnContainer.Position = UDim2.new(0, 0, 0, 0)
-                            leftColumnContainer.AutomaticSize = Enum.AutomaticSize.Y
-                            leftColumnContainer.ScrollingEnabled = true
-                            leftColumnContainer.ScrollBarThickness = 3
-
-                            rightColumnContainer.Size = UDim2.new(0.5, -4, 1, 0)
-                            rightColumnContainer.Position = UDim2.new(0.5, 4, 0, 0)
-                            rightColumnContainer.AutomaticSize = Enum.AutomaticSize.Y
-                            rightColumnContainer.ScrollingEnabled = true
-                            rightColumnContainer.ScrollBarThickness = 3
-                        end
-                    end
-
-                    updateResponsiveLayout()
-                    local cam = Workspace.CurrentCamera
-                    if cam then
-                        LouisHub:RegisterConnection(cam:GetPropertyChangedSignal("ViewportSize"):Connect(updateResponsiveLayout))
-                    end
-                end
+                pPad.Parent = subPage
 
                 local SubTabObj = {
-                    Name       = subName,
-                    Layout     = layoutMode,
-                    Button     = subBtn,
-                    Page       = mainSubPage,
-                    Sections   = {},
-                    _sideCount = 0,
+                    Name      = subName,
+                    Button    = subBtn,
+                    Page      = subPage,
+                    Sections  = {},
                 }
+                AttachAutoAlias(SubTabObj)
 
                 function SubTabObj:Select()
                     for _, s in pairs(TabObj.SubTabs) do
@@ -4700,47 +6850,20 @@ function LouisHub:CreateWindow(config)
                     Utils.Tween(self.Button, {BackgroundColor3 = Theme.Accent}, 0.2)
                     activeSubTabName = self.Name
                     refreshBreadcrumb()
-                    if updateResponsiveLayout then updateResponsiveLayout() end
                     LouisHub.Events.SubTabChanged:Fire(TabObj.Category, TabObj.Name, self.Name)
                 end
 
                 Utils.ReliableClick(subBtn, function() SubTabObj:Select() end)
 
-                table.insert(TabObj.SubTabsOrder, SubTabObj)
-                TabObj.SubTabs[subName] = SubTabObj
-
-                if #TabObj.SubTabsOrder >= 2 then
-                    TabObj.SubTabBar.Visible = true
-                    TabObj.SubTabContainer.Position = UDim2.new(0, 0, 0, showTitle and 48 or 28)
-                    TabObj.SubTabContainer.Size = UDim2.new(1, 0, 1, showTitle and -48 or -28)
-                else
-                    TabObj.SubTabBar.Visible = false
-                    TabObj.SubTabContainer.Position = UDim2.new(0, 0, 0, showTitle and 24 or 4)
-                    TabObj.SubTabContainer.Size = UDim2.new(1, 0, 1, showTitle and -24 or -4)
-                end
-
-                -- ── CREATE SECTION (PANEL PLACEMENT & INNER 2 COLUMNS) ────
+                -- FIX #2: Section dengan sistem Interleaved Two-Column Layout
                 function SubTabObj:CreateSection(secName, secCfg)
                     secCfg = secCfg or {}
-                    local numColumns         = secCfg.Columns or 1
-                    local collapsible        = (secCfg.Collapsible ~= false)
-                    local collapsedByDefault = collapsible and (secCfg.CollapsedByDefault == true)
-
-                    local targetPanel = mainSubPage
-                    if isTwoColumn then
-                        local specifiedSide = secCfg.Side or (secCfg.Column == 1 and "Left") or (secCfg.Column == 2 and "Right")
-                        if specifiedSide == "Left" then
-                            targetPanel = leftColumnContainer
-                        elseif specifiedSide == "Right" then
-                            targetPanel = rightColumnContainer
-                        else
-                            self._sideCount = self._sideCount + 1
-                            targetPanel = (self._sideCount % 2 == 1) and leftColumnContainer or rightColumnContainer
-                        end
-                    end
+                    local numColumns = secCfg.Columns or secCfg.Columnas or 1
+                    local collapsible = (secCfg.Collapsible ~= false and secCfg.Colapsable ~= false)
+                    local collapsedByDefault = collapsible and (secCfg.CollapsedByDefault == true or secCfg.ColapsadaPorDefecto == true)
 
                     local frame = Utils.Frame({
-                        Parent = targetPanel, Size = UDim2.new(1, 0, 0, 0),
+                        Parent = subPage, Size = UDim2.new(1, 0, 0, 0),
                         Color = Theme.Panel, Radius = 6, Border = true,
                         BorderColor = Theme.Border, BorderThemeKey = "Border",
                         Transparency = 0.35,
@@ -4788,59 +6911,23 @@ function LouisHub:CreateWindow(config)
                     bodyContainer.AutomaticSize = Enum.AutomaticSize.Y
                     bodyContainer.Visible = not collapsedByDefault
 
-                    local col1, col2 = nil, nil
-                    if numColumns == 2 then
-                        local rowCols = Instance.new("Frame")
-                        rowCols.BackgroundTransparency = 1
-                        rowCols.Size = UDim2.new(1, 0, 0, 0)
-                        rowCols.AutomaticSize = Enum.AutomaticSize.Y
-                        rowCols.Parent = bodyContainer
+                    -- FIX #2: bodyContainer selalu memiliki UIListLayout vertical terurut
+                    local padC = Instance.new("UIPadding")
+                    padC.PaddingLeft, padC.PaddingRight = UDim.new(0, 6), UDim.new(0, 6)
+                    padC.PaddingTop, padC.PaddingBottom = UDim.new(0, 6), UDim.new(0, 6)
+                    padC.Parent = bodyContainer
 
-                        local padCols = Instance.new("UIPadding")
-                        padCols.PaddingLeft, padCols.PaddingRight = UDim.new(0, 6), UDim.new(0, 6)
-                        padCols.PaddingTop, padCols.PaddingBottom = UDim.new(0, 6), UDim.new(0, 6)
-                        padCols.Parent = rowCols
-
-                        col1 = Instance.new("Frame")
-                        col1.Name = "Column1"
-                        col1.BackgroundTransparency = 1
-                        col1.Size = UDim2.new(0.5, -4, 0, 0)
-                        col1.Position = UDim2.new(0, 0, 0, 0)
-                        col1.AutomaticSize = Enum.AutomaticSize.Y
-                        col1.Parent = rowCols
-
-                        local l1 = Instance.new("UIListLayout")
-                        l1.Padding = UDim.new(0, 5)
-                        l1.SortOrder = Enum.SortOrder.LayoutOrder
-                        l1.Parent = col1
-
-                        col2 = Instance.new("Frame")
-                        col2.Name = "Column2"
-                        col2.BackgroundTransparency = 1
-                        col2.Size = UDim2.new(0.5, -4, 0, 0)
-                        col2.Position = UDim2.new(0.5, 4, 0, 0)
-                        col2.AutomaticSize = Enum.AutomaticSize.Y
-                        col2.Parent = rowCols
-
-                        local l2 = Instance.new("UIListLayout")
-                        l2.Padding = UDim.new(0, 5)
-                        l2.SortOrder = Enum.SortOrder.LayoutOrder
-                        l2.Parent = col2
-                    else
-                        local padC = Instance.new("UIPadding")
-                        padC.PaddingLeft, padC.PaddingRight = UDim.new(0, 6), UDim.new(0, 6)
-                        padC.PaddingTop, padC.PaddingBottom = UDim.new(0, 6), UDim.new(0, 6)
-                        padC.Parent = bodyContainer
-
-                        local lC = Instance.new("UIListLayout")
-                        lC.Padding = UDim.new(0, 5)
-                        lC.SortOrder = Enum.SortOrder.LayoutOrder
-                        lC.Parent = bodyContainer
-                    end
+                    local layoutBody = Instance.new("UIListLayout")
+                    layoutBody.Padding = UDim.new(0, 5)
+                    layoutBody.SortOrder = Enum.SortOrder.LayoutOrder
+                    layoutBody.Parent = bodyContainer
 
                     local secEntry = {
+                        marco       = frame,
                         frame       = frame,
+                        contenedor  = bodyContainer,
                         container   = bodyContainer,
+                        flecha      = arrow,
                         arrow       = arrow,
                         collapsible = collapsible,
                         collapsed   = collapsedByDefault,
@@ -4877,13 +6964,19 @@ function LouisHub:CreateWindow(config)
                     table.insert(SubTabObj.Sections, secEntry)
                     table.insert(registeredSections, secEntry)
 
+                    -- FIX #2: Class Section dengan manajemen slot grid dua kolom interleaved
                     local Section = {
+                        marco        = frame,
                         frame        = frame,
+                        contenedor   = bodyContainer,
                         container    = bodyContainer,
-                        _col1        = col1,
-                        _col2        = col2,
+                        _numColumns  = numColumns,
                         _itemCounter = 0,
+                        _activeGrid  = nil,
+                        _col1        = nil,
+                        _col2        = nil,
                     }
+                    AttachAutoAlias(Section)
 
                     local WIDE_CONTROLS = {
                         Slider = true, RangeSlider = true, Input = true,
@@ -4891,33 +6984,99 @@ function LouisHub:CreateWindow(config)
                         Paragraph = true, Image = true,
                     }
 
+                    -- FIX #2: Pemisahan target container agar kontrol lebar tidak menumpuk di atas grid
                     function Section:_GetTargetContainer(ctrlType, cfgCtrl)
-                        if numColumns ~= 2 then return bodyContainer end
-                        if cfgCtrl and cfgCtrl.Column == 1 then return col1 end
-                        if cfgCtrl and cfgCtrl.Column == 2 then return col2 end
-
-                        if WIDE_CONTROLS[ctrlType] and not (cfgCtrl and cfgCtrl.Column) then
+                        if self._numColumns ~= 2 then
                             return bodyContainer
                         end
 
-                        self._itemCounter = self._itemCounter + 1
-                        return (self._itemCounter % 2 == 1) and col1 or col2
+                        if WIDE_CONTROLS[ctrlType] and not (cfgCtrl and (cfgCtrl.Column or cfgCtrl.Columna)) then
+                            self._activeGrid = nil
+                            return bodyContainer
+                        end
+
+                        -- Jika belum ada grid aktif untuk kontrol kolom, buat baris grid baru
+                        if not self._activeGrid or not self._activeGrid.Parent then
+                            self._itemCounter = self._itemCounter + 1
+
+                            local rowCols = Instance.new("Frame")
+                            rowCols.Name = "RowCols_" .. tostring(self._itemCounter)
+                            rowCols.BackgroundTransparency = 1
+                            rowCols.Size = UDim2.new(1, 0, 0, 0)
+                            rowCols.AutomaticSize = Enum.AutomaticSize.Y
+                            rowCols.LayoutOrder = self._itemCounter
+                            rowCols.Parent = bodyContainer
+
+                            local col1 = Instance.new("Frame")
+                            col1.Name = "Column1"
+                            col1.BackgroundTransparency = 1
+                            col1.Size = UDim2.new(0.5, -3, 0, 0)
+                            col1.Position = UDim2.new(0, 0, 0, 0)
+                            col1.AutomaticSize = Enum.AutomaticSize.Y
+                            col1.Parent = rowCols
+
+                            local l1 = Instance.new("UIListLayout")
+                            l1.Padding = UDim.new(0, 5)
+                            l1.SortOrder = Enum.SortOrder.LayoutOrder
+                            l1.Parent = col1
+
+                            local col2 = Instance.new("Frame")
+                            col2.Name = "Column2"
+                            col2.BackgroundTransparency = 1
+                            col2.Size = UDim2.new(0.5, -3, 0, 0)
+                            col2.Position = UDim2.new(0.5, 3, 0, 0)
+                            col2.AutomaticSize = Enum.AutomaticSize.Y
+                            col2.Parent = rowCols
+
+                            local l2 = Instance.new("UIListLayout")
+                            l2.Padding = UDim.new(0, 5)
+                            l2.SortOrder = Enum.SortOrder.LayoutOrder
+                            l2.Parent = col2
+
+                            self._activeGrid = rowCols
+                            self._col1 = col1
+                            self._col2 = col2
+                        end
+
+                        if cfgCtrl and (cfgCtrl.Column == 1 or cfgCtrl.Columna == 1) then
+                            return self._col1
+                        elseif cfgCtrl and (cfgCtrl.Column == 2 or cfgCtrl.Columna == 2) then
+                            return self._col2
+                        end
+
+                        -- Alternasi otomatis
+                        local c1Count = #self._col1:GetChildren()
+                        local c2Count = #self._col2:GetChildren()
+                        return (c1Count <= c2Count) and self._col1 or self._col2
                     end
 
-                    if _controlInjector then
-                        _controlInjector(Section)
-                    end
-
+                    -- Daftarkan ke reference Tab
+                    TabObj._currentSection = Section
                     return Section
+                end
+
+                table.insert(self.SubTabsOrder, SubTabObj)
+                self.SubTabs[subName] = SubTabObj
+
+                if #self.SubTabsOrder >= 2 then
+                    self.SubTabBar.Visible = true
+                    self.SubTabContainer.Position = UDim2.new(0, 0, 0, showTitle and 48 or 28)
+                    self.SubTabContainer.Size = UDim2.new(1, 0, 1, showTitle and -48 or -28)
+                else
+                    self.SubTabBar.Visible = false
+                    self.SubTabContainer.Position = UDim2.new(0, 0, 0, showTitle and 24 or 4)
+                    self.SubTabContainer.Size = UDim2.new(1, 0, 1, showTitle and -24 or -4)
                 end
 
                 return SubTabObj
             end
 
-            -- Standard Alan API Tab-Level Section Delegation
+            -- FIX #1: CreateSection pada TabObj mendelegasikan ke subtab default ('Main') dan mencatat _currentSection
             function TabObj:CreateSection(secName, secCfg)
                 local subMain = self.SubTabs["Main"] or self:CreateSubTab("Main")
-                return subMain:CreateSection(secName, secCfg)
+                local sec = subMain:CreateSection(secName, secCfg)
+                self._currentSection = sec
+                return sec
             end
 
             table.insert(Window.Tabs, TabObj)
@@ -4936,24 +7095,21 @@ function LouisHub:CreateWindow(config)
     end
 
     function Window:CreateTab(tabCfg, iconParamOverride)
-        if type(tabCfg) == "string" then
-            tabCfg = { Name = tabCfg, Icon = iconParamOverride }
-        end
         local catGeneral = self.Categories["General"] or self:CreateCategory("General")
-        return catGeneral:CreateTab(tabCfg)
+        return catGeneral:CreateTab(tabCfg, iconParamOverride)
     end
 
-    if config.AutoSave ~= false and isFilesystemAvailable() then
+    if config.AutoSave ~= false and config.AutoGuardar ~= false and isFilesystemAvailable() then
         activeSaveWindow = Window
         task.defer(function()
-            pcall(function() LouisHub.SaveManager:LoadSilent(Window.ConfigName) end)
+            pcall(function() LouisHub.SaveManager:LoadSilent(Window.NombreConfig, true) end)
             pcall(function() LouisHub.SaveManager:LoadUI("preinstalled") end)
             pcall(function() LouisHub:LoadAutoloadConfig() end)
         end)
 
         sg.Destroying:Connect(function()
             isAutosaveLoopActive = false
-            pcall(function() LouisHub.SaveManager:SaveSilent(Window.ConfigName) end)
+            pcall(function() LouisHub.SaveManager:SaveSilent(Window.NombreConfig) end)
         end)
         startAutosaveLoop()
     end
@@ -4962,1243 +7118,10 @@ function LouisHub:CreateWindow(config)
     return Window
 end
 
---[[
-╔══════════════════════════════════════════════════════════════════════╗
-                              LouisHub
-                Master UI Suite: LouisHub Engine V4.0
-         PART 2C: MODALS, POPUPS, HUD, FLOATING BUTTONS & CORE
-╚══════════════════════════════════════════════════════════════════════╝
-]]
-
 -- ══════════════════════════════════════════════════════════════
---  SECTION 15: MODAL CONFIRMATION DIALOG SYSTEM
+--  SECTION 23: UNIVERSAL CONTROL FACTORY & DUAL-INTERFACE ADAPTER
 -- ══════════════════════════════════════════════════════════════
-LouisHub._openModals = 0
-
-function LouisHub:Confirm(cfg)
-    cfg = cfg or {}
-    local parent = getGuiParent()
-    local gui = self._guiConfirm or (parent and parent:FindFirstChild("LouisHub_ScreenGui")) or (parent and parent:FindFirstChild("LouisHub_NotifGui"))
-    if not (gui and gui.Parent) then
-        self:_LogError("Confirm", "No active window available to display modal")
-        return nil
-    end
-
-    local buttons = {}
-    if type(cfg.Buttons) == "table" and #cfg.Buttons > 0 then
-        for _, b in ipairs(cfg.Buttons) do table.insert(buttons, cloneTable(b)) end
-    else
-        if cfg.CancelButton then
-            local b = cloneTable(cfg.CancelButton)
-            b.Text = b.Text or "Cancel"
-            b.Variant = b.Variant or "neutral"
-            table.insert(buttons, b)
-        end
-        local accept = cloneTable(cfg.AcceptButton or {})
-        accept.Text = accept.Text or "Accept"
-        accept.Variant = accept.Variant or "primary"
-        table.insert(buttons, accept)
-    end
-
-    self._openModals = (self._openModals or 0) + 1
-    local zBase = 500 + (self._openModals - 1) * 10
-    local titleErr = cfg.Title or "Confirm"
-
-    local backdrop = Utils.Frame({
-        Parent = gui, Size = UDim2.new(1, 0, 1, 0),
-        Color = Color3.new(0, 0, 0), Transparency = 0.5, Radius = false,
-        Border = false,
-    })
-    backdrop.ZIndex = zBase
-    backdrop.Active = true
-
-    local blurData = BlurModule(backdrop)
-
-    local closed = false
-    backdrop.Destroying:Connect(function()
-        if closed then return end
-        closed = true
-        self._openModals = math.max(0, (self._openModals or 1) - 1)
-        for i = #themeRegistry, 1, -1 do
-            local inst = themeRegistry[i].instance
-            if inst == backdrop or inst:IsDescendantOf(backdrop) then table.remove(themeRegistry, i) end
-        end
-        for i = #textScaleRegistry, 1, -1 do
-            local inst = textScaleRegistry[i].instance
-            if inst == backdrop or inst:IsDescendantOf(backdrop) then table.remove(textScaleRegistry, i) end
-        end
-        task.defer(function()
-            local active = _G.LouisHub_Instance
-            if not active then return end
-            for i = #active.Connections, 1, -1 do
-                if active.Connections[i].Connected == false then table.remove(active.Connections, i) end
-            end
-        end)
-    end)
-
-    local card = Utils.Frame({
-        Parent = backdrop, Size = UDim2.new(0, 300, 0, 0),
-        Position = UDim2.new(0.5, 0, 0.5, 0), Anchor = Vector2.new(0.5, 0.5),
-        Color = Theme.Panel, Radius = 8,
-        Border = true, BorderColor = Theme.Border, BorderThickness = 1,
-        BorderThemeKey = "Border",
-        Transparency = 0.25,
-    })
-    card.ZIndex = zBase + 1
-    card.Active = true
-    card.AutomaticSize = Enum.AutomaticSize.Y
-    LouisHub:Register(card, "BackgroundColor3", "Panel")
-
-    local layout = Instance.new("UIListLayout")
-    layout.Padding = UDim.new(0, 10)
-    layout.SortOrder = Enum.SortOrder.LayoutOrder
-    layout.Parent = card
-
-    local pad = Instance.new("UIPadding")
-    pad.PaddingLeft, pad.PaddingRight = UDim.new(0, 14), UDim.new(0, 14)
-    pad.PaddingTop, pad.PaddingBottom = UDim.new(0, 14), UDim.new(0, 14)
-    pad.Parent = card
-
-    local order = 0
-    local iconParam = cfg.Icon
-    if iconParam then
-        order = order + 1
-        local iconAsset = GetIcon(iconParam, "Material")
-        if iconAsset then
-            local iconHolder = Instance.new("Frame")
-            iconHolder.BackgroundTransparency = 1
-            iconHolder.Size = UDim2.new(1, 0, 0, 28)
-            iconHolder.LayoutOrder = order
-            iconHolder.ZIndex = zBase + 2
-            iconHolder.Parent = card
-
-            local imgIco = Instance.new("ImageLabel")
-            imgIco.BackgroundTransparency = 1
-            imgIco.Size = UDim2.new(0, 26, 0, 26)
-            imgIco.AnchorPoint = Vector2.new(0.5, 0.5)
-            imgIco.Position = UDim2.new(0.5, 0, 0.5, 0)
-            imgIco.ZIndex = zBase + 3
-            if type(iconAsset) == "table" then
-                imgIco.Image = "rbxassetid://" .. tostring(iconAsset.id)
-                imgIco.ImageRectSize = iconAsset.imageRectSize
-                imgIco.ImageRectOffset = iconAsset.imageRectOffset
-            else
-                imgIco.Image = iconAsset
-            end
-            imgIco.Parent = iconHolder
-        else
-            local lblIcon = Utils.Text({
-                Parent = card, Text = tostring(iconParam),
-                Size = UDim2.new(1, 0, 0, 26), Order = order,
-                Alignment = Enum.TextXAlignment.Center, TextSize = 22,
-            })
-            lblIcon.ZIndex = zBase + 2
-        end
-    end
-
-    local titleParam = cfg.Title
-    if titleParam then
-        order = order + 1
-        local lblTitle = Utils.Text({
-            Parent = card, Text = tostring(titleParam),
-            Size = UDim2.new(1, 0, 0, 0), Order = order,
-            Font = Enum.Font.GothamBold, TextSize = 14, Wrapped = true,
-            Alignment = iconParam and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left,
-            Color = Theme.Highlight,
-        })
-        lblTitle.AutomaticSize = Enum.AutomaticSize.Y
-        lblTitle.ZIndex = zBase + 2
-        LouisHub:Register(lblTitle, "TextColor3", "Highlight")
-    end
-
-    local contentParam = cfg.Content
-    if contentParam then
-        order = order + 1
-        local lblBody = Utils.Text({
-            Parent = card, Text = tostring(contentParam),
-            Size = UDim2.new(1, 0, 0, 0), Order = order,
-            Wrapped = true, TextSize = 11, TextTransparency = 0.15,
-            Alignment = iconParam and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left,
-        })
-        lblBody.AutomaticSize = Enum.AutomaticSize.Y
-        lblBody.ZIndex = zBase + 2
-    end
-
-    local total = #buttons
-    local vertical = total > 3
-    order = order + 1
-    local buttonRow = Utils.Frame({
-        Parent = card, Size = UDim2.new(1, 0, 0, vertical and 0 or 30),
-        Transparency = 1, Order = order, Radius = false, Border = false,
-    })
-    buttonRow.ZIndex = zBase + 2
-    if vertical then buttonRow.AutomaticSize = Enum.AutomaticSize.Y end
-
-    local layoutButtons = Instance.new("UIListLayout")
-    layoutButtons.FillDirection = vertical and Enum.FillDirection.Vertical or Enum.FillDirection.Horizontal
-    layoutButtons.Padding = UDim.new(0, 6)
-    layoutButtons.SortOrder = Enum.SortOrder.LayoutOrder
-    layoutButtons.Parent = buttonRow
-
-    local white = Color3.fromRGB(255, 255, 255)
-    local function close()
-        if backdrop.Parent then backdrop:Destroy() end
-    end
-    local function press(i)
-        local btn = buttons[i]
-        if not btn then return end
-        close()
-        if type(btn.Callback) == "function" then
-            executeWithFallback(btn.Callback, btn.Text or titleErr)
-        end
-    end
-
-    for i, btnData in ipairs(buttons) do
-        local variant = btnData.Variant or "neutral"
-        local btnWidth = vertical and UDim2.new(1, 0, 0, 30)
-            or UDim2.new(1 / total, -math.ceil(6 * (total - 1) / total), 1, 0)
-        local color, themeKey, textColor, hasBorder = Theme.Row, "Row", nil, false
-        local transparency = 0.3
-        if variant == "primary" then
-            color, themeKey, textColor = Theme.Accent, "Accent", white
-        elseif variant == "danger" then
-            color, themeKey, textColor = Color3.fromRGB(180, 50, 50), nil, white
-        elseif variant == "tertiary" then
-            color, themeKey, hasBorder, transparency = Theme.Panel, nil, true, 1
-        end
-
-        local btn = Utils.BaseButton({
-            Parent = buttonRow, Size = btnWidth,
-            Color = color, Transparency = transparency, Radius = 6,
-        })
-        btn.LayoutOrder = i
-        btn.ZIndex = zBase + 3
-        if themeKey then LouisHub:Register(btn, "BackgroundColor3", themeKey) end
-        if hasBorder then
-            local stroke = Utils.Stroke(btn, Theme.Border, 1, 0)
-            LouisHub:Register(stroke, "Color", "Border")
-        else
-            Utils.Hover(btn, btn)
-        end
-
-        local lbl = Utils.Text({
-            Parent = btn, Text = tostring(btnData.Text or "OK"),
-            Alignment = Enum.TextXAlignment.Center, TextSize = 11,
-            Font = Enum.Font.GothamMedium, Color = textColor, Truncate = true,
-        })
-        lbl.ZIndex = zBase + 4
-
-        btn.MouseButton1Click:Connect(function() press(i) end)
-    end
-
-    Utils.ModalEntry(backdrop, card)
-
-    return { Close = close, Press = press, Backdrop = backdrop }
-end
-
--- ══════════════════════════════════════════════════════════════
---  SECTION 16: STACKABLE POPUP ENGINE (GLASS MODALS)
--- ══════════════════════════════════════════════════════════════
-function LouisHub:Popup(cfg)
-    cfg = cfg or {}
-    local parent = getGuiParent()
-    local sg = (parent and parent:FindFirstChild("LouisHub_ScreenGui")) or (parent and parent:FindFirstChild("LouisHub_NotifGui"))
-    if not sg then
-        sg = Instance.new("ScreenGui")
-        sg.Name = "LouisHub_PopupGui"
-        sg.ResetOnSpawn = false
-        sg.IgnoreGuiInset = true
-        sg.DisplayOrder = 999999
-        sg.Parent = parent
-        protectGui(sg)
-        LouisHub:RegisterInstance(sg)
-    end
-
-    self._openModals = (self._openModals or 0) + 1
-    local zBase = 500 + (self._openModals - 1) * 10
-
-    local backdrop = Instance.new("TextButton")
-    backdrop.Name = "PopupBackdrop"
-    backdrop.Size = UDim2.new(1, 0, 1, 0)
-    backdrop.BackgroundColor3 = Color3.new(0, 0, 0)
-    backdrop.BackgroundTransparency = 1
-    backdrop.AutoButtonColor = false
-    backdrop.Text = ""
-    backdrop.ZIndex = zBase
-    backdrop.Parent = sg
-
-    local blurData = BlurModule(backdrop)
-
-    local cardWidth = math.clamp(cfg.Width or 340, 300, 420)
-    local card = Instance.new("Frame")
-    card.Name = "PopupCard"
-    card.Size = UDim2.new(0, cardWidth, 0, 0)
-    card.Position = UDim2.new(0.5, 0, 0.5, 0)
-    card.AnchorPoint = Vector2.new(0.5, 0.5)
-    card.BackgroundColor3 = Theme.Panel
-    card.BackgroundTransparency = 0.25
-    card.BorderSizePixel = 0
-    card.ClipsDescendants = true
-    card.Active = true
-    card.AutomaticSize = Enum.AutomaticSize.Y
-    card.ZIndex = zBase + 1
-    card.Parent = backdrop
-
-    Utils.Corner(card, 8)
-    local cardStroke = Utils.Stroke(card, Theme.Accent, 1, 0.4)
-    LouisHub:Register(cardStroke, "Color", "Accent")
-
-    local layout = Instance.new("UIListLayout")
-    layout.Padding = UDim.new(0, 10)
-    layout.SortOrder = Enum.SortOrder.LayoutOrder
-    layout.Parent = card
-
-    local pad = Instance.new("UIPadding")
-    pad.PaddingLeft   = UDim.new(0, 14)
-    pad.PaddingRight  = UDim.new(0, 14)
-    pad.PaddingTop    = UDim.new(0, 14)
-    pad.PaddingBottom = UDim.new(0, 14)
-    pad.Parent = card
-
-    local order = 0
-    local iconParam = cfg.Icon
-    if iconParam then
-        order = order + 1
-        local iconFrame = Instance.new("ImageLabel")
-        iconFrame.BackgroundTransparency = 1
-        iconFrame.Size = UDim2.new(0, 26, 0, 26)
-        iconFrame.LayoutOrder = order
-        iconFrame.ZIndex = zBase + 2
-        local ic = GetIcon(iconParam, "Material")
-        if type(ic) == "table" then
-            iconFrame.Image = "rbxassetid://" .. tostring(ic.id)
-            iconFrame.ImageRectSize = ic.imageRectSize
-            iconFrame.ImageRectOffset = ic.imageRectOffset
-            iconFrame.Parent = card
-        elseif type(ic) == "string" then
-            iconFrame.Image = ic
-            iconFrame.Parent = card
-        end
-    end
-
-    local titleParam = cfg.Title
-    if titleParam then
-        order = order + 1
-        local lblTitle = Utils.Text({
-            Parent = card,
-            Text = tostring(titleParam),
-            Size = UDim2.new(1, 0, 0, 22),
-            Font = Enum.Font.GothamBold,
-            TextSize = 14,
-            Color = Theme.Highlight,
-            Order = order,
-        })
-        lblTitle.ZIndex = zBase + 2
-        LouisHub:Register(lblTitle, "TextColor3", "Highlight")
-    end
-
-    local contentContainer = nil
-    local contentParam = cfg.Content
-    if contentParam then
-        order = order + 1
-        if type(contentParam) == "function" then
-            contentContainer = Instance.new("Frame")
-            contentContainer.BackgroundTransparency = 1
-            contentContainer.Size = UDim2.new(1, 0, 0, 0)
-            contentContainer.AutomaticSize = Enum.AutomaticSize.Y
-            contentContainer.LayoutOrder = order
-            contentContainer.ZIndex = zBase + 2
-            contentContainer.Parent = card
-            pcall(contentParam, contentContainer)
-        else
-            local lblBody = Utils.Text({
-                Parent = card,
-                Text = tostring(contentParam),
-                Size = UDim2.new(1, 0, 0, 0),
-                Wrapped = true,
-                TextSize = 11,
-                Color = Theme.Text,
-                Order = order,
-            })
-            lblBody.AutomaticSize = Enum.AutomaticSize.Y
-            lblBody.ZIndex = zBase + 2
-            LouisHub:Register(lblBody, "TextColor3", "Text")
-        end
-    end
-
-    local buttons = cfg.Buttons or { { Text = "OK", Variant = "primary" } }
-    order = order + 1
-
-    local buttonRow = Instance.new("Frame")
-    buttonRow.BackgroundTransparency = 1
-    buttonRow.Size = UDim2.new(1, 0, 0, 28)
-    buttonRow.LayoutOrder = order
-    buttonRow.ZIndex = zBase + 2
-    buttonRow.Parent = card
-
-    local bLayout = Instance.new("UIListLayout")
-    bLayout.FillDirection = Enum.FillDirection.Horizontal
-    bLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
-    bLayout.Padding = UDim.new(0, 6)
-    bLayout.Parent = buttonRow
-
-    local closed = false
-    local function closeModal()
-        if closed then return end
-        closed = true
-        LouisHub._openModals = math.max(0, (LouisHub._openModals or 1) - 1)
-        Utils.Tween(backdrop, {BackgroundTransparency = 1}, 0.25, LouisHub.Motion.EaseExit)
-        Utils.Tween(card, {Position = UDim2.new(0.5, 0, 0.6, 0), BackgroundTransparency = 1}, 0.25, LouisHub.Motion.EaseExit)
-        task.delay(0.26, function()
-            pcall(function() backdrop:Destroy() end)
-            if cfg.OnClose then pcall(cfg.OnClose) end
-        end)
-    end
-
-    for _, bDef in ipairs(buttons) do
-        local btn = Utils.BaseButton({
-            Parent = buttonRow,
-            Size = UDim2.new(0, 75, 1, 0),
-            Color = Theme.Row,
-            Transparency = 0.3,
-            Radius = 6
-        })
-        btn.ZIndex = zBase + 3
-
-        local bColor = Theme.Row
-        local tColor = Theme.Text
-        local variant = bDef.Variant
-        if variant == "primary" then
-            bColor = Theme.Accent
-            tColor = Color3.fromRGB(255, 255, 255)
-        elseif variant == "danger" then
-            bColor = Color3.fromRGB(180, 50, 50)
-            tColor = Color3.fromRGB(255, 255, 255)
-        end
-        btn.BackgroundColor3 = bColor
-        Utils.Hover(btn, btn)
-
-        local bLbl = Utils.Text({
-            Parent = btn,
-            Text = bDef.Text or "Button",
-            Alignment = Enum.TextXAlignment.Center,
-            TextSize = 11,
-            Color = tColor,
-            Size = UDim2.new(1, 0, 1, 0),
-            Position = UDim2.new(0, 0, 0, 0)
-        })
-        bLbl.ZIndex = zBase + 4
-
-        btn.MouseButton1Click:Connect(function()
-            if bDef.Callback then executeWithFallback(bDef.Callback, bDef.Text or "PopupBtn") end
-            closeModal()
-        end)
-    end
-
-    if cfg.Closable ~= false then
-        backdrop.MouseButton1Click:Connect(function()
-            closeModal()
-        end)
-    end
-
-    local autoCloseTime = cfg.AutoClose
-    if autoCloseTime and tonumber(autoCloseTime) then
-        task.delay(tonumber(autoCloseTime), closeModal)
-    end
-
-    local cardScale = Instance.new("UIScale")
-    cardScale.Scale = 0.9
-    cardScale.Parent = card
-    Utils.Tween(backdrop, {BackgroundTransparency = 0.5}, 0.3, LouisHub.Motion.EaseEnter)
-    Utils.Tween(cardScale, {Scale = 1}, 0.35, LouisHub.Motion.EasePop)
-
-    return {
-        Close = closeModal,
-        Update = function(selfParam, newText)
-            local targetText = (selfParam == selfParam and newText ~= nil) and newText or selfParam
-            if contentContainer and contentContainer:FindFirstChildOfClass("TextLabel") then
-                contentContainer:FindFirstChildOfClass("TextLabel").Text = tostring(targetText)
-            end
-        end,
-        Container = contentContainer or card,
-        Backdrop = backdrop,
-    }
-end
-
--- ══════════════════════════════════════════════════════════════
---  SECTION 17: HUD OVERLAY & FLOATING BUTTON ENGINE
--- ══════════════════════════════════════════════════════════════
-local activeHUDs = {}
-
-function LouisHub:HUD(cfg)
-    cfg = cfg or {}
-    local name = cfg.Name or "HUD"
-    if activeHUDs[name] then return activeHUDs[name] end
-
-    local parent = getGuiParent()
-    local sg = (parent and parent:FindFirstChild("LouisHub_ScreenGui")) or (parent and parent:FindFirstChild("LouisHub_NotifGui"))
-    if not sg then
-        sg = Instance.new("ScreenGui")
-        sg.Name = "LouisHub_ScreenGui"
-        sg.ResetOnSpawn = false
-        sg.IgnoreGuiInset = true
-        sg.Parent = parent
-        protectGui(sg)
-        LouisHub:RegisterInstance(sg)
-    end
-
-    local hudFolder = sg:FindFirstChild("LouisHub_HudOverlay") or Instance.new("Folder")
-    hudFolder.Name = "LouisHub_HudOverlay"
-    hudFolder.Parent = sg
-
-    local anchorPoints = {
-        TopLeft     = Vector2.new(0, 0),
-        TopRight    = Vector2.new(1, 0),
-        BottomLeft  = Vector2.new(0, 1),
-        BottomRight = Vector2.new(1, 1),
-        Top         = Vector2.new(0.5, 0)
-    }
-
-    local positions = {
-        TopLeft     = UDim2.new(0, 15, 0, 15),
-        TopRight    = UDim2.new(1, -15, 0, 15),
-        BottomLeft  = UDim2.new(0, 15, 1, -15),
-        BottomRight = UDim2.new(1, -15, 1, -15),
-        Top         = UDim2.new(0.5, 0, 0, 15)
-    }
-
-    local posKey = type(cfg.Position) == "string" and cfg.Position or "TopLeft"
-    local posInit = (typeof(cfg.Position) == "UDim2" and cfg.Position) or positions[posKey] or positions.TopLeft
-    local anchorFinal = anchorPoints[posKey] or Vector2.new(0, 0)
-
-    local hudFrame = Utils.Frame({
-        Parent = hudFolder,
-        Size = UDim2.new(0, 200, 0, 30),
-        Position = posInit,
-        Anchor = anchorFinal,
-        Color = Theme.Panel,
-        Transparency = 0.35,
-        Radius = 8,
-        Border = true,
-        BorderColor = Theme.Border,
-        BorderThemeKey = "Border"
-    })
-    hudFrame.Name = "HUD_" .. name
-    hudFrame.AutomaticSize = Enum.AutomaticSize.XY
-    hudFrame.Active = true
-
-    local blurData = BlurModule(hudFrame)
-
-    local listLayout = Instance.new("UIListLayout")
-    listLayout.FillDirection = Enum.FillDirection.Horizontal
-    listLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-    listLayout.Padding = UDim.new(0, 8)
-    listLayout.Parent = hudFrame
-
-    local pad = Instance.new("UIPadding")
-    pad.PaddingLeft   = UDim.new(0, 8)
-    pad.PaddingRight  = UDim.new(0, 8)
-    pad.PaddingTop    = UDim.new(0, 4)
-    pad.PaddingBottom = UDim.new(0, 4)
-    pad.Parent = hudFrame
-
-    if cfg.Draggable ~= false then
-        Utils.Draggable(hudFrame, hudFrame, LouisHub.EventManager)
-    end
-
-    local items = {}
-
-    for _, eDef in ipairs(cfg.Elements or {}) do
-        local itemFrame = Instance.new("Frame")
-        itemFrame.BackgroundTransparency = 1
-        itemFrame.Size = UDim2.new(0, 0, 1, 0)
-        itemFrame.AutomaticSize = Enum.AutomaticSize.X
-        itemFrame.Parent = hudFrame
-
-        local iLayout = Instance.new("UIListLayout")
-        iLayout.FillDirection = Enum.FillDirection.Horizontal
-        iLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-        iLayout.Padding = UDim.new(0, 4)
-        iLayout.Parent = itemFrame
-
-        local icoParam = eDef.Icon
-        if icoParam then
-            local ico = Instance.new("ImageLabel")
-            ico.BackgroundTransparency = 1
-            ico.Size = UDim2.new(0, 14, 0, 14)
-            local icAsset = GetIcon(icoParam, "Material")
-            if type(icAsset) == "table" then
-                ico.Image = "rbxassetid://" .. tostring(icAsset.id)
-                ico.ImageRectSize = icAsset.imageRectSize
-                ico.ImageRectOffset = icAsset.imageRectOffset
-                ico.Parent = itemFrame
-            elseif type(icAsset) == "string" then
-                ico.Image = icAsset
-                ico.Parent = itemFrame
-            end
-        end
-
-        local valParam = eDef.Value or "--"
-        local sufParam = eDef.Suffix or ""
-        local preParam = eDef.Label and (eDef.Label .. ": ") or ""
-
-        local valLbl = Utils.Text({
-            Parent = itemFrame,
-            Text = tostring(preParam) .. tostring(valParam) .. tostring(sufParam),
-            TextSize = 10,
-            Color = Theme.Text,
-            Size = UDim2.new(0, 0, 1, 0)
-        })
-        valLbl.AutomaticSize = Enum.AutomaticSize.X
-
-        local barFill = nil
-        local typeParam = eDef.Type
-        if typeParam == "bar" then
-            local maxVal = tonumber(eDef.Max) or 100
-            if maxVal <= 0 then maxVal = 100 end
-            local curVal = tonumber(valParam) or 0
-
-            local bBg = Utils.Frame({
-                Parent = itemFrame,
-                Size = UDim2.new(0, 40, 0, 6),
-                Color = Theme.Input,
-                Radius = 3,
-                Border = false
-            })
-            barFill = Utils.Frame({
-                Parent = bBg,
-                Size = UDim2.new(math.clamp(curVal / maxVal, 0, 1), 0, 1, 0),
-                Color = Theme.Accent,
-                Radius = 3,
-                Border = false
-            })
-            Utils.AccentGradient(barFill)
-        end
-
-        items[eDef.Flag] = { Label = valLbl, Bar = barFill, Def = eDef }
-    end
-
-    local HUDObj = {}
-
-    function HUDObj:Set(flag, val)
-        local it = items[flag]
-        if not it then return end
-        local suf = it.Def.Suffix or ""
-        local pre = it.Def.Label and (it.Def.Label .. ": ") or ""
-        it.Label.Text = pre .. tostring(val) .. suf
-        if it.Bar and it.Def.Max then
-            local maxVal = tonumber(it.Def.Max) or 100
-            if maxVal <= 0 then maxVal = 100 end
-            local num = tonumber(val) or 0
-            Utils.Tween(it.Bar, {Size = UDim2.new(math.clamp(num / maxVal, 0, 1), 0, 1, 0)}, 0.2)
-        end
-    end
-
-    function HUDObj:Bind(flag, fn, interval)
-        interval = interval or 0.5
-        LouisHub:RegisterThread(task.spawn(function()
-            while hudFrame and hudFrame.Parent do
-                if hudFrame.Visible then
-                    local ok, res = pcall(fn)
-                    if ok and res ~= nil then self:Set(flag, res) end
-                end
-                task.wait(interval)
-            end
-        end))
-    end
-
-    function HUDObj:Show() hudFrame.Visible = true end
-    function HUDObj:Hide() hudFrame.Visible = false end
-    function HUDObj:Toggle() hudFrame.Visible = not hudFrame.Visible end
-
-    function HUDObj:Destroy()
-        activeHUDs[name] = nil
-        pcall(function() hudFrame:Destroy() end)
-    end
-
-    if cfg.Update then pcall(cfg.Update, HUDObj) end
-
-    activeHUDs[name] = HUDObj
-    return HUDObj
-end
-
-local floatingButtonSlots = {}
-
-function LouisHub:FloatingButton(cfg)
-    cfg = cfg or {}
-    local name = cfg.Name or ("FloatBtn_" .. math.random(1e5, 1e6))
-    local parent = getGuiParent()
-    local sg = (parent and parent:FindFirstChild("LouisHub_ScreenGui")) or (parent and parent:FindFirstChild("LouisHub_NotifGui"))
-    if not sg then
-        sg = Instance.new("ScreenGui")
-        sg.Name = "LouisHub_ScreenGui"
-        sg.ResetOnSpawn = false
-        sg.IgnoreGuiInset = true
-        sg.Parent = parent
-        protectGui(sg)
-        LouisHub:RegisterInstance(sg)
-    end
-
-    local extFolder = sg:FindFirstChild("LouisHub_ExternalOverlay") or Instance.new("Folder")
-    extFolder.Name = "LouisHub_ExternalOverlay"
-    extFolder.Parent = sg
-
-    local posSlot = type(cfg.Position) == "string" and cfg.Position or "RightCenter"
-    floatingButtonSlots[posSlot] = (floatingButtonSlots[posSlot] or 0) + 1
-    local slotIndex = floatingButtonSlots[posSlot]
-
-    local positions = {
-        RightCenter = UDim2.new(1, -55, 0.5, -25 + (slotIndex - 1) * 54),
-        LeftCenter  = UDim2.new(0, 15, 0.5, -25 + (slotIndex - 1) * 54),
-        BottomRight = UDim2.new(1, -55, 1, -65 - (slotIndex - 1) * 54)
-    }
-
-    local posFinal = (typeof(cfg.Position) == "UDim2" and cfg.Position) or positions[posSlot] or positions.RightCenter
-
-    local btn = Utils.BaseButton({
-        Parent = extFolder,
-        Size = UDim2.new(0, 46, 0, 46),
-        Position = posFinal,
-        Color = Theme.Panel,
-        Transparency = 0.35,
-        Radius = 23,
-    })
-    btn.Name = name
-    btn.Active = true
-    btn.ZIndex = 50000
-
-    local blurData = BlurModule(btn)
-    local stroke = Utils.Stroke(btn, Theme.Border, 1.5, 0.3)
-    LouisHub:Register(stroke, "Color", "Border")
-
-    local icon = Instance.new("ImageLabel")
-    icon.BackgroundTransparency = 1
-    icon.Size = UDim2.new(0, 22, 0, 22)
-    icon.Position = UDim2.new(0.5, -11, 0.5, -11)
-    icon.ZIndex = 50002
-    local icAsset = GetIcon(cfg.Icon or "crosshair", "Material")
-    if type(icAsset) == "table" then
-        icon.Image = "rbxassetid://" .. tostring(icAsset.id)
-        icon.ImageRectSize = icAsset.imageRectSize
-        icon.ImageRectOffset = icAsset.imageRectOffset
-    elseif type(icAsset) == "string" then
-        icon.Image = icAsset
-    end
-    icon.Parent = btn
-
-    Utils.Draggable(btn, btn, LouisHub.EventManager)
-
-    local state = false
-    local inCooldown = false
-    local mode = cfg.Mode or "Toggle"
-
-    local pulseTween = nil
-    local function setVisualState(on)
-        if on then
-            Utils.Tween(btn, {BackgroundColor3 = Theme.Accent, BackgroundTransparency = 0.15}, 0.25)
-            Utils.Tween(stroke, {Color = Theme.Highlight, Transparency = 0}, 0.25)
-            pulseTween = TweenService:Create(stroke, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Transparency = 0.7})
-            pulseTween:Play()
-        else
-            if pulseTween then pulseTween:Cancel(); pulseTween = nil end
-            Utils.Tween(btn, {BackgroundColor3 = Theme.Panel, BackgroundTransparency = 0.35}, 0.25)
-            Utils.Tween(stroke, {Color = Theme.Border, Transparency = 0.4}, 0.25)
-        end
-    end
-
-    local function trigger(forceState)
-        if mode == "Toggle" then
-            if forceState ~= nil then
-                state = (forceState == true)
-            else
-                state = not state
-            end
-            setVisualState(state)
-            if cfg.Callback then executeWithFallback(cfg.Callback, name, state) end
-            if state and cfg.CallbackOn then executeWithFallback(cfg.CallbackOn, name) end
-            if not state and cfg.CallbackOff then executeWithFallback(cfg.CallbackOff, name) end
-        elseif mode == "Once" and not inCooldown then
-            inCooldown = true
-            state = true
-            setVisualState(true)
-            if cfg.Callback then executeWithFallback(cfg.Callback, name, true) end
-            if cfg.CallbackOn then executeWithFallback(cfg.CallbackOn, name) end
-
-            local dur = cfg.Duration or 2
-            local cd  = cfg.Cooldown or 3
-
-            local pRing = Instance.new("Frame")
-            pRing.Size = UDim2.new(1, 0, 0, 3)
-            pRing.Position = UDim2.new(0, 0, 1, -3)
-            pRing.BackgroundColor3 = Theme.Highlight
-            pRing.BorderSizePixel = 0
-            pRing.ZIndex = 50003
-            pRing.Parent = btn
-
-            Utils.Tween(pRing, {Size = UDim2.new(0, 0, 0, 3)}, dur, Enum.EasingStyle.Linear)
-
-            task.delay(dur, function()
-                pcall(function() pRing:Destroy() end)
-                state = false
-                setVisualState(false)
-                if cfg.Callback then executeWithFallback(cfg.Callback, name, false) end
-                if cfg.CallbackOff then executeWithFallback(cfg.CallbackOff, name) end
-
-                local cdLbl = Utils.Text({
-                    Parent = btn,
-                    Text = tostring(cd),
-                    Size = UDim2.new(1, 0, 1, 0),
-                    Position = UDim2.new(0, 0, 0, 0),
-                    Alignment = Enum.TextXAlignment.Center,
-                    TextSize = 14,
-                    Font = Enum.Font.GothamBold,
-                    Color = Color3.fromRGB(255, 100, 100)
-                })
-                cdLbl.ZIndex = 50004
-                icon.ImageTransparency = 0.8
-
-                for s = cd, 1, -1 do
-                    cdLbl.Text = tostring(s)
-                    task.wait(1)
-                end
-                pcall(function() cdLbl:Destroy() end)
-                icon.ImageTransparency = 0
-                inCooldown = false
-            end)
-        end
-    end
-
-    Utils.ReliableClick(btn, function() trigger() end)
-
-    local keyParam = cfg.Key
-    if keyParam then
-        LouisHub:RegisterConnection(UserInputService.InputBegan:Connect(function(inp, gpe)
-            if gpe then return end
-            if inp.KeyCode == keyParam then trigger() end
-        end))
-    end
-
-    local ExtObj = {
-        Activate = function() trigger(true) end,
-        Deactivate = function() trigger(false) end,
-        Toggle   = function() trigger() end,
-        GetState = function() return state end,
-        SetPosition = function(selfParam, p)
-            local pos = (selfParam == selfParam and p ~= nil) and p or selfParam
-            if typeof(pos) == "UDim2" then btn.Position = pos end
-        end,
-        Destroy = function()
-            if pulseTween then pulseTween:Cancel() end
-            pcall(function() btn:Destroy() end)
-        end,
-    }
-    return ExtObj
-end
-
-function LouisHub:CreateWindowSafely(config)
-    config = config or {}
-    local active = _G.LouisHub_Instance
-    local currentWin = active and active.Window
-
-    if not (currentWin and currentWin._main and currentWin._main.Parent) then
-        return LouisHub:CreateWindow(config)
-    end
-
-    local currentTitle = active.Title or "Current Interface"
-    local newTitle     = config.Title or config.Name or "New Script"
-
-    LouisHub:Confirm({
-        Title   = "⚠️ Active Script Detected",
-        Content = string.format("Another window is currently active (\"%s\"). Would you like to terminate and replace it with \"%s\"?", currentTitle, newTitle),
-        Icon    = "warning",
-        Buttons = {
-            { Text = "Cancel", Variant = "neutral" },
-            {
-                Text = "Replace",
-                Variant = "primary",
-                Callback = function()
-                    if currentWin.Destroy then
-                        pcall(function() currentWin:Destroy() end)
-                    else
-                        LouisHub:Destroy()
-                    end
-                    task.defer(function()
-                        LouisHub:CreateWindow(config)
-                    end)
-                end
-            },
-        }
-    })
-
-    return currentWin
-end
-
-function LouisHub:Destroy()
-    local inst = _G.LouisHub_Instance
-    if inst and inst.Window and inst.Window._main and inst.Window._main.Parent then
-        pcall(function() inst.Window._main.Parent:Destroy() end)
-    end
-    cleanupPreviousInstance()
-end
-
---[[
-╔══════════════════════════════════════════════════════════════════════╗
-                              LouisHub
-                Master UI Suite: LouisHub Engine V4.0
-         PART 3A: CONTROLS 1–6 (BUTTON, TOGGLE, CHECKBOX,
-               SLIDER, RANGE SLIDER, NUMBER STEPPER)
-╚══════════════════════════════════════════════════════════════════════╝
-]]
-
--- ══════════════════════════════════════════════════════════════
---  SECTION 18: SLIDER BAR UTILITIES & EXPANDABLE FRAME LOGIC
--- ══════════════════════════════════════════════════════════════
-local function createDraggableBar(cfg)
-    local minVal = cfg.Min or 0
-    local maxVal = cfg.Max or 100
-    local rangeDiff = math.max(maxVal - minVal, 0.0001)
-
-    local background = Utils.Frame({
-        Parent = cfg.Parent, Size = cfg.Size, Position = cfg.Position,
-        Color = Theme.Input, Radius = 4, Transparency = 0.4,
-    })
-    LouisHub:Register(background, "BackgroundColor3", "Input")
-
-    local dragRing = Utils.Stroke(background, Theme.AccentLight, 1.5, 1)
-    LouisHub:Register(dragRing, "Color", "AccentLight")
-
-    local function markDrag(active)
-        Utils.Tween(dragRing, {Transparency = active and 0 or 1}, LouisHub.Motion.Hover)
-    end
-
-    local curVal = cfg.Value or minVal
-    local fill = Utils.Frame({
-        Parent = background,
-        Size = UDim2.new(math.clamp((curVal - minVal) / rangeDiff, 0, 1), 0, 1, 0),
-        Color = Theme.Accent, Radius = 4, Transparency = 0,
-        Border = false,
-    })
-    LouisHub:Register(fill, "BackgroundColor3", "Accent")
-    Utils.AccentGradient(fill, 0)
-
-    local stepVal = cfg.Step or cfg.Increment
-    if cfg.Steps and stepVal and stepVal > 0 then
-        local totalSteps = math.floor(rangeDiff / stepVal + 0.5)
-        if totalSteps >= 2 and totalSteps <= 40 then
-            for i = 1, totalSteps - 1 do
-                local rel = i / totalSteps
-                local tickMark = Utils.Frame({
-                    Parent = background, Size = UDim2.new(0, 1.5, 1, 0),
-                    Position = UDim2.new(rel, -1, 0, 0),
-                    Color = Theme.Border, Transparency = 0.4, Radius = false, Border = false,
-                })
-                tickMark.ZIndex = 2
-                LouisHub:Register(tickMark, "BackgroundColor3", "Border")
-            end
-        end
-    end
-
-    local function setVisual(val)
-        local rel = math.clamp((val - minVal) / rangeDiff, 0, 1)
-        local duration = EventManager:IsDragging() and LouisHub.Motion.Instant or LouisHub.Motion.Page
-        Utils.Tween(fill, {Size = UDim2.new(rel, 0, 1, 0)}, duration, LouisHub.Motion.EaseEnter)
-    end
-
-    local function calculateAndApply(input)
-        local totalWidth = math.max(background.AbsoluteSize.X, 1)
-        local rel = math.clamp((input.Position.X - background.AbsolutePosition.X) / totalWidth, 0, 1)
-        local v = minVal + rel * rangeDiff
-        Utils.Tween(fill, {Size = UDim2.new(rel, 0, 1, 0)}, LouisHub.Motion.Instant)
-        if cfg.OnChange then cfg.OnChange(v) end
-    end
-
-    local inputTarget = background
-    local hitboxH = cfg.HitboxHeight
-    if hitboxH and hitboxH > 0 then
-        local offsetY = cfg.HitboxOffsetY or 0
-        local hitbox = Utils.Frame({
-            Parent = cfg.Parent,
-            Size = UDim2.new(cfg.Size.X.Scale, cfg.Size.X.Offset, 0, hitboxH),
-            Position = UDim2.new(
-                cfg.Size.X.Scale, cfg.Position and cfg.Position.X.Offset or 0,
-                cfg.Size.Y.Scale, (cfg.Position and cfg.Position.Y.Offset or 0) - (hitboxH - cfg.Size.Y.Offset) / 2 + offsetY
-            ),
-            Transparency = 1, Radius = false, Border = false,
-        })
-        hitbox.ZIndex = background.ZIndex + 1
-        inputTarget = hitbox
-    end
-
-    inputTarget.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            if EventManager:IsDragging() then return end
-
-            calculateAndApply(input)
-
-            local GESTURE_THRESHOLD = 10
-            local startPos = Vector2.new(input.Position.X, input.Position.Y)
-            local isDecided = false
-            local isDragging = false
-
-            local ancestorScroll = background:FindFirstAncestorWhichIsA("ScrollingFrame")
-            local scrollWasEnabled = ancestorScroll and ancestorScroll.ScrollingEnabled
-
-            local function candidate(movedInput)
-                if not isDecided then
-                    local curPos = Vector2.new(movedInput.Position.X, movedInput.Position.Y)
-                    local delta = curPos - startPos
-                    if delta.Magnitude < GESTURE_THRESHOLD then return end
-                    isDecided = true
-                    if math.abs(delta.X) > math.abs(delta.Y) then
-                        isDragging = true
-                        if ancestorScroll then ancestorScroll.ScrollingEnabled = false end
-                        markDrag(true)
-                    else
-                        EventManager:StopDrag()
-                        return
-                    end
-                end
-                if isDragging then
-                    calculateAndApply(movedInput)
-                end
-            end
-
-            EventManager:StartDrag(candidate, function()
-                if isDragging then markDrag(false) end
-                if ancestorScroll then ancestorScroll.ScrollingEnabled = scrollWasEnabled end
-            end)
-        end
-    end)
-
-    return background, fill, setVisual, (inputTarget ~= background) and inputTarget or nil
-end
-
-local function createDraggableRangeBar(cfg)
-    local minVal = cfg.Min or 0
-    local maxVal = cfg.Max or 100
-    local rangeDiff = math.max(maxVal - minVal, 0.0001)
-
-    local background = Utils.Frame({
-        Parent = cfg.Parent, Size = cfg.Size, Position = cfg.Position,
-        Color = Theme.Input, Radius = 4, Transparency = 0.4,
-    })
-    LouisHub:Register(background, "BackgroundColor3", "Input")
-
-    local function relX(v)
-        return math.clamp((v - minVal) / rangeDiff, 0, 1)
-    end
-
-    local curMin = cfg.MinValue or minVal
-    local curMax = cfg.MaxValue or maxVal
-
-    local fill = Utils.Frame({
-        Parent = background,
-        Position = UDim2.new(relX(curMin), 0, 0, 0),
-        Size = UDim2.new(relX(curMax) - relX(curMin), 0, 1, 0),
-        Color = Theme.Accent, Radius = 4, Transparency = 0,
-        Border = false,
-    })
-    LouisHub:Register(fill, "BackgroundColor3", "Accent")
-    Utils.AccentGradient(fill, 0)
-
-    local HANDLE_DIAMETER = cfg.HandleDiameter or 14
-    local function createHandle()
-        local h = Utils.Frame({
-            Parent = background,
-            Size = UDim2.new(0, HANDLE_DIAMETER, 0, HANDLE_DIAMETER),
-            Anchor = Vector2.new(0.5, 0.5),
-            Color = Theme.Highlight, Radius = 999, Transparency = 0,
-        })
-        h.ZIndex = 3
-        LouisHub:Register(h, "BackgroundColor3", "Highlight")
-        local ring = Utils.Stroke(h, Theme.AccentLight, 1.5, 1)
-        LouisHub:Register(ring, "Color", "AccentLight")
-        return h, ring
-    end
-    local handleMin, ringMin = createHandle()
-    local handleMax, ringMax = createHandle()
-
-    local function positionHandle(handle, v)
-        handle.Position = UDim2.new(relX(v), 0, 0.5, 0)
-    end
-    positionHandle(handleMin, curMin)
-    positionHandle(handleMax, curMax)
-
-    local function markHandleDrag(ring, active)
-        Utils.Tween(ring, {Transparency = active and 0 or 1}, LouisHub.Motion.Hover)
-    end
-
-    local function setVisual(vMin, vMax)
-        positionHandle(handleMin, vMin)
-        positionHandle(handleMax, vMax)
-        fill.Position = UDim2.new(relX(vMin), 0, 0, 0)
-        fill.Size = UDim2.new(relX(vMax) - relX(vMin), 0, 1, 0)
-    end
-
-    local function calculateValue(input)
-        local totalWidth = math.max(background.AbsoluteSize.X, 1)
-        local rel = math.clamp((input.Position.X - background.AbsolutePosition.X) / totalWidth, 0, 1)
-        return minVal + rel * rangeDiff
-    end
-
-    background.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            if EventManager:IsDragging() then return end
-
-            local GESTURE_THRESHOLD = 10
-            local startPos = Vector2.new(input.Position.X, input.Position.Y)
-            local isDecided = false
-            local isDragging = false
-            local isMovingMin = nil
-
-            local getMinFn = cfg.GetMin
-            local getMaxFn = cfg.GetMax
-            local changeFn = cfg.OnChange
-
-            local scrollAncestor = background:FindFirstAncestorWhichIsA("ScrollingFrame")
-            local scrollWasEnabled = scrollAncestor and scrollAncestor.ScrollingEnabled
-
-            local function pickHandle(initInput)
-                local touchVal = calculateValue(initInput)
-                local vMin, vMax = getMinFn(), getMaxFn()
-                local distMin, distMax = math.abs(touchVal - vMin), math.abs(touchVal - vMax)
-                if distMin < distMax then
-                    isMovingMin = true
-                elseif distMax < distMin then
-                    isMovingMin = false
-                else
-                    isMovingMin = touchVal <= vMin
-                end
-            end
-
-            pickHandle(input)
-            local vInitial = calculateValue(input)
-            local currentMin, currentMax = getMinFn(), getMaxFn()
-            if isMovingMin then
-                vInitial = math.min(vInitial, currentMax)
-                positionHandle(handleMin, vInitial)
-                if changeFn then changeFn(vInitial, currentMax) end
-            else
-                vInitial = math.max(vInitial, currentMin)
-                positionHandle(handleMax, vInitial)
-                if changeFn then changeFn(currentMin, vInitial) end
-            end
-            local rMin, rMax = getMinFn(), getMaxFn()
-            fill.Position = UDim2.new(relX(rMin), 0, 0, 0)
-            fill.Size = UDim2.new(relX(rMax) - relX(rMin), 0, 1, 0)
-
-            local function candidate(movedInput)
-                if not isDecided then
-                    local curPos = Vector2.new(movedInput.Position.X, movedInput.Position.Y)
-                    local delta = curPos - startPos
-                    if delta.Magnitude < GESTURE_THRESHOLD then return end
-                    isDecided = true
-                    if math.abs(delta.X) > math.abs(delta.Y) then
-                        isDragging = true
-                        if scrollAncestor then scrollAncestor.ScrollingEnabled = false end
-                        markHandleDrag(isMovingMin and ringMin or ringMax, true)
-                    else
-                        EventManager:StopDrag()
-                        return
-                    end
-                end
-                if not isDragging then return end
-
-                local v = calculateValue(movedInput)
-                local vMin, vMax = getMinFn(), getMaxFn()
-                if isMovingMin then
-                    v = math.min(v, vMax)
-                    positionHandle(handleMin, v)
-                    if changeFn then changeFn(v, vMax) end
-                else
-                    v = math.max(v, vMin)
-                    positionHandle(handleMax, v)
-                    if changeFn then changeFn(vMin, v) end
-                end
-                local vMinReal, vMaxReal = getMinFn(), getMaxFn()
-                fill.Position = UDim2.new(relX(vMinReal), 0, 0, 0)
-                fill.Size = UDim2.new(relX(vMaxReal) - relX(vMinReal), 0, 1, 0)
-            end
-
-            EventManager:StartDrag(candidate, function()
-                if isDragging then
-                    markHandleDrag(isMovingMin and ringMin or ringMax, false)
-                end
-                if scrollAncestor then scrollAncestor.ScrollingEnabled = scrollWasEnabled end
-            end)
-        end
-    end)
-
-    return background, setVisual
-end
-
-local function makeExpandable(frame, closedHeight, getOpenHeight, onCloseCallback)
-    local isOpen = false
-    local closeConnections = {}
-
-    local function isOutside(input)
-        local pos = frame.AbsolutePosition
-        local sz = frame.AbsoluteSize
-        local x, y = input.Position.X, input.Position.Y
-        return x < pos.X or x > pos.X + sz.X or y < pos.Y or y > pos.Y + sz.Y
-    end
-
-    local function cleanCloseConnections()
-        for _, conn in ipairs(closeConnections) do
-            LouisHub:DisconnectAndClean(conn)
-        end
-        closeConnections = {}
-    end
-
-    local function toggle()
-        isOpen = not isOpen
-        local h = isOpen and getOpenHeight() or closedHeight
-        Utils.Tween(frame, {Size = UDim2.new(1, 0, 0, h)}, LouisHub.Motion.Expand)
-
-        cleanCloseConnections()
-
-        if isOpen then
-            local MOVE_THRESHOLD = LouisHub.Capabilities.IsTouch and 18 or 10
-            local startData = nil
-            table.insert(closeConnections, LouisHub:RegisterConnection(
-                UserInputService.InputBegan:Connect(function(input)
-                    if input.UserInputType ~= Enum.UserInputType.MouseButton1 and
-                       input.UserInputType ~= Enum.UserInputType.Touch then return end
-                    if frame.Parent and isOutside(input) then
-                        startData = {
-                            inputType = input.UserInputType,
-                            pos = Vector2.new(input.Position.X, input.Position.Y),
-                        }
-                    else
-                        startData = nil
-                    end
-                end)
-            ))
-            table.insert(closeConnections, LouisHub:RegisterConnection(
-                UserInputService.InputEnded:Connect(function(input)
-                    if not startData or input.UserInputType ~= startData.inputType then return end
-                    local moved = (Vector2.new(input.Position.X, input.Position.Y) - startData.pos).Magnitude > MOVE_THRESHOLD
-                    startData = nil
-                    if moved then return end
-                    if frame.Parent and isOpen then
-                        toggle()
-                        if onCloseCallback then pcall(onCloseCallback) end
-                    end
-                end)
-            ))
-        else
-            if onCloseCallback then pcall(onCloseCallback) end
-        end
-
-        return isOpen
-    end
-    return toggle
-end
-
--- ══════════════════════════════════════════════════════════════
---  SECTION 19: CONTROL INJECTION (CONTROLS 1 TO 6)
--- ══════════════════════════════════════════════════════════════
-local function applyBaseControlMethods(Section)
+local function applyControlMethods(Section)
     local order = 0
     local function nextOrder() order = order + 1; return order end
 
@@ -6206,7 +7129,7 @@ local function applyBaseControlMethods(Section)
         local row = Utils.Row(targetContainer, height, nextOrder(), Theme.Row)
         LouisHub:Register(row, "BackgroundColor3", "Row")
         Utils.Hover(row, row)
-        if mode ~= "fixed" then
+        if mode ~= "fixed" and mode ~= "fijo" then
             local lblD = Utils.Text({
                 Parent = row, Text = text,
                 Size = UDim2.new(labelWidth or 1, offsetX or -46, 1, 0),
@@ -6223,105 +7146,7 @@ local function applyBaseControlMethods(Section)
         return row, lbl
     end
 
-    local function createBooleanControl(typeName, cfg, createVisual)
-        cfg = cfg or {}
-        validateCallback(typeName, cfg)
-        local flag  = cfg.Flag or cfg.Text or cfg.Name or (typeName .. "_" .. tostring(math.random(1e5, 1e6)))
-        local value = false
-        if cfg.CurrentValue ~= nil then
-            value = cfg.CurrentValue
-        elseif cfg.Default ~= nil then
-            value = cfg.Default
-        end
-        LouisHub.Flags[flag] = value
-
-        local targetCont = Section:_GetTargetContainer(typeName, cfg)
-        local row, lbl = createHeader(26, cfg.Text or cfg.Name or typeName, 1, -48, nil, targetCont)
-
-        local icoParam = cfg.Icon
-        if icoParam then
-            local icData = GetIcon(icoParam, "Material")
-            if icData then
-                local icImg = Instance.new("ImageLabel")
-                icImg.BackgroundTransparency = 1
-                icImg.Size = UDim2.new(0, 14, 0, 14)
-                icImg.Position = UDim2.new(0, 6, 0.5, -7)
-                if type(icData) == "table" then
-                    icImg.Image = "rbxassetid://" .. tostring(icData.id)
-                    icImg.ImageRectSize = icData.imageRectSize
-                    icImg.ImageRectOffset = icData.imageRectOffset
-                else
-                    icImg.Image = icData
-                end
-                icImg.Parent = row
-                lbl.Position = UDim2.new(0, 24, 0, 0)
-                lbl.Size = UDim2.new(lbl.Size.X.Scale, lbl.Size.X.Offset - 18, 1, 0)
-            end
-        end
-
-        addTextTooltip(row, cfg.Text or cfg.Name or typeName, cfg.Tooltip or cfg.Description, lbl)
-        registerSearchable(row, cfg.Text or cfg.Name or typeName, cfg.VisibleIf)
-
-        local visual = createVisual(row, function() return value end)
-
-        local function updateVal(v, fire)
-            if type(v) ~= "boolean" then return end
-            value = v
-            LouisHub.Flags[flag] = v
-            visual.updateVisual(v)
-
-            local disableList = cfg.Disable
-            if v == true and disableList then
-                for _, otherFlag in ipairs(disableList) do
-                    local ctrl = LouisHub.Elements[otherFlag]
-                    if ctrl and ctrl:Get() == true then ctrl:Set(false, true) end
-                end
-            end
-
-            if fire and cfg.Callback then
-                executeWithFallback(cfg.Callback, cfg.Text or cfg.Name or "control", v)
-            end
-        end
-
-        local hitbox = Utils.ExpandedHitbox(visual.clickable, 8)
-        Utils.ReliableClick(hitbox, function() updateVal(not value, true) end, visual.clickable)
-
-        local keyParam = cfg.Key
-        if keyParam then
-            LouisHub:RegisterConnection(UserInputService.InputBegan:Connect(function(input, processed)
-                if processed then return end
-                if input.KeyCode == keyParam then updateVal(not value, true) end
-            end))
-        end
-
-        local elemObj = {
-            Set = function(selfParam, v, fireCallback)
-                local val = (selfParam == selfParam and fireCallback ~= nil) and v or (type(selfParam) == "boolean" and selfParam or v)
-                local fire = (type(fireCallback) == "boolean") and fireCallback or false
-                updateVal(val, fire)
-            end,
-            Get = function() return value end,
-            Destroy = function()
-                pcall(function() row:Destroy() end)
-                LouisHub.Elements[flag] = nil
-                LouisHub.Options[flag]  = nil
-            end,
-            CurrentValue = value,
-        }
-
-        elemObj.SetValue = elemObj.Set
-        elemObj.SetState = elemObj.Set
-
-        LouisHub.Elements[flag] = elemObj
-        LouisHub.Options[flag]  = elemObj
-
-        if cfg.FireOnCreate and cfg.Callback then
-            executeWithFallback(cfg.Callback, cfg.Text or cfg.Name or "control", value)
-        end
-        return elemObj
-    end
-
-    -- 1. BUTTON
+    -- BUTTON CONTROL
     function Section:Button(cfg)
         cfg = cfg or {}
         validateCallback("Button", cfg)
@@ -6334,9 +7159,9 @@ local function applyBaseControlMethods(Section)
         LouisHub:Register(row, "BackgroundColor3", "Row")
         Utils.Hover(row, row)
 
-        local textWithIcon = cfg.Text or cfg.Name or "Button"
-        local icoParam = cfg.Icon
-        local icAsset = icoParam and GetIcon(icoParam, "Material")
+        local textWithIcon = cfg.Text or cfg.Texto or cfg.Name or "Button"
+        local icoParam = cfg.Icon or cfg.Icono
+        local icAsset = icoParam and GetIcon(icoParam, cfg.ImageSource or "Material")
         if not icAsset and icoParam and type(icoParam) == "string" then
             textWithIcon = icoParam .. " " .. textWithIcon
         end
@@ -6363,8 +7188,8 @@ local function applyBaseControlMethods(Section)
             TextSize = 11,
         })
 
-        addTextTooltip(row, cfg.Text or cfg.Name or "Button", cfg.Tooltip or cfg.Description, lblButton)
-        registerSearchable(row, cfg.Text or cfg.Name or "Button", cfg.VisibleIf)
+        addTextTooltip(row, cfg.Text or cfg.Texto or cfg.Name or "Button", cfg.Tooltip or cfg.Description, lblButton)
+        registerSearchable(row, cfg.Text or cfg.Texto or cfg.Name or "Button", cfg.VisibleIf or cfg.VisibleSi)
 
         local spinner, spinThread
         local function activateSpinner(active)
@@ -6390,7 +7215,7 @@ local function applyBaseControlMethods(Section)
 
         local flashId = 0
         local inProgress = false
-        Utils.ReliableClick(row, function()
+        local function fireButton()
             if cfg.Async and inProgress then return end
             flashId = flashId + 1
             local curId = flashId
@@ -6405,24 +7230,138 @@ local function applyBaseControlMethods(Section)
                     inProgress = true
                     activateSpinner(true)
                     task.spawn(function()
-                        executeWithFallback(cfg.Callback, cfg.Text or cfg.Name or "control")
+                        executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "control")
                         inProgress = false
                         if row and row.Parent then activateSpinner(false) end
                     end)
                 else
-                    executeWithFallback(cfg.Callback, cfg.Text or cfg.Name or "control")
+                    executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "control")
                 end
             end
-        end)
-
-        local btnObj = Utils.WrapInstance(row)
-        btnObj.Destroy = function()
-            pcall(function() row:Destroy() end)
         end
-        return btnObj
+
+        Utils.ReliableClick(row, fireButton)
+
+        -- FIX #4 & #7: Button mengembalikan unified element dengan method Set/Get/Click
+        local elemObj = CreateUnifiedElement({
+            Row = row,
+            Instance = row,
+            Methods = {
+                Set = function(newTxt)
+                    if newTxt ~= nil then lblButton.Text = tostring(newTxt) end
+                end,
+                Get = function() return lblButton.Text end,
+                Click = fireButton,
+            }
+        })
+        Utils.AttachLock(elemObj, row)
+        return elemObj
     end
 
-    -- 2. TOGGLE
+    -- BOOLEAN CONTROLS (TOGGLE & CHECKBOX)
+    local function createBooleanControl(typeName, cfg, createVisual)
+        cfg = cfg or {}
+        validateCallback(typeName, cfg)
+        local flag  = cfg.Flag or cfg.Text or cfg.Texto or cfg.Name or (typeName .. "_" .. tostring(math.random(1e5, 1e6)))
+        
+        -- FIX #9: Prioritaskan pending config bila file konfigurasi dimuat sebelum kontrol dibuat
+        local value = false
+        if _pendingConfig[flag] ~= nil then
+            value = (_pendingConfig[flag] == true)
+            _pendingConfig[flag] = nil
+        elseif cfg.CurrentValue ~= nil then
+            value = (cfg.CurrentValue == true)
+        elseif cfg.Default ~= nil then
+            value = (cfg.Default == true)
+        elseif cfg.Defecto ~= nil then
+            value = (cfg.Defecto == true)
+        end
+        LouisHub.Flags[flag] = value
+
+        local targetCont = Section:_GetTargetContainer(typeName, cfg)
+        local row, lbl = createHeader(26, cfg.Text or cfg.Texto or cfg.Name or typeName, 1, -48, nil, targetCont)
+
+        local icoParam = cfg.Icon or cfg.Icono
+        if icoParam then
+            local icData = GetIcon(icoParam, cfg.ImageSource or "Material")
+            if icData then
+                local icImg = Instance.new("ImageLabel")
+                icImg.BackgroundTransparency = 1
+                icImg.Size = UDim2.new(0, 14, 0, 14)
+                icImg.Position = UDim2.new(0, 6, 0.5, -7)
+                if type(icData) == "table" then
+                    icImg.Image = "rbxassetid://" .. tostring(icData.id)
+                    icImg.ImageRectSize = icData.imageRectSize
+                    icImg.ImageRectOffset = icData.imageRectOffset
+                else
+                    icImg.Image = icData
+                end
+                icImg.Parent = row
+                lbl.Position = UDim2.new(0, 24, 0, 0)
+                lbl.Size = UDim2.new(lbl.Size.X.Scale, lbl.Size.X.Offset - 18, 1, 0)
+            end
+        end
+
+        addTextTooltip(row, cfg.Text or cfg.Texto or cfg.Name or typeName, cfg.Tooltip or cfg.Description, lbl)
+        registerSearchable(row, cfg.Text or cfg.Texto or cfg.Name or typeName, cfg.VisibleIf or cfg.VisibleSi)
+
+        local visual = createVisual(row, function() return value end)
+
+        local function updateVal(v, fire)
+            v = (v == true)
+            value = v
+            LouisHub.Flags[flag] = v
+            visual.updateVisual(v)
+
+            local disableList = cfg.Disable or cfg.Desactivar
+            if v == true and disableList then
+                for _, otherFlag in ipairs(disableList) do
+                    local ctrl = LouisHub.Elements[otherFlag]
+                    if ctrl and ctrl.Get() == true then ctrl.Set(false, true) end
+                end
+            end
+
+            if fire and cfg.Callback then
+                executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "control", v)
+            end
+        end
+
+        local hitbox = Utils.ExpandedHitbox(visual.clickable, 8)
+        Utils.ReliableClick(hitbox, function() updateVal(not value, true) end, visual.clickable)
+
+        local keyParam = cfg.Key or cfg.Tecla
+        if keyParam then
+            LouisHub:RegisterConnection(UserInputService.InputBegan:Connect(function(input, processed)
+                if processed then return end
+                if input.KeyCode == keyParam then updateVal(not value, true) end
+            end))
+        end
+
+        -- FIX #4 & #6: Unified element contract
+        local elemObj = CreateUnifiedElement({
+            Row = row,
+            Instance = row,
+            Methods = {
+                Set = function(v, fireCallback) updateVal(v, fireCallback == true) end,
+                SetValue = function(v) updateVal(v, true) end,
+                SetState = function(v) updateVal(v, true) end,
+                Get = function() return value end,
+            }
+        })
+        Utils.AttachLock(elemObj, row)
+
+        LouisHub.Elements[flag] = elemObj
+        LouisHub.Options[flag]  = elemObj
+
+        -- FIX #8: Hanya picu callback saat pembuatan jika opsi FireOnCreate == true
+        if cfg.FireOnCreate and cfg.Callback then
+            executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "control", value)
+        end
+
+        if cfg.Locked then elemObj:Lock(cfg.LockedTitle) end
+        return elemObj
+    end
+
     function Section:Toggle(cfg)
         return createBooleanControl("Toggle", cfg, function(row, getVal)
             local knob = Utils.BaseButton({
@@ -6458,7 +7397,6 @@ local function applyBaseControlMethods(Section)
         end)
     end
 
-    -- 3. CHECKBOX
     function Section:Checkbox(cfg)
         return createBooleanControl("Checkbox", cfg, function(row, getVal)
             local box = Utils.BaseButton({
@@ -6502,41 +7440,43 @@ local function applyBaseControlMethods(Section)
         end)
     end
 
-    -- 4. SLIDER
+    -- SLIDER CONTROL
     function Section:Slider(cfg)
         cfg = cfg or {}
         validateCallback("Slider", cfg)
-        local flag      = cfg.Flag or cfg.Text or cfg.Name or ("Slider_" .. tostring(math.random(1e5, 1e6)))
+        local flag      = cfg.Flag or cfg.Text or cfg.Texto or cfg.Name or ("Slider_" .. tostring(math.random(1e5, 1e6)))
         local range     = cfg.Range or {cfg.Min or 0, cfg.Max or 100}
         local minVal    = range[1]
         local maxVal    = range[2]
         if minVal >= maxVal then maxVal = minVal + 1 end
-        local stepVal   = cfg.Increment or cfg.Step or 1
+        local stepVal   = cfg.Increment or cfg.Incremento or cfg.Step or 1
         if stepVal <= 0 then stepVal = 1 end
-        local suffix    = cfg.Suffix or ""
-        local defaultV  = cfg.CurrentValue or cfg.Default or minVal
-        local value     = math.clamp(defaultV, minVal, maxVal)
+        local suffix    = cfg.Suffix or cfg.Sufijo or ""
+
+        -- FIX #9: Pending config check
+        local defaultV  = _pendingConfig[flag] or cfg.CurrentValue or cfg.Default or cfg.Defecto or minVal
+        _pendingConfig[flag] = nil
+        local value     = math.clamp(tonumber(defaultV) or minVal, minVal, maxVal)
         LouisHub.Flags[flag] = value
 
         local targetCont = self:_GetTargetContainer("Slider", cfg)
         local row = Utils.Row(targetCont, 42, nextOrder(), Theme.Row)
         LouisHub:Register(row, "BackgroundColor3", "Row")
         Utils.Hover(row, row)
-        registerSearchable(row, cfg.Text or cfg.Name or "Slider", cfg.VisibleIf)
+        registerSearchable(row, cfg.Text or cfg.Texto or cfg.Name or "Slider", cfg.VisibleIf or cfg.VisibleSi)
 
         local lblSlider = Utils.Text({
-            Parent = row, Text = cfg.Text or cfg.Name or "Slider",
+            Parent = row, Text = cfg.Text or cfg.Texto or cfg.Name or "Slider",
             Size = UDim2.new(1, -90, 0, 16), Position = UDim2.new(0, 6, 0, 5),
             Truncate = true, TextSize = 11,
         })
-        addTextTooltip(row, cfg.Text or cfg.Name or "Slider", cfg.Tooltip or cfg.Description, lblSlider, -90)
+        addTextTooltip(row, cfg.Text or cfg.Texto or cfg.Name or "Slider", cfg.Tooltip or cfg.Description, lblSlider, -90)
 
         local inputValBox = Instance.new("TextBox")
         inputValBox.Size             = UDim2.new(0, 80, 0, 18)
         inputValBox.Position         = UDim2.new(1, -86, 0, 4)
         inputValBox.BackgroundColor3 = Theme.Input
         inputValBox.BackgroundTransparency = 0.4
-        inputValBox.Text             = tostring(value) .. suffix
         inputValBox.TextColor3       = Theme.Highlight
         inputValBox.Font             = Enum.Font.GothamBold
         inputValBox.TextSize         = 11
@@ -6571,6 +7511,8 @@ local function applyBaseControlMethods(Section)
             return tostring(math.floor(n + 0.5))
         end
 
+        inputValBox.Text = formatNumber(value) .. suffix
+
         local lastProcessed = value
         local function animateDisplay(v, instant)
             if instant then
@@ -6584,26 +7526,27 @@ local function applyBaseControlMethods(Section)
             end
         end
 
-        local function processNewVal(rawV)
+        local barBg, fill, setVisual
+        local function processNewVal(rawV, fire)
             local v = roundVal(rawV)
             if v == lastProcessed then return end
             lastProcessed = v
             value = v
             LouisHub.Flags[flag] = v
             animateDisplay(v, true)
-            if cfg.Callback then
-                executeWithFallback(cfg.Callback, cfg.Text or cfg.Name or "control", v)
+            if fire and cfg.Callback then
+                executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "control", v)
             end
         end
 
-        local barBg, fill, setVisual = createDraggableBar({
+        barBg, fill, setVisual = createDraggableBar({
             Parent = row,
             Size = UDim2.new(1, -12, 0, 7),
             Position = UDim2.new(0, 6, 0, 27),
             Min = minVal, Max = maxVal, Value = value,
-            Increment = stepVal, Steps = cfg.Steps,
-            HitboxHeight = 16, HitboxOffsetY = 0,
-            OnChange = processNewVal,
+            Increment = stepVal, Steps = cfg.Steps or cfg.Pasos,
+            HitboxHeight = 16,
+            OnChange = function(v) processNewVal(v, true) end,
         })
 
         inputValBox.FocusLost:Connect(function(enterPressed)
@@ -6618,58 +7561,73 @@ local function applyBaseControlMethods(Section)
                 animateDisplay(num, true)
                 setVisual(num)
                 Utils.FlashFeedback(inputValBox, true, Theme.Input)
-                if cfg.Callback then
-                    executeWithFallback(cfg.Callback, cfg.Text or cfg.Name or "Slider", num)
-                end
+                if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "Slider", num) end
             else
                 animateDisplay(value, true)
                 Utils.FlashFeedback(inputValBox, false, Theme.Input)
             end
         end)
 
-        local elemObj = {
-            Set = function(selfParam, v, fireCallback)
-                local val = (selfParam == selfParam and fireCallback ~= nil) and v or (type(selfParam) == "number" and selfParam or v)
-                if typeof(val) ~= "number" then return end
-                val = roundVal(val)
-                lastProcessed = val
-                value = val
-                LouisHub.Flags[flag] = val
-                animateDisplay(val, false)
-                setVisual(val)
-                local fire = (type(fireCallback) == "boolean") and fireCallback or false
-                if fire and cfg.Callback then
-                    executeWithFallback(cfg.Callback, cfg.Text or cfg.Name or "control", val)
-                end
-            end,
-            Get = function() return value end,
-            Destroy = function()
-                pcall(function() row:Destroy() end)
-                LouisHub.Elements[flag] = nil
-                LouisHub.Options[flag]  = nil
-            end,
-            CurrentValue = value,
-        }
-        elemObj.SetValue = elemObj.Set
+        -- FIX #4 & #6: Unified element contract
+        local elemObj = CreateUnifiedElement({
+            Row = row,
+            Instance = row,
+            Methods = {
+                Set = function(v, fireCallback)
+                    local num = tonumber(v)
+                    if not num then return end
+                    num = roundVal(num)
+                    lastProcessed = num
+                    value = num
+                    LouisHub.Flags[flag] = num
+                    animateDisplay(num, false)
+                    setVisual(num)
+                    if fireCallback and cfg.Callback then
+                        executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "control", num)
+                    end
+                end,
+                SetValue = function(v)
+                    local num = tonumber(v)
+                    if num then
+                        num = roundVal(num)
+                        lastProcessed = num
+                        value = num
+                        LouisHub.Flags[flag] = num
+                        animateDisplay(num, false)
+                        setVisual(num)
+                        if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "control", num) end
+                    end
+                end,
+                Get = function() return value end,
+            }
+        })
+        Utils.AttachLock(elemObj, row)
 
         LouisHub.Elements[flag] = elemObj
         LouisHub.Options[flag]  = elemObj
 
+        if cfg.FireOnCreate and cfg.Callback then
+            executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "control", value)
+        end
+
+        if cfg.Locked then elemObj:Lock(cfg.LockedTitle) end
         return elemObj
     end
 
-    -- 5. RANGE SLIDER
+    -- RANGE SLIDER CONTROL
     function Section:RangeSlider(cfg)
         cfg = cfg or {}
         validateCallback("RangeSlider", cfg)
-        local flag      = cfg.Flag or cfg.Text or ("RangeSlider_" .. tostring(math.random(1e5, 1e6)))
+        local flag      = cfg.Flag or cfg.Text or cfg.Texto or ("RangeSlider_" .. tostring(math.random(1e5, 1e6)))
         local range     = cfg.Range or {cfg.Min or 0, cfg.Max or 100}
         local minVal    = range[1]
         local maxVal    = range[2]
         if minVal >= maxVal then maxVal = minVal + 1 end
-        local stepVal   = cfg.Increment or 1
-        local suffix    = cfg.Suffix or ""
-        local defaultT  = cfg.Default or {min = minVal, max = maxVal}
+        local stepVal   = cfg.Increment or cfg.Incremento or 1
+        local suffix    = cfg.Suffix or cfg.Sufijo or ""
+
+        local defaultT  = _pendingConfig[flag] or cfg.Default or cfg.Defecto or {min = minVal, max = maxVal}
+        _pendingConfig[flag] = nil
         local valMin    = math.clamp(defaultT.min or minVal, minVal, maxVal)
         local valMax    = math.clamp(defaultT.max or maxVal, minVal, maxVal)
         if valMin > valMax then valMin, valMax = valMax, valMin end
@@ -6681,14 +7639,14 @@ local function applyBaseControlMethods(Section)
         local row = Utils.Row(targetCont, 42, nextOrder(), Theme.Row)
         LouisHub:Register(row, "BackgroundColor3", "Row")
         Utils.Hover(row, row)
-        registerSearchable(row, cfg.Text or "RangeSlider", cfg.VisibleIf)
+        registerSearchable(row, cfg.Text or cfg.Texto or "RangeSlider", cfg.VisibleIf or cfg.VisibleSi)
 
         local lblSlider = Utils.Text({
-            Parent = row, Text = cfg.Text or "RangeSlider",
+            Parent = row, Text = cfg.Text or cfg.Texto or "RangeSlider",
             Size = UDim2.new(1, -130, 0, 16), Position = UDim2.new(0, 6, 0, 5),
             Truncate = true, TextSize = 11,
         })
-        addTextTooltip(row, cfg.Text or "RangeSlider", cfg.Tooltip, lblSlider, -130)
+        addTextTooltip(row, cfg.Text or cfg.Texto or "RangeSlider", cfg.Tooltip, lblSlider, -130)
 
         local lblValues = Utils.Text({
             Parent = row, Size = UDim2.new(0, 120, 0, 16),
@@ -6721,7 +7679,7 @@ local function applyBaseControlMethods(Section)
             LouisHub.Flags[flag] = currentRange()
             updateDisplay()
             if cfg.Callback then
-                executeWithFallback(cfg.Callback, cfg.Text or "control", currentRange())
+                executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "control", currentRange())
             end
         end
 
@@ -6734,48 +7692,1034 @@ local function applyBaseControlMethods(Section)
             OnChange = processNewRange,
         })
 
-        local elemObj = {
-            Set = function(selfParam, v, fireCallback)
-                local val = (selfParam == selfParam and fireCallback ~= nil) and v or (type(selfParam) == "table" and selfParam or v)
-                if type(val) ~= "table" or val.min == nil or val.max == nil then return end
-                local vMin = roundVal(math.clamp(val.min, minVal, maxVal))
-                local vMax = roundVal(math.clamp(val.max, minVal, maxVal))
-                if vMin > vMax then vMin, vMax = vMax, vMin end
-                lastMin, lastMax = vMin, vMax
-                valMin, valMax = vMin, vMax
-                LouisHub.Flags[flag] = currentRange()
-                updateDisplay()
-                setVisual(vMin, vMax)
-                local fire = (type(fireCallback) == "boolean") and fireCallback or false
-                if fire and cfg.Callback then
-                    executeWithFallback(cfg.Callback, cfg.Text or "control", currentRange())
-                end
-            end,
-            Get = function() return currentRange() end,
-            Destroy = function()
-                pcall(function() row:Destroy() end)
-                LouisHub.Elements[flag] = nil
-                LouisHub.Options[flag]  = nil
-            end,
-        }
+        local elemObj = CreateUnifiedElement({
+            Row = row,
+            Instance = row,
+            Methods = {
+                Set = function(v, fireCallback)
+                    if type(v) ~= "table" or v.min == nil or v.max == nil then return end
+                    local vMin = roundVal(math.clamp(v.min, minVal, maxVal))
+                    local vMax = roundVal(math.clamp(v.max, minVal, maxVal))
+                    if vMin > vMax then vMin, vMax = vMax, vMin end
+                    lastMin, lastMax = vMin, vMax
+                    valMin, valMax = vMin, vMax
+                    LouisHub.Flags[flag] = currentRange()
+                    updateDisplay()
+                    setVisual(vMin, vMax)
+                    if fireCallback and cfg.Callback then
+                        executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "control", currentRange())
+                    end
+                end,
+                Get = function() return currentRange() end,
+            }
+        })
+        Utils.AttachLock(elemObj, row)
+
         LouisHub.Elements[flag] = elemObj
         LouisHub.Options[flag]  = elemObj
+        if cfg.Locked then elemObj:Lock(cfg.LockedTitle) end
+        return elemObj
+    end
+
+    -- INPUT CONTROL
+    function Section:Input(cfg)
+        cfg = cfg or {}
+        validateCallback("Input", cfg)
+        local flag  = cfg.Flag or cfg.Text or cfg.Texto or cfg.Name or ("Input_" .. tostring(math.random(1e5, 1e6)))
+        local value = _pendingConfig[flag] or cfg.CurrentValue or cfg.Default or cfg.Defecto or ""
+        _pendingConfig[flag] = nil
+        LouisHub.Flags[flag] = value
+
+        local isArea = cfg.Type == "textarea" or cfg.Tipo == "textarea"
+        local areaHeight = math.clamp(cfg.Height or cfg.Alto or 70, 45, 300)
+        local targetCont = self:_GetTargetContainer("Input", cfg)
+
+        local row, lblInput
+        if isArea then
+            row, lblInput = createHeader(26, cfg.Text or cfg.Texto or cfg.Name or "Input", nil, nil, "manual", targetCont)
+            lblInput.AutomaticSize = Enum.AutomaticSize.Y
+            lblInput.Size = UDim2.new(1, -16, 0, 0)
+            lblInput.Position = UDim2.new(0, 6, 0, 6)
+        else
+            row, lblInput = createHeader(26, cfg.Text or cfg.Texto or cfg.Name or "Input", 0.45, nil, nil, targetCont)
+        end
+
+        addTextTooltip(row, cfg.Text or cfg.Texto or cfg.Name or "Input", cfg.Tooltip or cfg.Description, lblInput)
+        registerSearchable(row, cfg.Text or cfg.Texto or cfg.Name or "Input", cfg.VisibleIf or cfg.VisibleSi)
+
+        local box = Instance.new("TextBox")
+        box.Size             = UDim2.new(0.5, -10, 0, 20)
+        box.Position         = UDim2.new(0.5, 2, 0.5, -10)
+        box.BackgroundColor3 = Theme.Input
+        box.BackgroundTransparency = 0.4
+        box.Text             = tostring(value)
+        box.PlaceholderText  = cfg.Placeholder or cfg.PlaceholderText or ""
+        box.TextColor3       = Theme.Highlight
+        box.Font             = Enum.Font.Gotham
+        box.TextSize         = 11
+        box.ClearTextOnFocus = (cfg.ClearTextOnFocus or cfg.RemoveTextAfterFocusLost) or false
+        box.BorderSizePixel  = 0
+        box.Parent           = row
+        Utils.Corner(box, 4)
+        LouisHub:Register(box, "BackgroundColor3", "Input")
+        LouisHub:Register(box, "TextColor3", "Highlight")
+
+        if isArea then
+            box.Size             = UDim2.new(1, -12, 0, areaHeight)
+            box.Position         = UDim2.new(0, 6, 0, 24)
+            box.MultiLine        = true
+            box.TextWrapped      = true
+            box.TextXAlignment   = Enum.TextXAlignment.Left
+            box.TextYAlignment   = Enum.TextYAlignment.Top
+            local padArea = Instance.new("UIPadding")
+            padArea.PaddingLeft, padArea.PaddingRight = UDim.new(0, 6), UDim.new(0, 6)
+            padArea.PaddingTop, padArea.PaddingBottom = UDim.new(0, 4), UDim.new(0, 4)
+            padArea.Parent = box
+            row.Size = UDim2.new(1, 0, 0, areaHeight + 30)
+        end
+
+        local maxChars = cfg.MaxCharacters or cfg.MaxCaracteres or (isArea and 2000 or 200)
+
+        box:GetPropertyChangedSignal("Text"):Connect(function()
+            if cfg.Numeric then
+                local txt = box.Text
+                local parts = string.split(txt, ".")
+                if #parts > 2 then
+                    box.Text = parts[1] .. "." .. table.concat(parts, "", 2)
+                else
+                    box.Text = txt:gsub("[^%d%.%-]", "")
+                end
+            end
+            if #box.Text > maxChars then
+                box.Text = box.Text:sub(1, maxChars)
+                Utils.FlashFeedback(box, false, Theme.Input)
+            end
+            -- FIX #8: Hanya tembak callback saat mengetik jika LiveUpdate diaktifkan
+            if cfg.LiveUpdate == true then
+                value = box.Text
+                LouisHub.Flags[flag] = value
+                if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "Input", value) end
+            end
+        end)
+
+        -- FIX #8: Standar Luna & Alan: Picu callback saat FocusLost selesai
+        box.FocusLost:Connect(function(enterPressed)
+            local cleanTxt = box.Text:gsub("^%s+", ""):gsub("%s+$", "")
+            local finalVal = cleanTxt
+
+            if cfg.Type == "number" or cfg.Tipo == "number" or cfg.Numeric then
+                local n = tonumber(cleanTxt)
+                if not n and cleanTxt ~= "" then
+                    box.Text = tostring(value)
+                    Utils.FlashFeedback(box, false, Theme.Input)
+                    return
+                elseif n then
+                    if cfg.Min and n < cfg.Min then n = cfg.Min end
+                    if cfg.Max and n > cfg.Max then n = cfg.Max end
+                    finalVal = n
+                end
+            end
+
+            value = finalVal
+            box.Text = tostring(finalVal)
+            LouisHub.Flags[flag] = value
+            if not cfg.LiveUpdate and cfg.Callback then
+                executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "Input", value)
+            end
+        end)
+
+        local elemObj = CreateUnifiedElement({
+            Row = row,
+            Instance = row,
+            Methods = {
+                Set = function(v, fireCallback)
+                    value = tostring(v or "")
+                    box.Text = value
+                    LouisHub.Flags[flag] = value
+                    if fireCallback and cfg.Callback then
+                        executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "Input", value)
+                    end
+                end,
+                Get = function() return value end,
+            }
+        })
+        Utils.AttachLock(elemObj, row)
+
+        LouisHub.Elements[flag] = elemObj
+        LouisHub.Options[flag]  = elemObj
+        if cfg.Locked then elemObj:Lock(cfg.LockedTitle) end
+        return elemObj
+    end
+
+    -- DROPDOWN CONTROL (WITH PLAYER SPECIAL TYPE & RESILIENT SELECTION)
+    function Section:Dropdown(cfg)
+        cfg = cfg or {}
+        validateCallback("Dropdown", cfg)
+        local flag     = cfg.Flag or cfg.Text or cfg.Texto or cfg.Name or ("Dropdown_" .. tostring(math.random(1e5, 1e6)))
+        local options  = cloneTable(cfg.Options or cfg.Opciones or {})
+        local multi    = (cfg.MultipleOptions ~= nil and cfg.MultipleOptions) or (cfg.Multi ~= nil and cfg.Multi) or false
+        local selection = {}
+
+        -- FIX #7: Dukungan Luna SpecialType = "Player"
+        local isPlayerSpecial = (cfg.SpecialType == "Player" or cfg.TipoEspecial == "Player")
+        if isPlayerSpecial then
+            options = {}
+            for _, pl in ipairs(Players:GetPlayers()) do
+                table.insert(options, pl.Name)
+            end
+        end
+
+        local def = _pendingConfig[flag] or cfg.CurrentOption or cfg.Default or cfg.Defecto
+        _pendingConfig[flag] = nil
+
+        if multi then
+            if type(def) == "table" then
+                if #def > 0 then
+                    for _, v in ipairs(def) do selection[v] = true end
+                else
+                    for k, v in pairs(def) do if v then selection[k] = true end end
+                end
+            elseif type(def) == "string" then
+                selection[def] = true
+            end
+        else
+            if type(def) == "table" then def = def[1] end
+            if def then selection[def] = true end
+        end
+
+        LouisHub.Flags[flag] = multi and cloneTable(selection) or (def or options[1])
+
+        local SEARCH_THRESHOLD = 8
+        local hasSearch       = #options > SEARCH_THRESHOLD
+        local ROW_HEIGHT      = 26
+        local SEARCH_HEIGHT   = hasSearch and 22 or 0
+        local MAX_LIST_HEIGHT = 132
+
+        local targetCont = self:_GetTargetContainer("Dropdown", cfg)
+        local frame = Utils.Frame({
+            Parent = targetCont, Size = UDim2.new(1, 0, 0, ROW_HEIGHT),
+            Color = Theme.Row, Order = nextOrder(), Clips = true,
+            Transparency = 0.5,
+        })
+        LouisHub:Register(frame, "BackgroundColor3", "Row")
+        registerSearchable(frame, cfg.Text or cfg.Texto or cfg.Name or "Dropdown", cfg.VisibleIf or cfg.VisibleSi)
+
+        local headerBtn = Utils.BaseButton({Parent = frame, Size = UDim2.new(1, 0, 0, ROW_HEIGHT)})
+        Utils.Hover(headerBtn, frame)
+
+        local lbl = Utils.Text({
+            Parent = frame, Size = UDim2.new(1, -26, 0, ROW_HEIGHT),
+            Truncate = true, TextSize = 11,
+        })
+        local arrow = Instance.new("ImageLabel")
+        arrow.BackgroundTransparency = 1
+        arrow.Image = "rbxassetid://83472139709682"
+        arrow.Size = UDim2.new(0, 9, 0, 9)
+        arrow.AnchorPoint = Vector2.new(0.5, 0.5)
+        arrow.Position = UDim2.new(1, -12, 0.5, 0)
+        arrow.Parent = frame
+        LouisHub:Register(arrow, "ImageColor3", "Text")
+
+        addTextTooltip(frame, cfg.Text or cfg.Texto or cfg.Name or "Dropdown", cfg.Tooltip or cfg.Description, lbl)
+
+        local searchBox = nil
+        if hasSearch then
+            searchBox = Instance.new("TextBox")
+            searchBox.Size             = UDim2.new(1, -8, 0, SEARCH_HEIGHT - 2)
+            searchBox.Position         = UDim2.new(0, 4, 0, ROW_HEIGHT + 2)
+            searchBox.BackgroundColor3 = Theme.Input
+            searchBox.BackgroundTransparency = 0.4
+            searchBox.PlaceholderText  = "🔍 Search option..."
+            searchBox.Text             = ""
+            searchBox.TextColor3       = Theme.Text
+            searchBox.Font             = Enum.Font.Gotham
+            searchBox.TextSize         = 10
+            searchBox.BorderSizePixel  = 0
+            searchBox.ClearTextOnFocus = false
+            searchBox.Parent           = frame
+            Utils.Corner(searchBox, 4)
+            LouisHub:Register(searchBox, "BackgroundColor3", "Input")
+            LouisHub:Register(searchBox, "TextColor3", "Text")
+        end
+
+        local optionsScroll = Instance.new("ScrollingFrame")
+        optionsScroll.Name                   = "DropdownScroll"
+        optionsScroll.BackgroundTransparency = 1
+        optionsScroll.BorderSizePixel        = 0
+        optionsScroll.ScrollBarThickness     = 2
+        optionsScroll.ScrollBarImageColor3   = Theme.Accent
+        optionsScroll.CanvasSize             = UDim2.new(0, 0, 0, #options * 22)
+        optionsScroll.AutomaticCanvasSize    = Enum.AutomaticSize.None
+        optionsScroll.Size                   = UDim2.new(1, 0, 0, math.min(#options * 22, MAX_LIST_HEIGHT))
+        optionsScroll.Position               = UDim2.new(0, 0, 0, ROW_HEIGHT + SEARCH_HEIGHT + 2)
+        optionsScroll.Parent                 = frame
+
+        local layoutOp = Instance.new("UIListLayout")
+        layoutOp.Padding = UDim.new(0, 2)
+        layoutOp.SortOrder = Enum.SortOrder.LayoutOrder
+        layoutOp.Parent = optionsScroll
+
+        local function getDisplayText()
+            if multi then
+                local names = {}
+                for _, o in ipairs(options) do
+                    if selection[o] then table.insert(names, tostring(o)) end
+                end
+                return #names > 0 and table.concat(names, ", ") or "None"
+            end
+            for k, v in pairs(selection) do if v then return tostring(k) end end
+            return "None"
+        end
+
+        local function updateLabel()
+            lbl.Text = (cfg.Text or cfg.Texto or cfg.Name or "Dropdown") .. ": " .. getDisplayText()
+        end
+        updateLabel()
+
+        local opButtons = {}
+        local toggleDropdown
+
+        local function pickOpt(opt, keepOpen)
+            if multi then
+                selection[opt] = not selection[opt] or nil
+            else
+                selection = {[opt] = true}
+            end
+            local res = multi and cloneTable(selection) or opt
+            LouisHub.Flags[flag] = res
+            for o, btn in pairs(opButtons) do
+                btn.BackgroundColor3 = selection[o] and Theme.Accent or Theme.Input
+                btn.BackgroundTransparency = selection[o] and 0.2 or 0.5
+            end
+            updateLabel()
+            if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "Dropdown", res) end
+            if not multi and not keepOpen and toggleDropdown then toggleDropdown() end
+        end
+
+        local function buildOptionButtons()
+            for _, child in ipairs(optionsScroll:GetChildren()) do
+                if child:IsA("GuiObject") and not child:IsA("UIListLayout") then
+                    child:Destroy()
+                end
+            end
+            opButtons = {}
+
+            optionsScroll.CanvasSize = UDim2.new(0, 0, 0, #options * 22)
+            optionsScroll.Size = UDim2.new(1, 0, 0, math.min(#options * 22, MAX_LIST_HEIGHT))
+
+            for i, opt in ipairs(options) do
+                local btn = Utils.BaseButton({
+                    Parent = optionsScroll, Size = UDim2.new(1, -8, 0, 20),
+                    Position = UDim2.new(0, 4, 0, 0),
+                    Color = selection[opt] and Theme.Accent or Theme.Input,
+                    Transparency = selection[opt] and 0.2 or 0.5,
+                    Order = i, Radius = 4,
+                })
+                LouisHub:Register(btn, "BackgroundColor3", function()
+                    return selection[opt] and Theme.Accent or Theme.Input
+                end)
+                Utils.Text({
+                    Parent = btn, Text = tostring(opt), Size = UDim2.new(1, -8, 1, 0),
+                    Position = UDim2.new(0, 6, 0, 0), TextSize = 10.5, Truncate = true,
+                })
+                Utils.ReliableClick(btn, function() pickOpt(opt) end)
+                opButtons[opt] = btn
+            end
+        end
+
+        buildOptionButtons()
+
+        -- FIX #7: Auto-listener saat pemain masuk atau keluar jika SpecialType = "Player"
+        if isPlayerSpecial then
+            LouisHub:RegisterConnection(Players.PlayerAdded:Connect(function(pl)
+                table.insert(options, pl.Name)
+                buildOptionButtons()
+            end))
+            LouisHub:RegisterConnection(Players.PlayerRemoving:Connect(function(pl)
+                local idx = table.find(options, pl.Name)
+                if idx then table.remove(options, idx) end
+                selection[pl.Name] = nil
+                buildOptionButtons()
+                updateLabel()
+            end))
+        end
+
+        toggleDropdown = makeExpandable(frame, ROW_HEIGHT, function()
+            local contentH = math.min(#options * 22, MAX_LIST_HEIGHT)
+            return ROW_HEIGHT + SEARCH_HEIGHT + contentH + 6
+        end, function()
+            Utils.Tween(arrow, {Rotation = 0}, LouisHub.Motion.Expand)
+            if searchBox then searchBox.Visible = false end
+        end)
+
+        Utils.ReliableClick(headerBtn, function()
+            local openState = toggleDropdown()
+            Utils.Tween(arrow, {Rotation = openState and 180 or 0}, LouisHub.Motion.Expand)
+            if searchBox then searchBox.Visible = openState end
+        end)
+
+        if searchBox then
+            searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+                local t = searchBox.Text:lower()
+                for opt, btn in pairs(opButtons) do
+                    btn.Visible = (t == "") or (tostring(opt):lower():find(t, 1, true) ~= nil)
+                end
+            end)
+        end
+
+        local function getSelectedValue()
+            if multi then return cloneTable(selection) end
+            for k, v in pairs(selection) do if v then return k end end
+            return nil
+        end
+
+        local function updateOptionsExternal(newOpts)
+            options = cloneTable(newOpts or {})
+            buildOptionButtons()
+            updateLabel()
+        end
+
+        -- FIX #4 & #5: Method seragam tanpa penimpaan rusak
+        local elemObj = CreateUnifiedElement({
+            Row = frame,
+            Instance = frame,
+            Methods = {
+                Set = function(v, fireCallback)
+                    if multi then
+                        selection = {}
+                        if type(v) == "table" then
+                            if #v > 0 then
+                                for _, item in ipairs(v) do selection[item] = true end
+                            else
+                                for item, val in pairs(v) do if val then selection[item] = true end end
+                            end
+                        elseif type(v) == "string" then
+                            selection[v] = true
+                        end
+                    else
+                        selection = {[v] = true}
+                    end
+                    for opt, btn in pairs(opButtons) do
+                        btn.BackgroundColor3 = selection[opt] and Theme.Accent or Theme.Input
+                        btn.BackgroundTransparency = selection[opt] and 0.2 or 0.5
+                    end
+                    updateLabel()
+                    local finalVal = getSelectedValue()
+                    LouisHub.Flags[flag] = finalVal
+                    if fireCallback and cfg.Callback then
+                        executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "Dropdown", finalVal)
+                    end
+                end,
+                SetOption = function(v)
+                    if v ~= nil then
+                        selection = {[v] = true}
+                        for opt, btn in pairs(opButtons) do
+                            btn.BackgroundColor3 = selection[opt] and Theme.Accent or Theme.Input
+                            btn.BackgroundTransparency = selection[opt] and 0.2 or 0.5
+                        end
+                        updateLabel()
+                        LouisHub.Flags[flag] = v
+                        if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "Dropdown", v) end
+                    end
+                end,
+                SetOptions = updateOptionsExternal,
+                Refresh    = updateOptionsExternal,
+                Get        = getSelectedValue,
+            }
+        })
+        Utils.AttachLock(elemObj, frame)
+
+        LouisHub.Elements[flag] = elemObj
+        LouisHub.Options[flag]  = elemObj
+        if cfg.Locked then elemObj:Lock(cfg.LockedTitle) end
+        return elemObj
+    end
+
+    -- COLORPICKER CONTROL
+    function Section:ColorPicker(cfg, flagArg)
+        cfg = cfg or {}
+        validateCallback("ColorPicker", cfg)
+        local flag = cfg.Flag or flagArg or cfg.Text or cfg.Texto or cfg.Name or ("Color_" .. tostring(math.random(1e5, 1e6)))
+        
+        -- FIX #9: Pending config check
+        local currentColor = _pendingConfig[flag] or cfg.Color or cfg.Default or cfg.Defecto or Color3.fromRGB(255, 255, 255)
+        _pendingConfig[flag] = nil
+        LouisHub.Flags[flag] = currentColor
+
+        local ROW_HEIGHT = 26
+        local targetCont = self:_GetTargetContainer("ColorPicker", cfg)
+        local frame = Utils.Frame({
+            Parent = targetCont, Size = UDim2.new(1, 0, 0, ROW_HEIGHT),
+            Color = Theme.Row, Order = nextOrder(), Clips = true,
+            Transparency = 0.5,
+        })
+        LouisHub:Register(frame, "BackgroundColor3", "Row")
+
+        local headerBtn = Utils.BaseButton({Parent = frame, Size = UDim2.new(1, 0, 0, ROW_HEIGHT)})
+        Utils.Hover(headerBtn, frame)
+
+        local lbl = Utils.Text({
+            Parent = frame, Text = cfg.Text or cfg.Texto or cfg.Name or "Color",
+            Size = UDim2.new(1, -44, 0, ROW_HEIGHT), Truncate = true, TextSize = 11,
+        })
+        local swatch = Utils.Frame({
+            Parent = frame, Size = UDim2.new(0, 24, 0, 14),
+            Position = UDim2.new(1, -30, 0.5, -7),
+            Color = currentColor, Radius = 3, Transparency = 0,
+        })
+
+        addTextTooltip(frame, cfg.Text or cfg.Texto or cfg.Name or "Color", cfg.Tooltip, lbl, -44)
+        registerSearchable(frame, cfg.Text or cfg.Texto or cfg.Name or "Color", cfg.VisibleIf or cfg.VisibleSi)
+
+        local panel = Utils.Frame({
+            Parent = frame, Size = UDim2.new(1, -12, 0, 105),
+            Position = UDim2.new(0, 6, 0, ROW_HEIGHT + 2), Transparency = 1,
+            Radius = false, Border = false,
+        })
+        local layoutP = Instance.new("UIListLayout")
+        layoutP.Padding = UDim.new(0, 4)
+        layoutP.Parent = panel
+
+        local r = currentColor.R * 255
+        local g = currentColor.G * 255
+        local b = currentColor.B * 255
+        local setVisualR, setVisualG, setVisualB
+        local hexBox = nil
+
+        local function toHex(c)
+            return string.format("#%02X%02X%02X", math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5))
+        end
+
+        local elemObj
+
+        local function updateColor(fire)
+            local newC = Color3.fromRGB(math.floor(r + 0.5), math.floor(g + 0.5), math.floor(b + 0.5))
+            currentColor = newC
+            swatch.BackgroundColor3 = newC
+            if hexBox then hexBox.Text = toHex(newC) end
+            LouisHub.Flags[flag] = newC
+            if fire and cfg.Callback then
+                executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "ColorPicker", newC)
+            end
+        end
+
+        local function makeChannelRow(chName, orderIdx, getV, setV)
+            local rowC = Utils.Frame({
+                Parent = panel, Size = UDim2.new(1, 0, 0, 18),
+                Order = orderIdx, Transparency = 1, Radius = false, Border = false,
+            })
+            Utils.Text({
+                Parent = rowC, Text = chName, Size = UDim2.new(0, 14, 1, 0),
+                Font = Enum.Font.GothamBold, TextSize = 9.5,
+            })
+            local _, _, sv = createDraggableBar({
+                Parent = rowC, Size = UDim2.new(1, -16, 0, 6),
+                Position = UDim2.new(0, 16, 0.5, -3),
+                Min = 0, Max = 255, Value = getV(),
+                OnChange = function(v) setV(v); updateColor(true) end,
+            })
+            return sv
+        end
+
+        setVisualR = makeChannelRow("R", 1, function() return r end, function(v) r = v end)
+        setVisualG = makeChannelRow("G", 2, function() return g end, function(v) g = v end)
+        setVisualB = makeChannelRow("B", 3, function() return b end, function(v) b = v end)
+
+        local rowHex = Utils.Frame({
+            Parent = panel, Size = UDim2.new(1, 0, 0, 18),
+            Order = 4, Transparency = 1, Radius = false, Border = false,
+        })
+        Utils.Text({
+            Parent = rowHex, Text = "Hex", Size = UDim2.new(0, 24, 1, 0),
+            Font = Enum.Font.GothamBold, TextSize = 9.5,
+        })
+        hexBox = Instance.new("TextBox")
+        hexBox.Size = UDim2.new(1, -26, 1, 0)
+        hexBox.Position = UDim2.new(0, 26, 0, 0)
+        hexBox.BackgroundColor3 = Theme.Input
+        hexBox.BackgroundTransparency = 0.4
+        hexBox.BorderSizePixel = 0
+        hexBox.Font = Enum.Font.Code
+        hexBox.TextSize = 10.5
+        hexBox.TextColor3 = Theme.Text
+        hexBox.Text = toHex(currentColor)
+        hexBox.ClearTextOnFocus = false
+        hexBox.Parent = rowHex
+        Utils.Corner(hexBox, 3)
+        LouisHub:Register(hexBox, "BackgroundColor3", "Input")
+        LouisHub:Register(hexBox, "TextColor3", "Text")
+
+        hexBox.FocusLost:Connect(function()
+            local cleanHex = hexBox.Text:gsub("^#", ""):gsub("%s", "")
+            if #cleanHex == 6 and not cleanHex:match("%X") then
+                r = tonumber(cleanHex:sub(1,2), 16)
+                g = tonumber(cleanHex:sub(3,4), 16)
+                b = tonumber(cleanHex:sub(5,6), 16)
+                setVisualR(r); setVisualG(g); setVisualB(b)
+                updateColor(true)
+                Utils.FlashFeedback(hexBox, true, Theme.Input)
+            else
+                hexBox.Text = toHex(currentColor)
+                Utils.FlashFeedback(hexBox, false, Theme.Input)
+            end
+        end)
+
+        local togglePicker = makeExpandable(frame, ROW_HEIGHT, function() return ROW_HEIGHT + 112 end)
+        Utils.ReliableClick(headerBtn, function() togglePicker() end)
+
+        -- FIX #4 & #7: Support Color3, Hex string, dan table format
+        elemObj = CreateUnifiedElement({
+            Row = frame,
+            Instance = frame,
+            Methods = {
+                Set = function(v, fireCallback)
+                    if typeof(v) == "Color3" then
+                        currentColor = v
+                    elseif type(v) == "string" and v:sub(1,1) == "#" and #v == 7 then
+                        local rHex = tonumber(v:sub(2, 3), 16) or 255
+                        local gHex = tonumber(v:sub(4, 5), 16) or 255
+                        local bHex = tonumber(v:sub(6, 7), 16) or 255
+                        currentColor = Color3.fromRGB(rHex, gHex, bHex)
+                    elseif type(v) == "table" and v.R and v.G and v.B then
+                        currentColor = Color3.fromRGB(v.R, v.G, v.B)
+                    else
+                        return
+                    end
+                    r = currentColor.R * 255; g = currentColor.G * 255; b = currentColor.B * 255
+                    swatch.BackgroundColor3 = currentColor
+                    if hexBox then hexBox.Text = toHex(currentColor) end
+                    LouisHub.Flags[flag] = currentColor
+                    setVisualR(r); setVisualG(g); setVisualB(b)
+                    if fireCallback and cfg.Callback then
+                        executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "ColorPicker", currentColor)
+                    end
+                end,
+                Get = function() return currentColor end,
+            }
+        })
+        Utils.AttachLock(elemObj, frame)
+
+        LouisHub.Elements[flag] = elemObj
+        LouisHub.Options[flag]  = elemObj
+        if cfg.Locked then elemObj:Lock(cfg.LockedTitle) end
+        return elemObj
+    end
+
+    -- KEYBIND CONTROL
+    function Section:Keybind(cfg)
+        cfg = cfg or {}
+        validateCallback("Keybind", cfg)
+        local flag     = cfg.Flag or cfg.Text or cfg.Texto or cfg.Name or ("Keybind_" .. tostring(math.random(1e5, 1e6)))
+        local withMods = (cfg.WithModifiers or cfg.ConModificadores) or false
+
+        -- FIX #7: Parsing otomatis jika input string seperti "Q"
+        local defaultK = _pendingConfig[flag] or cfg.CurrentBind or cfg.Default or cfg.Defecto
+        _pendingConfig[flag] = nil
+        if not defaultK then
+            defaultK = withMods and {KeyCode = Enum.KeyCode.Unknown} or Enum.KeyCode.Unknown
+        else
+            local parsedKey, parsedCtrl, parsedShift, parsedAlt = _decomposeKey(defaultK)
+            if withMods then
+                defaultK = {KeyCode = parsedKey, Ctrl = parsedCtrl, Shift = parsedShift, Alt = parsedAlt}
+            else
+                defaultK = parsedKey
+            end
+        end
+
+        local value = defaultK
+        local isWaiting = false
+        local connCapture = nil
+        local _assignedThisFrame = false
+        local waitToken = 0
+        LouisHub.Flags[flag] = value
+
+        local conflictEntry = { flag = flag, text = cfg.Text or cfg.Texto or cfg.Name or "Keybind" }
+        conflictEntry.GetValor = function() return value end
+        table.insert(_registeredKeybinds, conflictEntry)
+
+        local function formatKeyText(v)
+            local k, c, s, a = _decomposeKey(v)
+            return _formatKey(k, c, s, a)
+        end
+
+        local targetCont = self:_GetTargetContainer("Keybind", cfg)
+        local row, lbl = createHeader(26, cfg.Text or cfg.Texto or cfg.Name or "Keybind", 1, -64, nil, targetCont)
+        addTextTooltip(row, cfg.Text or cfg.Texto or cfg.Name or "Keybind", cfg.Tooltip or cfg.Description, lbl)
+        registerSearchable(row, cfg.Text or cfg.Texto or cfg.Name or "Keybind", cfg.VisibleIf or cfg.VisibleSi)
+
+        local btnKey = Utils.BaseButton({
+            Parent = row, Size = UDim2.new(0, 54, 0, 18),
+            Position = UDim2.new(1, -58, 0.5, -9),
+            Color = Theme.Input, Transparency = 0.4, Radius = 4,
+        })
+        LouisHub:Register(btnKey, "BackgroundColor3", "Input")
+        Utils.Hover(btnKey, btnKey)
+
+        local lblKey = Utils.Text({
+            Parent = btnKey, Text = formatKeyText(value),
+            Alignment = Enum.TextXAlignment.Center,
+            Color = Theme.Highlight, TextSize = 9.5, Truncate = true,
+        })
+        LouisHub:Register(lblKey, "TextColor3", "Highlight")
+
+        local function updateKey(keyVal, fire)
+            value = keyVal
+            LouisHub.Flags[flag] = keyVal
+            lblKey.Text = formatKeyText(keyVal)
+            if fire and cfg.Callback then
+                executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "Keybind", keyVal)
+            end
+        end
+
+        local function cancelListening()
+            if not isWaiting then return end
+            isWaiting = false
+            btnKey.BackgroundColor3 = Theme.Input
+            lblKey.Text = formatKeyText(value)
+            if connCapture then
+                connCapture:Disconnect()
+                connCapture = nil
+            end
+        end
+
+        LouisHub:RegisterConnection(UserInputService.InputBegan:Connect(function(input, processed)
+            if processed or isWaiting or _assignedThisFrame then return end
+            local k, c, s, a = _decomposeKey(value)
+            if k == Enum.KeyCode.Unknown or input.KeyCode ~= k then return end
+
+            if withMods then
+                local ctrlDown = UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
+                local shiftDown = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
+                local altDown = UserInputService:IsKeyDown(Enum.KeyCode.LeftAlt) or UserInputService:IsKeyDown(Enum.KeyCode.RightAlt)
+                if ctrlDown ~= c or shiftDown ~= s or altDown ~= a then return end
+            end
+
+            if cfg.Callback then
+                executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or cfg.Name or "Keybind", value)
+            end
+        end))
+
+        Utils.ReliableClick(btnKey, function()
+            if isWaiting then
+                cancelListening()
+                return
+            end
+            isWaiting = true
+            lblKey.Text = "..."
+            btnKey.BackgroundColor3 = Theme.Accent
+
+            waitToken = waitToken + 1
+            local myToken = waitToken
+
+            task.delay(5, function()
+                if isWaiting and waitToken == myToken then
+                    cancelListening()
+                end
+            end)
+
+            connCapture = UserInputService.InputBegan:Connect(function(input, processed)
+                if processed or not isWaiting then return end
+                if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode ~= Enum.KeyCode.Unknown then
+                    local isModKey = withMods and (
+                        input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.RightControl or
+                        input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.RightShift or
+                        input.KeyCode == Enum.KeyCode.LeftAlt or input.KeyCode == Enum.KeyCode.RightAlt
+                    )
+                    if isModKey then return end
+
+                    isWaiting = false
+                    btnKey.BackgroundColor3 = Theme.Input
+                    if connCapture then connCapture:Disconnect(); connCapture = nil end
+
+                    local newVal = withMods and {
+                        KeyCode = input.KeyCode,
+                        Ctrl = UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl),
+                        Shift = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift),
+                        Alt = UserInputService:IsKeyDown(Enum.KeyCode.LeftAlt) or UserInputService:IsKeyDown(Enum.KeyCode.RightAlt),
+                    } or input.KeyCode
+
+                    _checkKeybindConflict(conflictEntry, newVal)
+                    _assignedThisFrame = true
+                    task.defer(function() _assignedThisFrame = false end)
+                    updateKey(newVal, false)
+                end
+            end)
+            LouisHub:RegisterConnection(connCapture)
+        end)
+
+        local elemObj = CreateUnifiedElement({
+            Row = row,
+            Instance = row,
+            Methods = {
+                Set = function(v, fireCallback)
+                    local pk, pc, ps, pa = _decomposeKey(v)
+                    local finalKey = withMods and {KeyCode = pk, Ctrl = pc, Shift = ps, Alt = pa} or pk
+                    updateKey(finalKey, fireCallback == true)
+                end,
+                Get = function() return value end,
+            }
+        })
+        Utils.AttachLock(elemObj, row)
+
+        LouisHub.Elements[flag] = elemObj
+        LouisHub.Options[flag]  = elemObj
+        if cfg.Locked then elemObj:Lock(cfg.LockedTitle) end
+        return elemObj
+    end
+
+    -- LABEL CONTROL
+    function Section:Label(cfg)
+        cfg = cfg or {}
+        local flag  = cfg.Flag or ("Label_" .. tostring(math.random(1e5, 1e6)))
+        local isLunaLabel = (cfg.Value == nil and cfg.Valor == nil)
+        local valueStr = tostring(cfg.Value or cfg.Valor or cfg.Text or cfg.Texto or "")
+        _nonPersistentFlags[flag] = true
+
+        local targetCont = self:_GetTargetContainer("Label", cfg)
+        local row, lbl = createHeader(26, cfg.Text or cfg.Texto or "Label", 1, isLunaLabel and -16 or -100, nil, targetCont)
+        addTextTooltip(row, cfg.Text or cfg.Texto or "Label", cfg.Tooltip or cfg.Description, lbl)
+        registerSearchable(row, cfg.Text or cfg.Texto or "Label", cfg.VisibleIf or cfg.VisibleSi)
+
+        local lblValue = nil
+        if not isLunaLabel then
+            lblValue = Utils.Text({
+                Parent = row, Text = valueStr, Size = UDim2.new(0, 90, 1, 0),
+                Position = UDim2.new(1, -96, 0, 0), Alignment = Enum.TextXAlignment.Right,
+                Color = Theme.AccentLight, TextSize = 10.5, Truncate = true,
+            })
+            LouisHub:Register(lblValue, "TextColor3", "AccentLight")
+        end
+
+        local function setVal(v)
+            local txt = tostring(v)
+            _realFlags[flag] = v
+            if isLunaLabel then
+                lbl.Text = txt
+            else
+                valueStr = txt
+                if lblValue then lblValue.Text = valueStr end
+            end
+        end
+
+        _realFlags[flag] = cfg.Value or cfg.Valor or cfg.Text or cfg.Texto
+        -- FIX #4: Unified Element contract
+        local elemObj = CreateUnifiedElement({
+            Row = row,
+            Instance = row,
+            Methods = {
+                Set      = function(v) setVal(v) end,
+                SetText  = function(v) setVal(v) end,
+                SetTexto = function(v) setVal(v) end,
+                Get      = function() return isLunaLabel and lbl.Text or valueStr end,
+            }
+        })
+        Utils.AttachLock(elemObj, row)
+        LouisHub.Elements[flag] = elemObj
+
+        local updateInterval = tonumber(cfg.Every or cfg.Cada)
+        local updateFn = cfg.Update or cfg.Actualizar
+        if updateInterval and updateFn and type(updateFn) == "function" and updateInterval >= 0.05 then
+            _autoUpdateLabels[lblValue or lbl] = {
+                interval = updateInterval,
+                fn = updateFn,
+                apply = setVal,
+                flag = flag,
+                nextTime = os.clock() + updateInterval,
+            }
+        end
 
         return elemObj
     end
 
-    -- 6. NUMBER STEPPER
+    -- PROGRESS CONTROL
+    function Section:Progress(cfg)
+        cfg = cfg or {}
+        local flag  = cfg.Flag or ("Progress_" .. tostring(math.random(1e5, 1e6)))
+        local value = math.clamp(cfg.Default or cfg.Defecto or 0, 0, 100)
+        _nonPersistentFlags[flag] = true
+        _realFlags[flag] = value
+
+        local targetCont = self:_GetTargetContainer("Progress", cfg)
+        local row, lbl = createHeader(34, cfg.Text or cfg.Texto or "Progress", nil, nil, "fixed", targetCont)
+        lbl.Size = UDim2.new(1, -55, 0, 16)
+        lbl.Position = UDim2.new(0, 6, 0, 2)
+        addTextTooltip(row, cfg.Text or cfg.Texto or "Progress", cfg.Tooltip, lbl)
+        registerSearchable(row, cfg.Text or cfg.Texto or "Progress", cfg.VisibleIf or cfg.VisibleSi)
+
+        local lblVal = Utils.Text({
+            Parent = row, Text = math.floor(value) .. "%",
+            Size = UDim2.new(0, 45, 0, 16), Position = UDim2.new(1, -50, 0, 2),
+            Alignment = Enum.TextXAlignment.Right, Color = Theme.AccentLight, TextSize = 10,
+        })
+        LouisHub:Register(lblVal, "TextColor3", "AccentLight")
+
+        local bg = Utils.Frame({
+            Parent = row, Size = UDim2.new(1, -12, 0, 5),
+            Position = UDim2.new(0, 6, 0, 22), Color = Theme.Input,
+            Radius = 3, Transparency = 0.4,
+        })
+        LouisHub:Register(bg, "BackgroundColor3", "Input")
+
+        local fill = Utils.Frame({
+            Parent = bg, Size = UDim2.new(value / 100, 0, 1, 0),
+            Color = Theme.Accent, Radius = 3, Transparency = 0, Border = false,
+        })
+        LouisHub:Register(fill, "BackgroundColor3", "Accent")
+        Utils.AccentGradient(fill)
+
+        local function setProgress(v)
+            local num = tonumber(v) or 0
+            value = math.clamp(num, 0, 100)
+            Utils.Tween(fill, {Size = UDim2.new(value / 100, 0, 1, 0)}, LouisHub.Motion.Expand)
+            lblVal.Text = math.floor(value + 0.5) .. "%"
+            _realFlags[flag] = value
+        end
+
+        local elemObj = CreateUnifiedElement({
+            Row = row,
+            Instance = row,
+            Methods = {
+                Set = function(v) setProgress(v) end,
+                Get = function() return value end,
+            }
+        })
+        Utils.AttachLock(elemObj, row)
+        LouisHub.Elements[flag] = elemObj
+        return elemObj
+    end
+
+    -- PARAGRAPH CONTROL
+    function Section:Paragraph(cfg)
+        cfg = cfg or {}
+        local targetCont = self:_GetTargetContainer("Paragraph", cfg)
+        local frame = Utils.Frame({
+            Parent = targetCont, Size = UDim2.new(1, 0, 0, 0),
+            Color = Theme.Row, Order = nextOrder(), Radius = 6,
+            Transparency = 0.5,
+        })
+        frame.AutomaticSize = Enum.AutomaticSize.Y
+        LouisHub:Register(frame, "BackgroundColor3", "Row")
+
+        local pad = Instance.new("UIPadding")
+        pad.PaddingTop, pad.PaddingBottom = UDim.new(0, 6), UDim.new(0, 6)
+        pad.PaddingLeft, pad.PaddingRight = UDim.new(0, 8), UDim.new(0, 8)
+        pad.Parent = frame
+
+        local layout = Instance.new("UIListLayout")
+        layout.Padding = UDim.new(0, 2)
+        layout.SortOrder = Enum.SortOrder.LayoutOrder
+        layout.Parent = frame
+
+        local titleParam = cfg.Title or cfg.Titulo
+        local lblTit = nil
+        if titleParam then
+            lblTit = Utils.Text({
+                Parent = frame, Text = titleParam,
+                Size = UDim2.new(1, 0, 0, 0), Font = Enum.Font.GothamBold,
+                TextSize = 11, Color = Theme.Highlight, Wrapped = true, Order = 1,
+            })
+            lblTit.AutomaticSize = Enum.AutomaticSize.Y
+            LouisHub:Register(lblTit, "TextColor3", "Highlight")
+        end
+
+        local bodyParam = cfg.Content or cfg.Contenido or cfg.Text or cfg.Texto or ""
+        local lblBody = Utils.Text({
+            Parent = frame, Text = bodyParam,
+            Size = UDim2.new(1, 0, 0, 0), TextSize = 10.5, Color = Theme.Text,
+            Wrapped = true, Order = 2,
+        })
+        lblBody.AutomaticSize = Enum.AutomaticSize.Y
+        LouisHub:Register(lblBody, "TextColor3", "Text")
+
+        local elemObj = CreateUnifiedElement({
+            Row = frame,
+            Instance = frame,
+            Methods = {
+                Set = function(...)
+                    local t = normalizeArgSet(...)
+                    lblBody.Text = tostring(t)
+                end,
+                SetTitle = function(...)
+                    local t = normalizeArgSet(...)
+                    if lblTit then lblTit.Text = tostring(t) end
+                end,
+                Get = function() return lblBody.Text end,
+            }
+        })
+        Utils.AttachLock(elemObj, frame)
+        return elemObj
+    end
+
+    -- DIVIDER CONTROL
+    function Section:Divider(cfg)
+        cfg = cfg or {}
+        local textParam = cfg.Text or cfg.Texto
+        local targetCont = self:_GetTargetContainer("Divider", cfg)
+        local row = Utils.Frame({
+            Parent = targetCont, Size = UDim2.new(1, 0, 0, textParam and 24 or 12),
+            Order = nextOrder(), Transparency = 1, Radius = false, Border = false,
+        })
+        if textParam then
+            Utils.Text({
+                Parent = row, Text = tostring(textParam),
+                Size = UDim2.new(1, -12, 0, 14), Position = UDim2.new(0, 6, 0, 0),
+                Font = Enum.Font.GothamBold, TextSize = 9.5, ThemeColor = "AccentLight",
+            })
+        end
+        local line = Utils.Frame({
+            Parent = row, Size = UDim2.new(1, 0, 0, 1.5),
+            Position = UDim2.new(0, 0, 1, -2), Color = Theme.Accent,
+            Radius = false, Border = false, Transparency = 0.3,
+        })
+        LouisHub:Register(line, "BackgroundColor3", "Accent")
+        Utils.AccentGradient(line)
+        return { Instance = row, Instancia = row }
+    end
+
+    -- IMAGE CONTROL
+    function Section:Image(cfg)
+        cfg = cfg or {}
+        local targetCont = self:_GetTargetContainer("Image", cfg)
+        local fixedHeight = math.clamp(cfg.Height or cfg.Alto or 90, 30, 350)
+        local row = Utils.Frame({
+            Parent = targetCont, Size = UDim2.new(1, 0, 0, fixedHeight),
+            Transparency = 1, Order = nextOrder(), Radius = false, Border = false,
+        })
+        local img = Instance.new("ImageLabel")
+        img.BackgroundColor3 = Theme.Row
+        img.BackgroundTransparency = 0.5
+        img.BorderSizePixel = 0
+        img.Image = type(cfg.Url) == "string" and cfg.Url or ""
+        img.ScaleType = Enum.ScaleType.Fit
+        img.Size = UDim2.new(1, 0, 1, 0)
+        img.Parent = row
+        Utils.Corner(img, 6)
+        LouisHub:Register(img, "BackgroundColor3", "Row")
+        return CreateUnifiedElement({
+            Row = row,
+            Instance = img,
+            Methods = {
+                Set = function(...)
+                    local u = normalizeArgSet(...)
+                    if type(u) == "string" then img.Image = u end
+                end,
+                Get = function() return img.Image end,
+            }
+        })
+    end
+
+    -- NUMBER STEPPER CONTROL
     function Section:NumberStepper(cfg)
         cfg = cfg or {}
         validateCallback("NumberStepper", cfg)
-        local flag     = cfg.Flag or cfg.Text or ("NumberStepper_" .. tostring(math.random(1e5, 1e6)))
+        local flag     = cfg.Flag or cfg.Text or cfg.Texto or ("NumberStepper_" .. tostring(math.random(1e5, 1e6)))
         local minVal   = cfg.Min or 0
         local maxVal   = cfg.Max or 100
         if minVal >= maxVal then maxVal = minVal + 1 end
-        local stepVal  = cfg.Increment or 1
-        local decimals = cfg.Decimals or (tostring(stepVal):find("%.") and (#tostring(stepVal) - tostring(stepVal):find("%.")) or 0)
-        local prefix   = cfg.Prefix or ""
-        local suffix   = cfg.Suffix or ""
+        local stepVal  = cfg.Increment or cfg.Incremento or 1
+        local decimals = cfg.Decimals or cfg.Decimales or (tostring(stepVal):find("%.") and (#tostring(stepVal) - tostring(stepVal):find("%.")) or 0)
+        local prefix   = cfg.Prefix or cfg.Prefijo or ""
+        local suffix   = cfg.Suffix or cfg.Sufijo or ""
 
         local function roundVal(v)
             local factor = 1 / stepVal
@@ -6785,7 +8729,8 @@ local function applyBaseControlMethods(Section)
             )
         end
 
-        local value = roundVal(math.clamp(cfg.Default or minVal, minVal, maxVal))
+        local value = roundVal(math.clamp(tonumber(_pendingConfig[flag] or cfg.Default or cfg.Defecto or minVal) or minVal, minVal, maxVal))
+        _pendingConfig[flag] = nil
         LouisHub.Flags[flag] = value
 
         local function formatText(v)
@@ -6800,9 +8745,9 @@ local function applyBaseControlMethods(Section)
         end
 
         local targetCont = self:_GetTargetContainer("NumberStepper", cfg)
-        local row, lbl = createHeader(26, cfg.Text or "NumberStepper", 1, -120, nil, targetCont)
-        addTextTooltip(row, cfg.Text or "NumberStepper", cfg.Tooltip, lbl)
-        registerSearchable(row, cfg.Text or "NumberStepper", cfg.VisibleIf)
+        local row, lbl = createHeader(26, cfg.Text or cfg.Texto or "NumberStepper", 1, -120, nil, targetCont)
+        addTextTooltip(row, cfg.Text or cfg.Texto or "NumberStepper", cfg.Tooltip, lbl)
+        registerSearchable(row, cfg.Text or cfg.Texto or "NumberStepper", cfg.VisibleIf or cfg.VisibleSi)
 
         local BTN_WIDTH = 20
         local BOX_WIDTH = 54
@@ -6854,31 +8799,11 @@ local function applyBaseControlMethods(Section)
             value = newV
             LouisHub.Flags[flag] = value
             textBox.Text = formatText(value)
-            if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or "control", value) end
+            if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "control", value) end
         end
 
-        local pressId = 0
-        local function startHold(sign, refBtn)
-            pressId = pressId + 1
-            local myId = pressId
-            applyStep(sign)
-            task.spawn(function()
-                task.wait(0.4)
-                while pressId == myId and refBtn.Parent do
-                    applyStep(sign)
-                    task.wait(0.1)
-                end
-            end)
-        end
-        local function stopHold() pressId = pressId + 1 end
-
-        LouisHub:RegisterConnection(btnMinus.MouseButton1Down:Connect(function() startHold(-1, btnMinus) end))
-        LouisHub:RegisterConnection(btnMinus.MouseButton1Up:Connect(stopHold))
-        LouisHub:RegisterConnection(btnMinus.MouseLeave:Connect(stopHold))
-
-        LouisHub:RegisterConnection(btnPlus.MouseButton1Down:Connect(function() startHold(1, btnPlus) end))
-        LouisHub:RegisterConnection(btnPlus.MouseButton1Up:Connect(stopHold))
-        LouisHub:RegisterConnection(btnPlus.MouseLeave:Connect(stopHold))
+        Utils.ReliableClick(btnMinus, function() applyStep(-1) end)
+        Utils.ReliableClick(btnPlus, function() applyStep(1) end)
 
         textBox.FocusLost:Connect(function(enterPressed)
             if not enterPressed then return end
@@ -6894,226 +8819,45 @@ local function applyBaseControlMethods(Section)
             LouisHub.Flags[flag] = value
             textBox.Text = formatText(value)
             Utils.FlashFeedback(textBox, true, Theme.Input)
-            if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or "control", value) end
+            if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "control", value) end
         end)
 
-        local elemObj = {
-            Set = function(selfParam, v, fireCallback)
-                local val = (selfParam == selfParam and fireCallback ~= nil) and v or (type(selfParam) == "number" and selfParam or v)
-                if type(val) ~= "number" then return end
-                value = roundVal(val)
-                LouisHub.Flags[flag] = value
-                textBox.Text = formatText(value)
-                local fire = (type(fireCallback) == "boolean") and fireCallback or false
-                if fire and cfg.Callback then
-                    executeWithFallback(cfg.Callback, cfg.Text or "control", value)
-                end
-            end,
-            Get = function() return value end,
-            Destroy = function()
-                pcall(function() row:Destroy() end)
-                LouisHub.Elements[flag] = nil
-                LouisHub.Options[flag]  = nil
-            end,
-        }
-        LouisHub.Elements[flag] = elemObj
-        LouisHub.Options[flag]  = elemObj
-
-        return elemObj
-    end
-
-    for _, n in ipairs({"Button", "Toggle", "Checkbox", "Slider", "RangeSlider", "NumberStepper"}) do
-        Utils.WrapLockableControl(Section, Section.container, n)
-    end
-end
-
-LouisHub._BaseControlMethods = applyBaseControlMethods
-
---[[
-╔══════════════════════════════════════════════════════════════════════╗
-                              LouisHub
-                Master UI Suite: LouisHub Engine V4.0
-         PART 3B: CONTROLS 7–12 (INPUT, TAG INPUT, RADIO GROUP,
-               DROPDOWN, COLOR PICKER, KEYBIND)
-╚══════════════════════════════════════════════════════════════════════╝
-]]
-
--- ══════════════════════════════════════════════════════════════
---  SECTION 20: CONTROL INJECTION (CONTROLS 7 TO 12)
--- ══════════════════════════════════════════════════════════════
-local function applyAdvancedControlMethods(Section)
-    local order = 100
-    local function nextOrder() order = order + 1; return order end
-
-    local function createHeader(height, text, labelWidth, offsetX, mode, targetContainer)
-        local row = Utils.Row(targetContainer, height, nextOrder(), Theme.Row)
-        LouisHub:Register(row, "BackgroundColor3", "Row")
-        Utils.Hover(row, row)
-        if mode ~= "fixed" then
-            local lblD = Utils.Text({
-                Parent = row, Text = text,
-                Size = UDim2.new(labelWidth or 1, offsetX or -46, 1, 0),
-                TextSize = 11, Wrapped = true,
-            })
-            if mode ~= "manual" then Utils.MakeDynamicRow(row, lblD, height, 5) end
-            return row, lblD
-        end
-        local lbl = Utils.Text({
-            Parent = row, Text = text,
-            Size = UDim2.new(labelWidth or 1, offsetX or -46, 1, 0),
-            TextSize = 11, Truncate = true,
+        local elemObj = CreateUnifiedElement({
+            Row = row,
+            Instance = row,
+            Methods = {
+                Set = function(v, fireCallback)
+                    local num = tonumber(v)
+                    if not num then return end
+                    value = roundVal(num)
+                    LouisHub.Flags[flag] = value
+                    textBox.Text = formatText(value)
+                    if fireCallback and cfg.Callback then
+                        executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "control", value)
+                    end
+                end,
+                Get = function() return value end,
+            }
         })
-        return row, lbl
-    end
-
-    -- 7. INPUT
-    function Section:Input(cfg)
-        cfg = cfg or {}
-        validateCallback("Input", cfg)
-        local flag  = cfg.Flag or cfg.Text or cfg.Name or ("Input_" .. tostring(math.random(1e5, 1e6)))
-        local value = cfg.CurrentValue or cfg.Default or ""
-        LouisHub.Flags[flag] = value
-
-        local isArea = cfg.Type == "textarea"
-        local areaHeight = math.clamp(cfg.Height or 70, 45, 300)
-        local targetCont = self:_GetTargetContainer("Input", cfg)
-
-        local row, lblInput
-        if isArea then
-            row, lblInput = createHeader(26, cfg.Text or cfg.Name or "Input", nil, nil, "manual", targetCont)
-            lblInput.AutomaticSize = Enum.AutomaticSize.Y
-            lblInput.Size = UDim2.new(1, -16, 0, 0)
-            lblInput.Position = UDim2.new(0, 6, 0, 6)
-        else
-            row, lblInput = createHeader(26, cfg.Text or cfg.Name or "Input", 0.45, nil, nil, targetCont)
-        end
-
-        addTextTooltip(row, cfg.Text or cfg.Name or "Input", cfg.Tooltip or cfg.Description, lblInput)
-        registerSearchable(row, cfg.Text or cfg.Name or "Input", cfg.VisibleIf)
-
-        local box = Instance.new("TextBox")
-        box.Size             = UDim2.new(0.5, -10, 0, 20)
-        box.Position         = UDim2.new(0.5, 2, 0.5, -10)
-        box.BackgroundColor3 = Theme.Input
-        box.BackgroundTransparency = 0.4
-        box.Text             = tostring(value)
-        box.PlaceholderText  = cfg.Placeholder or cfg.PlaceholderText or ""
-        box.TextColor3       = Theme.Highlight
-        box.Font             = Enum.Font.Gotham
-        box.TextSize         = 11
-        box.ClearTextOnFocus = (cfg.ClearTextOnFocus or cfg.RemoveTextAfterFocusLost) or false
-        box.BorderSizePixel  = 0
-        box.Parent           = row
-        Utils.Corner(box, 4)
-        LouisHub:Register(box, "BackgroundColor3", "Input")
-        LouisHub:Register(box, "TextColor3", "Highlight")
-
-        if isArea then
-            box.Size             = UDim2.new(1, -12, 0, areaHeight)
-            box.Position         = UDim2.new(0, 6, 0, 24)
-            box.MultiLine        = true
-            box.TextWrapped      = true
-            box.TextXAlignment   = Enum.TextXAlignment.Left
-            box.TextYAlignment   = Enum.TextYAlignment.Top
-            local padArea = Instance.new("UIPadding")
-            padArea.PaddingLeft, padArea.PaddingRight = UDim.new(0, 6), UDim.new(0, 6)
-            padArea.PaddingTop, padArea.PaddingBottom = UDim.new(0, 4), UDim.new(0, 4)
-            padArea.Parent = box
-
-            row.Size = UDim2.new(1, 0, 0, areaHeight + 30)
-        end
-
-        local maxChars = cfg.MaxCharacters or (isArea and 2000 or 200)
-
-        box:GetPropertyChangedSignal("Text"):Connect(function()
-            if cfg.Numeric then
-                local txt = box.Text
-                local parts = string.split(txt, ".")
-                if #parts > 2 then
-                    box.Text = parts[1] .. "." .. table.concat(parts, "", 2)
-                else
-                    box.Text = txt:gsub("[^%d%.%-]", "")
-                end
-            end
-            if #box.Text > maxChars then
-                box.Text = box.Text:sub(1, maxChars)
-                Utils.FlashFeedback(box, false, Theme.Input)
-            end
-            if not cfg.Enter and not isArea then
-                value = box.Text
-                LouisHub.Flags[flag] = value
-                if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or "Input", value) end
-            end
-        end)
-
-        box.FocusLost:Connect(function(enterPressed)
-            local cleanTxt = box.Text:gsub("^%s+", ""):gsub("%s+$", "")
-            local finalVal = cleanTxt
-
-            if cfg.Type == "number" or cfg.Numeric then
-                local n = tonumber(cleanTxt)
-                if not n and cleanTxt ~= "" then
-                    box.Text = tostring(value)
-                    Utils.FlashFeedback(box, false, Theme.Input)
-                    return
-                elseif n then
-                    if cfg.Min and n < cfg.Min then n = cfg.Min end
-                    if cfg.Max and n > cfg.Max then n = cfg.Max end
-                    finalVal = n
-                end
-            elseif cfg.Type == "pattern" and (cfg.Regex or cfg.Pattern) then
-                local pat = (cfg.Regex or cfg.Pattern):gsub("^%^", ""):gsub("%$$", "")
-                if not cleanTxt:match("^" .. pat .. "$") then
-                    box.Text = tostring(value)
-                    Utils.FlashFeedback(box, false, Theme.Input)
-                    return
-                end
-            end
-
-            value = finalVal
-            box.Text = tostring(finalVal)
-            LouisHub.Flags[flag] = value
-            if (enterPressed or isArea or cfg.Enter) and cfg.Callback then
-                executeWithFallback(cfg.Callback, cfg.Text or "Input", value)
-            end
-        end)
-
-        local elemObj = {
-            Set = function(selfParam, v, fireCallback)
-                local val = (selfParam == selfParam and fireCallback ~= nil) and v or (type(selfParam) == "string" and selfParam or (type(selfParam) == "number" and tostring(selfParam) or v))
-                value = val
-                box.Text = tostring(val or "")
-                LouisHub.Flags[flag] = val
-                local fire = (type(fireCallback) == "boolean") and fireCallback or false
-                if fire and cfg.Callback then
-                    executeWithFallback(cfg.Callback, cfg.Text or "Input", val)
-                end
-            end,
-            Get = function() return value end,
-            Destroy = function()
-                pcall(function() row:Destroy() end)
-                LouisHub.Elements[flag] = nil
-                LouisHub.Options[flag]  = nil
-            end,
-            CurrentValue = value,
-        }
+        Utils.AttachLock(elemObj, row)
         LouisHub.Elements[flag] = elemObj
         LouisHub.Options[flag]  = elemObj
-
         return elemObj
     end
 
-    -- 8. TAG INPUT
+    -- TAG INPUT CONTROL
     function Section:TagInput(cfg)
         cfg = cfg or {}
         validateCallback("TagInput", cfg)
-        local flag     = cfg.Flag or cfg.Text or ("TagInput_" .. tostring(math.random(1e5, 1e6)))
-        local maxChars = cfg.MaxCharacters or 200
+        local flag     = cfg.Flag or cfg.Text or cfg.Texto or ("TagInput_" .. tostring(math.random(1e5, 1e6)))
         local maxTags  = cfg.MaxTags
 
         local tags = {}
         local tagsLower = {}
-        for _, t in ipairs(cfg.Default or {}) do
+        local initialTags = _pendingConfig[flag] or cfg.Default or cfg.Defecto or {}
+        _pendingConfig[flag] = nil
+
+        for _, t in ipairs(initialTags) do
             if type(t) == "string" then
                 local clean = t:gsub("^%s+", ""):gsub("%s+$", "")
                 if clean ~= "" and not tagsLower[clean:lower()] then
@@ -7134,14 +8878,14 @@ local function applyAdvancedControlMethods(Section)
         local row = Utils.Row(targetCont, 56, nextOrder(), Theme.Row)
         LouisHub:Register(row, "BackgroundColor3", "Row")
         Utils.Hover(row, row)
-        registerSearchable(row, cfg.Text or "TagInput", cfg.VisibleIf)
+        registerSearchable(row, cfg.Text or cfg.Texto or "TagInput", cfg.VisibleIf or cfg.VisibleSi)
 
         local lblTitle = Utils.Text({
-            Parent = row, Text = cfg.Text or "TagInput",
+            Parent = row, Text = cfg.Text or cfg.Texto or "TagInput",
             Size = UDim2.new(1, -12, 0, 16), Position = UDim2.new(0, 6, 0, 4),
             Truncate = true, TextSize = 11,
         })
-        addTextTooltip(row, cfg.Text or "TagInput", cfg.Tooltip, lblTitle)
+        addTextTooltip(row, cfg.Text or cfg.Texto or "TagInput", cfg.Tooltip, lblTitle)
 
         local chipsContainer = Utils.Frame({
             Parent = row, Size = UDim2.new(1, -12, 0, 0),
@@ -7194,7 +8938,7 @@ local function applyAdvancedControlMethods(Section)
             if hadChange then
                 LouisHub.Flags[flag] = currentTags()
                 drawChips()
-                if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or "control", currentTags()) end
+                if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "control", currentTags()) end
             end
             box.Text = ""
         end
@@ -7245,61 +8989,59 @@ local function applyAdvancedControlMethods(Section)
                     tagsLower[t:lower()] = nil
                     LouisHub.Flags[flag] = currentTags()
                     drawChips()
-                    if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or "control", currentTags()) end
+                    if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "control", currentTags()) end
                 end)
             end
             task.defer(reLayoutChips)
         end
         drawChips()
 
-        local elemObj = {
-            Set = function(selfParam, v, fireCallback)
-                local val = (selfParam == selfParam and fireCallback ~= nil) and v or (type(selfParam) == "table" and selfParam or v)
-                if type(val) ~= "table" then return end
-                tags = {}
-                tagsLower = {}
-                for _, t in ipairs(val) do
-                    if type(t) == "string" and not tagsLower[t:lower()] then
-                        table.insert(tags, t)
-                        tagsLower[t:lower()] = true
+        local elemObj = CreateUnifiedElement({
+            Row = row,
+            Instance = row,
+            Methods = {
+                Set = function(v, fireCallback)
+                    if type(v) ~= "table" then return end
+                    tags = {}
+                    tagsLower = {}
+                    for _, t in ipairs(v) do
+                        if type(t) == "string" and not tagsLower[t:lower()] then
+                            table.insert(tags, t)
+                            tagsLower[t:lower()] = true
+                        end
                     end
-                end
-                LouisHub.Flags[flag] = currentTags()
-                drawChips()
-                local fire = (type(fireCallback) == "boolean") and fireCallback or false
-                if fire and cfg.Callback then
-                    executeWithFallback(cfg.Callback, cfg.Text or "control", currentTags())
-                end
-            end,
-            Get = function() return currentTags() end,
-            Destroy = function()
-                pcall(function() row:Destroy() end)
-                LouisHub.Elements[flag] = nil
-                LouisHub.Options[flag]  = nil
-            end,
-        }
+                    LouisHub.Flags[flag] = currentTags()
+                    drawChips()
+                    if fireCallback and cfg.Callback then
+                        executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "control", currentTags())
+                    end
+                end,
+                Get = function() return currentTags() end,
+            }
+        })
+        Utils.AttachLock(elemObj, row)
         LouisHub.Elements[flag] = elemObj
         LouisHub.Options[flag]  = elemObj
-
         return elemObj
     end
 
-    -- 9. RADIO GROUP
+    -- RADIO GROUP CONTROL
     function Section:RadioGroup(cfg)
         cfg = cfg or {}
         validateCallback("RadioGroup", cfg)
-        local flag     = cfg.Flag or cfg.Text or ("RadioGroup_" .. tostring(math.random(1e5, 1e6)))
-        local options  = cfg.Options or {}
-        local value    = cfg.Default or options[1]
+        local flag     = cfg.Flag or cfg.Text or cfg.Texto or ("RadioGroup_" .. tostring(math.random(1e5, 1e6)))
+        local options  = cfg.Options or cfg.Opciones or {}
+        local value    = _pendingConfig[flag] or cfg.Default or cfg.Defecto or options[1]
+        _pendingConfig[flag] = nil
         LouisHub.Flags[flag] = value
 
         local targetCont = self:_GetTargetContainer("RadioGroup", cfg)
-        local row, lbl = createHeader(50, cfg.Text or "RadioGroup", nil, nil, "manual", targetCont)
+        local row, lbl = createHeader(50, cfg.Text or cfg.Texto or "RadioGroup", nil, nil, "manual", targetCont)
         lbl.AutomaticSize = Enum.AutomaticSize.Y
         lbl.Size = UDim2.new(1, -16, 0, 0)
         lbl.Position = UDim2.new(0, 6, 0, 6)
-        addTextTooltip(row, cfg.Text or "RadioGroup", cfg.Tooltip, lbl)
-        registerSearchable(row, cfg.Text or "RadioGroup", cfg.VisibleIf)
+        addTextTooltip(row, cfg.Text or cfg.Texto or "RadioGroup", cfg.Tooltip, lbl)
+        registerSearchable(row, cfg.Text or cfg.Texto or "RadioGroup", cfg.VisibleIf or cfg.VisibleSi)
 
         local btnRow = Utils.Frame({
             Parent = row, Size = UDim2.new(1, -12, 0, 22),
@@ -7329,7 +9071,7 @@ local function applyAdvancedControlMethods(Section)
             value = opt
             LouisHub.Flags[flag] = value
             refreshVisual()
-            if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or "RadioGroup", value) end
+            if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "RadioGroup", value) end
         end
 
         for i, opt in ipairs(options) do
@@ -7343,7 +9085,7 @@ local function applyAdvancedControlMethods(Section)
             LouisHub:Register(btn, "BackgroundColor3", function()
                 return (opt == value) and Theme.Accent or Theme.Input
             end)
-            Utils.Text({
+            local lblBtn = Utils.Text({
                 Parent = btn, Text = tostring(opt), Size = UDim2.new(1, 0, 1, 0),
                 Alignment = Enum.TextXAlignment.Center, TextSize = 10.5, Truncate = true,
                 Color = isActive and Theme.Text or Theme.TextDark,
@@ -7352,1628 +9094,326 @@ local function applyAdvancedControlMethods(Section)
             opButtons[opt] = btn
         end
 
-        local elemObj = {
-            Set = function(selfParam, v, fireCallback)
-                local val = (selfParam == selfParam and fireCallback ~= nil) and v or (selfParam ~= nil and selfParam or v)
-                value = val
-                LouisHub.Flags[flag] = val
-                refreshVisual()
-                local fire = (type(fireCallback) == "boolean") and fireCallback or false
-                if fire and cfg.Callback then
-                    executeWithFallback(cfg.Callback, cfg.Text or "RadioGroup", val)
-                end
-            end,
-            Get = function() return value end,
-            Destroy = function()
-                pcall(function() row:Destroy() end)
-                LouisHub.Elements[flag] = nil
-                LouisHub.Options[flag]  = nil
-            end,
-        }
-        LouisHub.Elements[flag] = elemObj
-        LouisHub.Options[flag]  = elemObj
-
-        return elemObj
-    end
-
-    -- 10. DROPDOWN
-    function Section:Dropdown(cfg)
-        cfg = cfg or {}
-        validateCallback("Dropdown", cfg)
-        local flag     = cfg.Flag or cfg.Text or cfg.Name or ("Dropdown_" .. tostring(math.random(1e5, 1e6)))
-        local options  = cloneTable(cfg.Options or {})
-        local multi    = (cfg.MultipleOptions ~= nil and cfg.MultipleOptions) or (cfg.Multi ~= nil and cfg.Multi) or false
-        local selection = {}
-
-        if multi then
-            local def = cfg.CurrentOption or cfg.Default or {}
-            if type(def) == "table" then
-                if #def > 0 then
-                    for _, v in ipairs(def) do selection[v] = true end
-                else
-                    for k, v in pairs(def) do if v then selection[k] = true end end
-                end
-            elseif type(def) == "string" then
-                selection[def] = true
-            end
-        else
-            local def = cfg.CurrentOption or cfg.Default
-            if type(def) == "table" then def = def[1] end
-            if def then selection[def] = true end
-        end
-
-        LouisHub.Flags[flag] = multi and cloneTable(selection) or (cfg.CurrentOption or cfg.Default)
-
-        local SEARCH_THRESHOLD = 8
-        local hasSearch       = #options > SEARCH_THRESHOLD
-        local ROW_HEIGHT      = 26
-        local SEARCH_HEIGHT   = hasSearch and 22 or 0
-        local MAX_LIST_HEIGHT = 132
-
-        local targetCont = self:_GetTargetContainer("Dropdown", cfg)
-        local frame = Utils.Frame({
-            Parent = targetCont, Size = UDim2.new(1, 0, 0, ROW_HEIGHT),
-            Color = Theme.Row, Order = nextOrder(), Clips = true,
-            Transparency = 0.5,
-        })
-        LouisHub:Register(frame, "BackgroundColor3", "Row")
-        registerSearchable(frame, cfg.Text or cfg.Name or "Dropdown", cfg.VisibleIf)
-
-        local headerBtn = Utils.BaseButton({Parent = frame, Size = UDim2.new(1, 0, 0, ROW_HEIGHT)})
-        Utils.Hover(headerBtn, frame)
-
-        local lbl = Utils.Text({
-            Parent = frame, Size = UDim2.new(1, -26, 0, ROW_HEIGHT),
-            Truncate = true, TextSize = 11,
-        })
-        local arrow = Instance.new("ImageLabel")
-        arrow.BackgroundTransparency = 1
-        arrow.Image = "rbxassetid://83472139709682"
-        arrow.Size = UDim2.new(0, 9, 0, 9)
-        arrow.AnchorPoint = Vector2.new(0.5, 0.5)
-        arrow.Position = UDim2.new(1, -12, 0.5, 0)
-        arrow.Parent = frame
-        LouisHub:Register(arrow, "ImageColor3", "Text")
-
-        addTextTooltip(frame, cfg.Text or cfg.Name or "Dropdown", cfg.Tooltip or cfg.Description, lbl)
-
-        local searchBox = nil
-        if hasSearch then
-            searchBox = Instance.new("TextBox")
-            searchBox.Size             = UDim2.new(1, -8, 0, SEARCH_HEIGHT - 2)
-            searchBox.Position         = UDim2.new(0, 4, 0, ROW_HEIGHT + 2)
-            searchBox.BackgroundColor3 = Theme.Input
-            searchBox.BackgroundTransparency = 0.4
-            searchBox.PlaceholderText  = "🔍 Search option..."
-            searchBox.Text             = ""
-            searchBox.TextColor3       = Theme.Text
-            searchBox.Font             = Enum.Font.Gotham
-            searchBox.TextSize         = 10
-            searchBox.BorderSizePixel  = 0
-            searchBox.ClearTextOnFocus = false
-            searchBox.Parent           = frame
-            Utils.Corner(searchBox, 4)
-            LouisHub:Register(searchBox, "BackgroundColor3", "Input")
-            LouisHub:Register(searchBox, "TextColor3", "Text")
-        end
-
-        local optionsScroll = Instance.new("ScrollingFrame")
-        optionsScroll.Name                   = "DropdownScroll"
-        optionsScroll.BackgroundTransparency = 1
-        optionsScroll.BorderSizePixel        = 0
-        optionsScroll.ScrollBarThickness     = 2
-        optionsScroll.ScrollBarImageColor3   = Theme.Accent
-        optionsScroll.CanvasSize             = UDim2.new(0, 0, 0, #options * 22)
-        optionsScroll.AutomaticCanvasSize    = Enum.AutomaticSize.None
-        optionsScroll.Size                   = UDim2.new(1, 0, 0, math.min(#options * 22, MAX_LIST_HEIGHT))
-        optionsScroll.Position               = UDim2.new(0, 0, 0, ROW_HEIGHT + SEARCH_HEIGHT + 2)
-        optionsScroll.Parent                 = frame
-
-        local layoutOp = Instance.new("UIListLayout")
-        layoutOp.Padding = UDim.new(0, 2)
-        layoutOp.SortOrder = Enum.SortOrder.LayoutOrder
-        layoutOp.Parent = optionsScroll
-
-        local function getDisplayText()
-            if multi then
-                local names = {}
-                for _, o in ipairs(options) do
-                    if selection[o] then table.insert(names, tostring(o)) end
-                end
-                return #names > 0 and table.concat(names, ", ") or "None"
-            end
-            for k, v in pairs(selection) do if v then return tostring(k) end end
-            return "None"
-        end
-
-        local function updateLabel()
-            lbl.Text = (cfg.Text or cfg.Name or "Dropdown") .. ": " .. getDisplayText()
-        end
-        updateLabel()
-
-        local opButtons = {}
-        local toggleDropdown
-
-        local function pickOpt(opt, keepOpen)
-            if multi then
-                selection[opt] = not selection[opt] or nil
-            else
-                selection = {[opt] = true}
-            end
-            local res = multi and cloneTable(selection) or opt
-            LouisHub.Flags[flag] = res
-            for o, btn in pairs(opButtons) do
-                btn.BackgroundColor3 = selection[o] and Theme.Accent or Theme.Input
-                btn.BackgroundTransparency = selection[o] and 0.2 or 0.5
-            end
-            updateLabel()
-            if cfg.Callback then executeWithFallback(cfg.Callback, cfg.Text or cfg.Name or "Dropdown", res) end
-            if not multi and not keepOpen and toggleDropdown then toggleDropdown() end
-        end
-
-        local function buildOptionButtons()
-            for _, child in ipairs(optionsScroll:GetChildren()) do
-                if child:IsA("GuiObject") and not child:IsA("UIListLayout") then
-                    child:Destroy()
-                end
-            end
-            opButtons = {}
-
-            optionsScroll.CanvasSize = UDim2.new(0, 0, 0, #options * 22)
-            optionsScroll.Size = UDim2.new(1, 0, 0, math.min(#options * 22, MAX_LIST_HEIGHT))
-
-            for i, opt in ipairs(options) do
-                local btn = Utils.BaseButton({
-                    Parent = optionsScroll, Size = UDim2.new(1, -8, 0, 20),
-                    Position = UDim2.new(0, 4, 0, 0),
-                    Color = selection[opt] and Theme.Accent or Theme.Input,
-                    Transparency = selection[opt] and 0.2 or 0.5,
-                    Order = i, Radius = 4,
-                })
-                LouisHub:Register(btn, "BackgroundColor3", function()
-                    return selection[opt] and Theme.Accent or Theme.Input
-                end)
-                Utils.Text({
-                    Parent = btn, Text = tostring(opt), Size = UDim2.new(1, -8, 1, 0),
-                    Position = UDim2.new(0, 6, 0, 0), TextSize = 10.5, Truncate = true,
-                })
-                Utils.ReliableClick(btn, function() pickOpt(opt) end)
-                opButtons[opt] = btn
-            end
-        end
-
-        buildOptionButtons()
-
-        toggleDropdown = makeExpandable(frame, ROW_HEIGHT, function()
-            local contentH = math.min(#options * 22, MAX_LIST_HEIGHT)
-            return ROW_HEIGHT + SEARCH_HEIGHT + contentH + 6
-        end, function()
-            Utils.Tween(arrow, {Rotation = 0}, LouisHub.Motion.Expand)
-            if searchBox then searchBox.Visible = false end
-        end)
-
-        Utils.ReliableClick(headerBtn, function()
-            local openState = toggleDropdown()
-            Utils.Tween(arrow, {Rotation = openState and 180 or 0}, LouisHub.Motion.Expand)
-            if searchBox then searchBox.Visible = openState end
-        end)
-
-        if searchBox then
-            searchBox:GetPropertyChangedSignal("Text"):Connect(function()
-                local t = searchBox.Text:lower()
-                for opt, btn in pairs(opButtons) do
-                    btn.Visible = (t == "") or (tostring(opt):lower():find(t, 1, true) ~= nil)
-                end
-            end)
-        end
-
-        local function getSelectedValue()
-            if multi then return cloneTable(selection) end
-            for k, v in pairs(selection) do if v then return k end end
-            return nil
-        end
-
-        local function updateOptionsExternal(selfParam, newOpts)
-            local opts = (selfParam == selfParam and newOpts ~= nil) and newOpts or (type(selfParam) == "table" and selfParam or newOpts)
-            options = cloneTable(opts or {})
-            buildOptionButtons()
-            updateLabel()
-        end
-
-        local elemObj = {
-            Set = function(selfParam, v, fireCallback)
-                local val = (selfParam == selfParam and fireCallback ~= nil) and v or (selfParam ~= nil and selfParam or v)
-                if multi then
-                    selection = {}
-                    if type(val) == "table" then
-                        if #val > 0 then
-                            for _, item in ipairs(val) do selection[item] = true end
-                        else
-                            for item, isSel in pairs(val) do if isSel then selection[item] = true end end
-                        end
-                    elseif type(val) == "string" then
-                        selection[val] = true
-                    end
-                else
-                    selection = {[val] = true}
-                end
-                for opt, btn in pairs(opButtons) do
-                    btn.BackgroundColor3 = selection[opt] and Theme.Accent or Theme.Input
-                    btn.BackgroundTransparency = selection[opt] and 0.2 or 0.5
-                end
-                updateLabel()
-                LouisHub.Flags[flag] = multi and cloneTable(selection) or val
-                local fire = (type(fireCallback) == "boolean") and fireCallback or false
-                if fire and cfg.Callback then
-                    executeWithFallback(cfg.Callback, cfg.Text or cfg.Name or "Dropdown", LouisHub.Flags[flag])
-                end
-            end,
-            SetOptions    = updateOptionsExternal,
-            Refresh       = updateOptionsExternal,
-            Get           = getSelectedValue,
-            Destroy = function()
-                pcall(function() frame:Destroy() end)
-                LouisHub.Elements[flag] = nil
-                LouisHub.Options[flag]  = nil
-            end,
-            CurrentOption = multi and cloneTable(selection) or (cfg.CurrentOption or cfg.Default),
-        }
-        elemObj.SetOption = elemObj.Set
-
-        LouisHub.Elements[flag] = elemObj
-        LouisHub.Options[flag]  = elemObj
-
-        return elemObj
-    end
-
-    -- 11. COLOR PICKER
-    function Section:ColorPicker(cfg, flagArg)
-        cfg = cfg or {}
-        validateCallback("ColorPicker", cfg)
-        local flag         = cfg.Flag or flagArg or cfg.Text or cfg.Name or ("Color_" .. tostring(math.random(1e5, 1e6)))
-        local currentColor = cfg.Color or cfg.Default or Color3.fromRGB(255, 255, 255)
-        LouisHub.Flags[flag] = currentColor
-
-        local ROW_HEIGHT = 26
-        local targetCont = self:_GetTargetContainer("ColorPicker", cfg)
-        local frame = Utils.Frame({
-            Parent = targetCont, Size = UDim2.new(1, 0, 0, ROW_HEIGHT),
-            Color = Theme.Row, Order = nextOrder(), Clips = true,
-            Transparency = 0.5,
-        })
-        LouisHub:Register(frame, "BackgroundColor3", "Row")
-
-        local headerBtn = Utils.BaseButton({Parent = frame, Size = UDim2.new(1, 0, 0, ROW_HEIGHT)})
-        Utils.Hover(headerBtn, frame)
-
-        local lbl = Utils.Text({
-            Parent = frame, Text = cfg.Text or cfg.Name or "Color",
-            Size = UDim2.new(1, -44, 0, ROW_HEIGHT), Truncate = true, TextSize = 11,
-        })
-        local swatch = Utils.Frame({
-            Parent = frame, Size = UDim2.new(0, 24, 0, 14),
-            Position = UDim2.new(1, -30, 0.5, -7),
-            Color = currentColor, Radius = 3, Transparency = 0,
-        })
-
-        addTextTooltip(frame, cfg.Text or cfg.Name or "Color", cfg.Tooltip, lbl, -44)
-        registerSearchable(frame, cfg.Text or cfg.Name or "Color", cfg.VisibleIf)
-
-        local panel = Utils.Frame({
-            Parent = frame, Size = UDim2.new(1, -12, 0, 105),
-            Position = UDim2.new(0, 6, 0, ROW_HEIGHT + 2), Transparency = 1,
-            Radius = false, Border = false,
-        })
-        local layoutP = Instance.new("UIListLayout")
-        layoutP.Padding = UDim.new(0, 4)
-        layoutP.Parent = panel
-
-        local r = currentColor.R * 255
-        local g = currentColor.G * 255
-        local b = currentColor.B * 255
-        local setVisualR, setVisualG, setVisualB
-        local hexBox = nil
-
-        local elemObj = {}
-
-        local function toHex(c)
-            return string.format("#%02X%02X%02X", math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5))
-        end
-
-        local function triggerColorCallback(c)
-            local cb = elemObj.Callback or cfg.Callback
-            if cb then executeWithFallback(cb, cfg.Text or cfg.Name or "ColorPicker", c) end
-        end
-
-        local function updateColor()
-            local newC = Color3.fromRGB(math.floor(r + 0.5), math.floor(g + 0.5), math.floor(b + 0.5))
-            currentColor = newC
-            swatch.BackgroundColor3 = newC
-            if hexBox then hexBox.Text = toHex(newC) end
-            LouisHub.Flags[flag] = newC
-            elemObj.Color = newC
-            triggerColorCallback(newC)
-        end
-
-        local function makeChannelRow(chName, orderIdx, getV, setV)
-            local rowC = Utils.Frame({
-                Parent = panel, Size = UDim2.new(1, 0, 0, 18),
-                Order = orderIdx, Transparency = 1, Radius = false, Border = false,
-            })
-            Utils.Text({
-                Parent = rowC, Text = chName, Size = UDim2.new(0, 14, 1, 0),
-                Font = Enum.Font.GothamBold, TextSize = 9.5,
-            })
-            local _, _, sv = createDraggableBar({
-                Parent = rowC, Size = UDim2.new(1, -16, 0, 6),
-                Position = UDim2.new(0, 16, 0.5, -3),
-                Min = 0, Max = 255, Value = getV(),
-                OnChange = function(v) setV(v); updateColor() end,
-            })
-            return sv
-        end
-
-        setVisualR = makeChannelRow("R", 1, function() return r end, function(v) r = v end)
-        setVisualG = makeChannelRow("G", 2, function() return g end, function(v) g = v end)
-        setVisualB = makeChannelRow("B", 3, function() return b end, function(v) b = v end)
-
-        local rowHex = Utils.Frame({
-            Parent = panel, Size = UDim2.new(1, 0, 0, 18),
-            Order = 4, Transparency = 1, Radius = false, Border = false,
-        })
-        Utils.Text({
-            Parent = rowHex, Text = "Hex", Size = UDim2.new(0, 24, 1, 0),
-            Font = Enum.Font.GothamBold, TextSize = 9.5,
-        })
-        hexBox = Instance.new("TextBox")
-        hexBox.Size = UDim2.new(1, -26, 1, 0)
-        hexBox.Position = UDim2.new(0, 26, 0, 0)
-        hexBox.BackgroundColor3 = Theme.Input
-        hexBox.BackgroundTransparency = 0.4
-        hexBox.BorderSizePixel = 0
-        hexBox.Font = Enum.Font.Code
-        hexBox.TextSize = 10.5
-        hexBox.TextColor3 = Theme.Text
-        hexBox.Text = toHex(currentColor)
-        hexBox.ClearTextOnFocus = false
-        hexBox.Parent = rowHex
-        Utils.Corner(hexBox, 3)
-        LouisHub:Register(hexBox, "BackgroundColor3", "Input")
-        LouisHub:Register(hexBox, "TextColor3", "Text")
-
-        hexBox.FocusLost:Connect(function()
-            local cleanHex = hexBox.Text:gsub("^#", ""):gsub("%s", "")
-            if #cleanHex == 6 and not cleanHex:match("%X") then
-                r = tonumber(cleanHex:sub(1,2), 16)
-                g = tonumber(cleanHex:sub(3,4), 16)
-                b = tonumber(cleanHex:sub(5,6), 16)
-                setVisualR(r); setVisualG(g); setVisualB(b)
-                updateColor()
-                Utils.FlashFeedback(hexBox, true, Theme.Input)
-            else
-                hexBox.Text = toHex(currentColor)
-                Utils.FlashFeedback(hexBox, false, Theme.Input)
-            end
-        end)
-
-        local togglePicker = makeExpandable(frame, ROW_HEIGHT, function() return ROW_HEIGHT + 112 end)
-        Utils.ReliableClick(headerBtn, function() togglePicker() end)
-
-        elemObj.Set = function(selfParam, v, fireCallback)
-            local val = (selfParam == selfParam and fireCallback ~= nil) and v or (typeof(selfParam) == "Color3" and selfParam or v)
-            if typeof(val) ~= "Color3" then return end
-            currentColor = val
-            r = val.R * 255; g = val.G * 255; b = val.B * 255
-            swatch.BackgroundColor3 = val
-            if hexBox then hexBox.Text = toHex(val) end
-            LouisHub.Flags[flag] = val
-            elemObj.Color = val
-            setVisualR(r); setVisualG(g); setVisualB(b)
-            local fire = (type(fireCallback) == "boolean") and fireCallback or false
-            if fire then
-                triggerColorCallback(val)
-            end
-        end
-
-        elemObj.Get = function() return currentColor end
-        elemObj.Destroy = function()
-            pcall(function() frame:Destroy() end)
-            LouisHub.Elements[flag] = nil
-            LouisHub.Options[flag]  = nil
-        end
-        elemObj.Color = currentColor
-        elemObj.Callback = cfg.Callback
-
-        LouisHub.Elements[flag] = elemObj
-        LouisHub.Options[flag]  = elemObj
-
-        return elemObj
-    end
-
-    -- 12. KEYBIND
-    function Section:Keybind(cfg)
-        cfg = cfg or {}
-        validateCallback("Keybind", cfg)
-        local flag     = cfg.Flag or cfg.Text or cfg.Name or ("Keybind_" .. tostring(math.random(1e5, 1e6)))
-        local withMods = cfg.WithModifiers or false
-        local defaultK = cfg.CurrentBind or cfg.Default or (withMods and {KeyCode = Enum.KeyCode.Unknown} or Enum.KeyCode.Unknown)
-        if withMods and typeof(defaultK) ~= "table" then
-            defaultK = {KeyCode = defaultK, Ctrl = false, Shift = false, Alt = false}
-        end
-        local value = defaultK
-        local isWaiting = false
-        local connCapture = nil
-        local _assignedThisFrame = false
-        local waitToken = 0
-        LouisHub.Flags[flag] = value
-
-        local conflictEntry = { flag = flag, text = cfg.Text or cfg.Name or "Keybind" }
-        conflictEntry.GetValue = function() return value end
-        table.insert(_registeredKeybinds, conflictEntry)
-
-        local function formatKeyText(v)
-            if not withMods then
-                return (v == Enum.KeyCode.Unknown) and "None" or v.Name
-            end
-            if typeof(v) ~= "table" then v = {KeyCode = v, Ctrl = false, Shift = false, Alt = false} end
-            if not v or v.KeyCode == Enum.KeyCode.Unknown then return "None" end
-            local parts = {}
-            if v.Ctrl then table.insert(parts, "Ctrl") end
-            if v.Shift then table.insert(parts, "Shift") end
-            if v.Alt then table.insert(parts, "Alt") end
-            table.insert(parts, v.KeyCode.Name)
-            return table.concat(parts, "+")
-        end
-
-        local targetCont = self:_GetTargetContainer("Keybind", cfg)
-        local row, lbl = createHeader(26, cfg.Text or cfg.Name or "Keybind", 1, -64, nil, targetCont)
-        addTextTooltip(row, cfg.Text or cfg.Name or "Keybind", cfg.Tooltip or cfg.Description, lbl)
-        registerSearchable(row, cfg.Text or cfg.Name or "Keybind", cfg.VisibleIf)
-
-        local btnKey = Utils.BaseButton({
-            Parent = row, Size = UDim2.new(0, 54, 0, 18),
-            Position = UDim2.new(1, -58, 0.5, -9),
-            Color = Theme.Input, Transparency = 0.4, Radius = 4,
-        })
-        LouisHub:Register(btnKey, "BackgroundColor3", "Input")
-        Utils.Hover(btnKey, btnKey)
-
-        local lblKey = Utils.Text({
-            Parent = btnKey, Text = formatKeyText(value),
-            Alignment = Enum.TextXAlignment.Center,
-            Color = Theme.Highlight, TextSize = 9.5, Truncate = true,
-        })
-        LouisHub:Register(lblKey, "TextColor3", "Highlight")
-
-        local function updateKey(keyVal, fire)
-            value = keyVal
-            LouisHub.Flags[flag] = keyVal
-            lblKey.Text = formatKeyText(keyVal)
-            if fire and cfg.Callback then
-                executeWithFallback(cfg.Callback, cfg.Text or cfg.Name or "Keybind", keyVal)
-            end
-        end
-
-        local function cancelListening()
-            if not isWaiting then return end
-            isWaiting = false
-            btnKey.BackgroundColor3 = Theme.Input
-            lblKey.Text = formatKeyText(value)
-            if connCapture then
-                connCapture:Disconnect()
-                connCapture = nil
-            end
-        end
-
-        LouisHub:RegisterConnection(UserInputService.InputBegan:Connect(function(input, processed)
-            if processed or isWaiting or _assignedThisFrame then return end
-            local k, c, s, a = _decomposeKey(value)
-            if k == Enum.KeyCode.Unknown or input.KeyCode ~= k then return end
-
-            if withMods then
-                local ctrlDown = UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
-                local shiftDown = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
-                local altDown = UserInputService:IsKeyDown(Enum.KeyCode.LeftAlt) or UserInputService:IsKeyDown(Enum.KeyCode.RightAlt)
-                if ctrlDown ~= c or shiftDown ~= s or altDown ~= a then return end
-            end
-
-            if cfg.Callback then
-                executeWithFallback(cfg.Callback, cfg.Text or cfg.Name or "Keybind", value)
-            end
-        end))
-
-        Utils.ReliableClick(btnKey, function()
-            if isWaiting then
-                cancelListening()
-                return
-            end
-            isWaiting = true
-            lblKey.Text = "..."
-            btnKey.BackgroundColor3 = Theme.Accent
-
-            waitToken = waitToken + 1
-            local myToken = waitToken
-
-            task.delay(5, function()
-                if isWaiting and waitToken == myToken then
-                    cancelListening()
-                end
-            end)
-
-            connCapture = UserInputService.InputBegan:Connect(function(input, processed)
-                if processed or not isWaiting then return end
-                if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode ~= Enum.KeyCode.Unknown then
-                    local isModKey = withMods and (
-                        input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.RightControl or
-                        input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.RightShift or
-                        input.KeyCode == Enum.KeyCode.LeftAlt or input.KeyCode == Enum.KeyCode.RightAlt
-                    )
-                    if isModKey then return end
-
-                    isWaiting = false
-                    btnKey.BackgroundColor3 = Theme.Input
-                    if connCapture then connCapture:Disconnect(); connCapture = nil end
-
-                    local newVal = withMods and {
-                        KeyCode = input.KeyCode,
-                        Ctrl = UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl),
-                        Shift = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift),
-                        Alt = UserInputService:IsKeyDown(Enum.KeyCode.LeftAlt) or UserInputService:IsKeyDown(Enum.KeyCode.RightAlt),
-                    } or input.KeyCode
-
-                    _checkKeybindConflict(conflictEntry, newVal)
-                    _assignedThisFrame = true
-                    task.defer(function() _assignedThisFrame = false end)
-                    updateKey(newVal, false)
-                end
-            end)
-            LouisHub:RegisterConnection(connCapture)
-        end)
-
-        local elemObj = {
-            Set = function(selfParam, v, fireCallback)
-                local val = (selfParam == selfParam and fireCallback ~= nil) and v or (selfParam ~= nil and selfParam or v)
-                local fire = (type(fireCallback) == "boolean") and fireCallback or false
-                updateKey(val, fire)
-            end,
-            Get = function() return value end,
-            Destroy = function()
-                pcall(function() row:Destroy() end)
-                local idx = table.find(_registeredKeybinds, conflictEntry)
-                if idx then table.remove(_registeredKeybinds, idx) end
-                LouisHub.Elements[flag] = nil
-                LouisHub.Options[flag]  = nil
-            end,
-            CurrentBind = value,
-        }
-        LouisHub.Elements[flag] = elemObj
-        LouisHub.Options[flag]  = elemObj
-
-        return elemObj
-    end
-
-    for _, n in ipairs({"Input", "TagInput", "RadioGroup", "Dropdown", "ColorPicker", "Keybind"}) do
-        Utils.WrapLockableControl(Section, Section.container, n)
-    end
-end
-
-LouisHub._AdvancedControlMethods = applyAdvancedControlMethods
-
---[[
-╔══════════════════════════════════════════════════════════════════════╗
-                              LouisHub
-                Master UI Suite: LouisHub Engine V4.0
-         PART 3C: CONTROLS 13–18 (LABEL, PROGRESS, PARAGRAPH,
-           DIVIDER, IMAGE, GROUP) & INJECTOR FINALIZATION
-╚══════════════════════════════════════════════════════════════════════╝
-]]
-
--- ══════════════════════════════════════════════════════════════
---  SECTION 21: CONDITIONAL VISIBILITY & AUTO-UPDATING LABELS
--- ══════════════════════════════════════════════════════════════
-local _autoUpdateLabels = setmetatable({}, {__mode = "k"})
-
-table.insert(_G.LouisHub_Instance.Connections, RunService.Heartbeat:Connect(function()
-    local now = os.clock()
-    for entry, cfg in pairs(_autoUpdateLabels) do
-        if not (entry and entry.Parent) then
-            _autoUpdateLabels[entry] = nil
-        elseif now >= cfg.nextTime then
-            cfg.nextTime = now + cfg.interval
-            local ok, newVal = pcall(cfg.fn)
-            if ok and newVal ~= nil then
-                pcall(cfg.apply, newVal)
-            elseif not ok then
-                LouisHub:_LogError("Label auto-update ('" .. tostring(cfg.flag) .. "')", newVal)
-            end
-        end
-    end
-end))
-
-local visibilityRegistry = setmetatable({}, {__mode = "k"})
-
-function checkConditionalVisibility(row)
-    local condition = visibilityRegistry[row]
-    if not condition then return true end
-    local ok, res = pcall(condition)
-    if not ok then
-        LouisHub:_LogError("VisibleIf", res)
-        return true
-    end
-    return res and true or false
-end
-
-function registerConditionalVisibility(row, visibleIf)
-    if type(visibleIf) ~= "function" or not row then return end
-    visibilityRegistry[row] = visibleIf
-    row.Visible = checkConditionalVisibility(row)
-end
-
-local function reevaluateConditionalVisibility()
-    for row in pairs(visibilityRegistry) do
-        if row and row.Parent then
-            row.Visible = checkConditionalVisibility(row)
-        end
-    end
-end
-
-table.insert(_G.LouisHub_Instance.Connections, LouisHub.Events.FlagChanged:Connect(reevaluateConditionalVisibility))
-
--- ══════════════════════════════════════════════════════════════
---  SECTION 22: CONTROL INJECTION (CONTROLS 13 TO 18)
--- ══════════════════════════════════════════════════════════════
-local function applyExtraControlMethods(Section)
-    local order = 200
-    local function nextOrder() order = order + 1; return order end
-
-    local function createHeader(height, text, labelWidth, offsetX, mode, targetContainer)
-        local row = Utils.Row(targetContainer, height, nextOrder(), Theme.Row)
-        LouisHub:Register(row, "BackgroundColor3", "Row")
-        Utils.Hover(row, row)
-        if mode ~= "fixed" then
-            local lblD = Utils.Text({
-                Parent = row, Text = text,
-                Size = UDim2.new(labelWidth or 1, offsetX or -46, 1, 0),
-                TextSize = 11, Wrapped = true,
-            })
-            if mode ~= "manual" then Utils.MakeDynamicRow(row, lblD, height, 5) end
-            return row, lblD
-        end
-        local lbl = Utils.Text({
-            Parent = row, Text = text,
-            Size = UDim2.new(labelWidth or 1, offsetX or -46, 1, 0),
-            TextSize = 11, Truncate = true,
-        })
-        return row, lbl
-    end
-
-    -- 13. LABEL
-    function Section:Label(cfg)
-        cfg = cfg or {}
-        local flag  = cfg.Flag or ("Label_" .. tostring(math.random(1e5, 1e6)))
-        local isPlainLabel = (cfg.Value == nil)
-        local valueStr = tostring(cfg.Value or "")
-        _nonPersistentFlags[flag] = true
-
-        local targetCont = self:_GetTargetContainer("Label", cfg)
-        local row, lbl = createHeader(26, cfg.Text or "Label", 1, isPlainLabel and -16 or -100, nil, targetCont)
-        addTextTooltip(row, cfg.Text or "Label", cfg.Tooltip or cfg.Description, lbl)
-        registerSearchable(row, cfg.Text or "Label", cfg.VisibleIf)
-
-        local lblValue = nil
-        if not isPlainLabel then
-            lblValue = Utils.Text({
-                Parent = row, Text = valueStr, Size = UDim2.new(0, 90, 1, 0),
-                Position = UDim2.new(1, -96, 0, 0), Alignment = Enum.TextXAlignment.Right,
-                Color = Theme.AccentLight, TextSize = 10.5, Truncate = true,
-            })
-            LouisHub:Register(lblValue, "TextColor3", "AccentLight")
-        end
-
-        local function setVal(v)
-            local txt = tostring(v)
-            _realFlags[flag] = v
-            if isPlainLabel then
-                lbl.Text = txt
-            else
-                valueStr = txt
-                if lblValue then lblValue.Text = valueStr end
-            end
-        end
-
-        _realFlags[flag] = cfg.Value or cfg.Text
-        local elemObj = {
-            Set = function(selfParam, v)
-                local targetV = (selfParam == selfParam and v ~= nil) and v or selfParam
-                setVal(targetV)
-            end,
-            Get = function() return isPlainLabel and lbl.Text or valueStr end,
-            Destroy = function()
-                pcall(function() row:Destroy() end)
-                if lblValue then _autoUpdateLabels[lblValue] = nil end
-                _autoUpdateLabels[lbl] = nil
-                LouisHub.Elements[flag] = nil
-                LouisHub.Options[flag]  = nil
-            end,
+        local elemObj = CreateUnifiedElement({
             Row = row,
-        }
-        elemObj.SetText = elemObj.Set
-
-        LouisHub.Elements[flag] = elemObj
-
-        local updateInterval = tonumber(cfg.Every)
-        local updateFn = cfg.Update
-        if updateInterval and updateFn and type(updateFn) == "function" and updateInterval >= 0.05 then
-            _autoUpdateLabels[lblValue or lbl] = {
-                interval = updateInterval,
-                fn = updateFn,
-                apply = setVal,
-                flag = flag,
-                nextTime = os.clock() + updateInterval,
-            }
-        end
-
-        return elemObj
-    end
-
-    -- 14. PROGRESS
-    function Section:Progress(cfg)
-        cfg = cfg or {}
-        local flag  = cfg.Flag or ("Progress_" .. tostring(math.random(1e5, 1e6)))
-        local value = math.clamp(cfg.Default or 0, 0, 100)
-        _nonPersistentFlags[flag] = true
-        _realFlags[flag] = value
-
-        local targetCont = self:_GetTargetContainer("Progress", cfg)
-        local row, lbl = createHeader(34, cfg.Text or "Progress", nil, nil, "fixed", targetCont)
-        lbl.Size = UDim2.new(1, -55, 0, 16)
-        lbl.Position = UDim2.new(0, 6, 0, 2)
-        addTextTooltip(row, cfg.Text or "Progress", cfg.Tooltip, lbl)
-        registerSearchable(row, cfg.Text or "Progress", cfg.VisibleIf)
-
-        local lblVal = Utils.Text({
-            Parent = row, Text = math.floor(value) .. "%",
-            Size = UDim2.new(0, 45, 0, 16), Position = UDim2.new(1, -50, 0, 2),
-            Alignment = Enum.TextXAlignment.Right, Color = Theme.AccentLight, TextSize = 10,
-        })
-        LouisHub:Register(lblVal, "TextColor3", "AccentLight")
-
-        local bg = Utils.Frame({
-            Parent = row, Size = UDim2.new(1, -12, 0, 5),
-            Position = UDim2.new(0, 6, 0, 22), Color = Theme.Input,
-            Radius = 3, Transparency = 0.4,
-        })
-        LouisHub:Register(bg, "BackgroundColor3", "Input")
-
-        local fill = Utils.Frame({
-            Parent = bg, Size = UDim2.new(value / 100, 0, 1, 0),
-            Color = Theme.Accent, Radius = 3, Transparency = 0, Border = false,
-        })
-        LouisHub:Register(fill, "BackgroundColor3", "Accent")
-        Utils.AccentGradient(fill)
-
-        local function setProgress(v)
-            if type(v) ~= "number" then return end
-            value = math.clamp(v, 0, 100)
-            Utils.Tween(fill, {Size = UDim2.new(value / 100, 0, 1, 0)}, LouisHub.Motion.Expand)
-            lblVal.Text = math.floor(value + 0.5) .. "%"
-            _realFlags[flag] = value
-        end
-
-        local elemObj = {
-            Set = function(selfParam, v)
-                local targetV = (selfParam == selfParam and v ~= nil) and v or selfParam
-                setProgress(targetV)
-            end,
-            Get = function() return value end,
-            Destroy = function()
-                pcall(function() row:Destroy() end)
-                LouisHub.Elements[flag] = nil
-                LouisHub.Options[flag]  = nil
-            end,
-        }
-        LouisHub.Elements[flag] = elemObj
-        return elemObj
-    end
-
-    -- 15. PARAGRAPH
-    function Section:Paragraph(cfg)
-        cfg = cfg or {}
-        local targetCont = self:_GetTargetContainer("Paragraph", cfg)
-        local frame = Utils.Frame({
-            Parent = targetCont, Size = UDim2.new(1, 0, 0, 0),
-            Color = Theme.Row, Order = nextOrder(), Radius = 6,
-            Transparency = 0.5,
-        })
-        frame.AutomaticSize = Enum.AutomaticSize.Y
-        LouisHub:Register(frame, "BackgroundColor3", "Row")
-
-        local pad = Instance.new("UIPadding")
-        pad.PaddingTop, pad.PaddingBottom = UDim.new(0, 6), UDim.new(0, 6)
-        pad.PaddingLeft, pad.PaddingRight = UDim.new(0, 8), UDim.new(0, 8)
-        pad.Parent = frame
-
-        local layout = Instance.new("UIListLayout")
-        layout.Padding = UDim.new(0, 2)
-        layout.SortOrder = Enum.SortOrder.LayoutOrder
-        layout.Parent = frame
-
-        local titleParam = cfg.Title
-        local lblTit = nil
-        if titleParam then
-            lblTit = Utils.Text({
-                Parent = frame, Text = titleParam,
-                Size = UDim2.new(1, 0, 0, 0), Font = Enum.Font.GothamBold,
-                TextSize = 11, Color = Theme.Highlight, Wrapped = true, Order = 1,
-            })
-            lblTit.AutomaticSize = Enum.AutomaticSize.Y
-            LouisHub:Register(lblTit, "TextColor3", "Highlight")
-        end
-
-        local bodyParam = cfg.Content or cfg.Text or ""
-        local lblBody = Utils.Text({
-            Parent = frame, Text = bodyParam,
-            Size = UDim2.new(1, 0, 0, 0), TextSize = 10.5, Color = Theme.Text,
-            Wrapped = true, Order = 2,
-        })
-        lblBody.AutomaticSize = Enum.AutomaticSize.Y
-        LouisHub:Register(lblBody, "TextColor3", "Text")
-
-        local elemObj = {
-            Instance = frame,
-            Set = function(selfParam, v)
-                local targetV = (selfParam == selfParam and v ~= nil) and v or selfParam
-                if type(targetV) == "table" then
-                    if targetV.Title and lblTit then lblTit.Text = tostring(targetV.Title) end
-                    if targetV.Content then lblBody.Text = tostring(targetV.Content) end
-                else
-                    lblBody.Text = tostring(targetV)
-                end
-            end,
-            Get = function()
-                return {
-                    Title = lblTit and lblTit.Text or nil,
-                    Content = lblBody.Text
-                }
-            end,
-            Destroy = function()
-                pcall(function() frame:Destroy() end)
-            end,
-        }
-        return elemObj
-    end
-
-    -- 16. DIVIDER
-    function Section:Divider(cfg)
-        cfg = cfg or {}
-        local textParam = cfg.Text
-        local targetCont = self:_GetTargetContainer("Divider", cfg)
-        local row = Utils.Frame({
-            Parent = targetCont, Size = UDim2.new(1, 0, 0, textParam and 24 or 12),
-            Order = nextOrder(), Transparency = 1, Radius = false, Border = false,
-        })
-        if textParam then
-            Utils.Text({
-                Parent = row, Text = tostring(textParam),
-                Size = UDim2.new(1, -12, 0, 14), Position = UDim2.new(0, 6, 0, 0),
-                Font = Enum.Font.GothamBold, TextSize = 9.5, ThemeColor = "AccentLight",
-            })
-        end
-        local line = Utils.Frame({
-            Parent = row, Size = UDim2.new(1, 0, 0, 1.5),
-            Position = UDim2.new(0, 0, 1, -2), Color = Theme.Accent,
-            Radius = false, Border = false, Transparency = 0.3,
-        })
-        LouisHub:Register(line, "BackgroundColor3", "Accent")
-        Utils.AccentGradient(line)
-
-        return {
             Instance = row,
-            Destroy = function()
-                pcall(function() row:Destroy() end)
-            end,
-        }
-    end
-
-    -- 17. IMAGE
-    function Section:Image(cfg)
-        cfg = cfg or {}
-        local targetCont = self:_GetTargetContainer("Image", cfg)
-        local fixedHeight = math.clamp(cfg.Height or 90, 30, 350)
-        local row = Utils.Frame({
-            Parent = targetCont, Size = UDim2.new(1, 0, 0, fixedHeight),
-            Transparency = 1, Order = nextOrder(), Radius = false, Border = false,
-        })
-        local img = Instance.new("ImageLabel")
-        img.BackgroundColor3 = Theme.Row
-        img.BackgroundTransparency = 0.5
-        img.BorderSizePixel = 0
-
-        local initialUrl = type(cfg.Url) == "string" and cfg.Url or ""
-        if initialUrl ~= "" and not string.find(initialUrl, "rbxassetid://") and not string.find(initialUrl, "http") then
-            initialUrl = "rbxassetid://" .. initialUrl
-        end
-        img.Image = initialUrl
-        img.ScaleType = Enum.ScaleType.Fit
-        img.Size = UDim2.new(1, 0, 1, 0)
-        img.Parent = row
-        Utils.Corner(img, 6)
-        LouisHub:Register(img, "BackgroundColor3", "Row")
-
-        return {
-            Set = function(selfParam, u)
-                local targetU = (selfParam == selfParam and u ~= nil) and u or selfParam
-                if type(targetU) == "string" then
-                    if not string.find(targetU, "rbxassetid://") and not string.find(targetU, "http") then
-                        targetU = "rbxassetid://" .. targetU
+            Methods = {
+                Set = function(v, fireCallback)
+                    value = v
+                    LouisHub.Flags[flag] = v
+                    refreshVisual()
+                    if fireCallback and cfg.Callback then
+                        executeWithFallback(cfg.Callback, cfg.Text or cfg.Texto or "RadioGroup", v)
                     end
-                    img.Image = targetU
-                end
-            end,
-            Get = function() return img.Image end,
-            Instance = img,
-            Destroy = function()
-                pcall(function() row:Destroy() end)
-            end,
-        }
-    end
-
-    -- 18. GROUP
-    function Section:Group(cfg)
-        cfg = cfg or {}
-        local targetCont = self:_GetTargetContainer("Group", cfg)
-        local GROUP_H = 26
-        local rowG = Utils.Frame({
-            Parent = targetCont, Size = UDim2.new(1, 0, 0, GROUP_H),
-            Transparency = 1, Order = nextOrder(), Radius = false, Border = false,
+                end,
+                Get = function() return value end,
+            }
         })
-        local layG = Instance.new("UIListLayout")
-        layG.FillDirection = Enum.FillDirection.Horizontal
-        layG.Padding = UDim.new(0, 6)
-        layG.Parent = rowG
-
-        local groupButtons = {}
-        local groupObj = {
-            Instance = rowG,
-            Destroy = function()
-                pcall(function() rowG:Destroy() end)
-            end,
-        }
-
-        function groupObj:Button(cfgB)
-            local btn = Section:Button(cfgB)
-            btn.Parent = rowG
-            table.insert(groupButtons, btn)
-            local tot = #groupButtons
-            for _, b in ipairs(groupButtons) do
-                b.Size = UDim2.new(1 / tot, -math.ceil(6 * (tot - 1) / tot), 1, 0)
-            end
-            return btn
-        end
-
-        return groupObj
+        Utils.AttachLock(elemObj, row)
+        LouisHub.Elements[flag] = elemObj
+        LouisHub.Options[flag]  = elemObj
+        return elemObj
     end
 
-    -- BUILD HELPER
-    function Section:Build(list)
-        local res = {}
-        for i, def in ipairs(list or {}) do
-            local ctrlType = def.Control or def.Type
-            if ctrlType and type(self[ctrlType]) == "function" then
-                local obj = self[ctrlType](self, def)
-                res[i] = obj
-                if def.Flag then res[def.Flag] = obj end
-            end
-        end
-        return res
-    end
-
-    for _, n in ipairs({"Label", "Progress", "Paragraph", "Divider", "Image", "Group"}) do
-        Utils.WrapLockableControl(Section, Section.container, n)
-    end
+    -- SECTION METHOD ALIASES (1:1 Alan & Luna di level Section)
+    Section.CreateButton      = Section.Button
+    Section.CreateToggle      = Section.Toggle
+    Section.CreateCheckbox    = Section.Checkbox
+    Section.CreateSlider      = Section.Slider
+    Section.CreateRangeSlider = Section.RangeSlider
+    Section.CreateInput       = Section.Input
+    Section.CreateDropdown    = Section.Dropdown
+    Section.CreateColorPicker = Section.ColorPicker
+    Section.CreateKeybind     = Section.Keybind
+    Section.CreateBind        = Section.Keybind
+    Section.CreateLabel       = Section.Label
+    Section.CreateParagraph   = Section.Paragraph
+    Section.CreateDivider     = Section.Divider
+    AttachAutoAlias(Section)
 end
 
--- ══════════════════════════════════════════════════════════════
---  SECTION 23: INJECTOR COMPOSER & HOOK DISPATCH
--- ══════════════════════════════════════════════════════════════
-LouisHub:_SetControlInjector(function(Section)
-    if LouisHub._BaseControlMethods then
-        LouisHub._BaseControlMethods(Section)
-    end
-    if LouisHub._AdvancedControlMethods then
-        LouisHub._AdvancedControlMethods(Section)
-    end
-    applyExtraControlMethods(Section)
-end)
-
---[[
-╔══════════════════════════════════════════════════════════════════════╗
-                              LouisHub
-                Master UI Suite: LouisHub Engine V4.0
-         PART 4A: UNDO/REDO ENGINE & UNIFIED SAVE MANAGER V3
-╚══════════════════════════════════════════════════════════════════════╝
-]]
-
--- ══════════════════════════════════════════════════════════════
---  SECTION 24: UNDO / REDO HISTORY ENGINE
--- ══════════════════════════════════════════════════════════════
-LouisHub._history = { undo = {}, redo = {}, lastValues = {}, pause = 0 }
-local MAX_HISTORY = 50
-
-local function notifyHistoryChanged()
-    local h = LouisHub._history
-    LouisHub.Events.HistoryChanged:Fire(#h.undo, #h.redo)
-end
-
-table.insert(_G.LouisHub_Instance.Connections, LouisHub.Events.FlagChanged:Connect(function(flag, val)
-    local h = LouisHub._history
-    local prev = h.lastValues[flag]
-    h.lastValues[flag] = copyDefault(val)
-    if h.pause > 0 or _uiFlags[flag] or _nonPersistentFlags[flag] then return end
-    local elem = LouisHub.Elements[flag]
-    if prev == nil and elem then prev = elem._default end
-    if prev == nil then return end
-    if type(val) ~= "table" and prev == val then return end
-
-    local now = os.clock()
-    local lastEntry = h.undo[#h.undo]
-    if lastEntry and #lastEntry.changes == 1 and lastEntry.changes[1].flag == flag and now - lastEntry.t < 0.6 then
-        lastEntry.changes[1].after = copyDefault(val)
-        lastEntry.t = now
-        if type(val) ~= "table" and lastEntry.changes[1].before == val then
-            table.remove(h.undo)
-        end
-    elseif lastEntry and now - lastEntry.t < 0.05 then
-        table.insert(lastEntry.changes, { flag = flag, before = copyDefault(prev), after = copyDefault(val) })
-        lastEntry.t = now
-    else
-        table.insert(h.undo, {
-            t = now,
-            changes = { { flag = flag, before = copyDefault(prev), after = copyDefault(val) } },
-        })
-        if #h.undo > MAX_HISTORY then table.remove(h.undo, 1) end
-    end
-    h.redo = {}
-    notifyHistoryChanged()
-end))
-
-local function applyHistoryChanges(changes, useBefore, inReverse)
-    local h = LouisHub._history
-    h.pause = h.pause + 1
-    local total = #changes
-    for i = 1, total do
-        local c = changes[inReverse and (total - i + 1) or i]
-        local elem = LouisHub.Elements[c.flag]
-        if elem and type(elem.Set) == "function" then
-            local source = useBefore and c.before or c.after
-            local val = copyDefault(source)
-            pcall(function() elem:Set(val, true) end)
-            h.lastValues[c.flag] = copyDefault(val)
-        end
-    end
-    h.pause = h.pause - 1
-end
-
-function LouisHub:Undo()
-    local h = self._history
-    local entry = table.remove(h.undo)
-    if not entry then return false end
-    applyHistoryChanges(entry.changes, true, true)
-    table.insert(h.redo, entry)
-    notifyHistoryChanged()
-    return true, entry
-end
-
-function LouisHub:Redo()
-    local h = self._history
-    local entry = table.remove(h.redo)
-    if not entry then return false end
-    applyHistoryChanges(entry.changes, false, false)
-    table.insert(h.undo, entry)
-    notifyHistoryChanged()
-    return true, entry
-end
-
-function LouisHub:CanUndo() return #self._history.undo > 0 end
-function LouisHub:CanRedo() return #self._history.redo > 0 end
-function LouisHub:GetHistory() return { Undo = #self._history.undo, Redo = #self._history.redo } end
-
-function LouisHub:ClearHistory()
-    local h = self._history
-    h.undo, h.redo, h.lastValues = {}, {}, {}
-    for flag, elem in pairs(self.Elements) do
-        if type(elem) == "table" and type(elem.Get) == "function" then
-            local ok, val = pcall(function() return elem:Get() end)
-            if ok and val ~= nil then h.lastValues[flag] = copyDefault(val) end
-        end
-    end
-    notifyHistoryChanged()
-end
-
-function LouisHub:DescribeChange(entry)
-    if type(entry) ~= "table" or not entry.changes or #entry.changes == 0 then return "" end
-    local first = entry.changes[1]
-    local function text(v)
-        if type(v) == "table" then return "[table]" end
-        return tostring(v)
-    end
-    local summary = tostring(first.flag) .. ": " .. text(first.before) .. " -> " .. text(first.after)
-    if #entry.changes > 1 then summary = summary .. " (+" .. (#entry.changes - 1) .. ")" end
-    return summary
-end
-
--- ══════════════════════════════════════════════════════════════
---  SECTION 25: UNIFIED SAVE MANAGER V3 (PROFILE SYSTEM)
--- ══════════════════════════════════════════════════════════════
-local SAVE_FORMAT_VERSION = 3
-_G.LouisHub_NavigationState = { cat = nil, tab = nil, sub = nil }
-
-local function isColor3Type(v) return typeof and typeof(v) == "Color3" end
-local function isEnumType(v) return typeof and typeof(v) == "EnumItem" end
-
-local function packFlagsForSaving(flags, uiOnly)
-    local result = {
-        __version = SAVE_FORMAT_VERSION,
-        __navigation = _G.LouisHub_NavigationState,
-        __baseTheme = LouisHub.CurrentBaseTheme,
-        __accentPreset = LouisHub.CurrentAccentPreset,
+-- FIX #1 & #11: Injeksi universal ke objek Tab. Setiap pemanggilan Tab:CreateX atau Tab:X
+-- secara konsisten dan otomatis diteruskan ke `self._currentSection` milik Tab tersebut!
+local function injectUniversalTabMethods(TabObj)
+    local methodNames = {
+        "Button", "CreateButton",
+        "Toggle", "CreateToggle",
+        "Checkbox", "CreateCheckbox",
+        "Slider", "CreateSlider",
+        "RangeSlider", "CreateRangeSlider",
+        "NumberStepper",
+        "Input", "CreateInput",
+        "TagInput",
+        "RadioGroup",
+        "Dropdown", "CreateDropdown",
+        "ColorPicker", "CreateColorPicker",
+        "Keybind", "CreateKeybind", "CreateBind",
+        "Label", "CreateLabel",
+        "Progress",
+        "Paragraph", "CreateParagraph",
+        "Divider", "CreateDivider",
+        "Image",
     }
-    for key, val in pairs(flags) do
-        local skip = _nonPersistentFlags[key]
-            or (uiOnly and not _uiFlags[key])
-            or (not uiOnly and _uiFlags[key])
-        if not skip then
-            if isColor3Type(val) then
-                result[key] = {
-                    __color3 = true,
-                    R = math.floor(val.R * 255 + 0.5),
-                    G = math.floor(val.G * 255 + 0.5),
-                    B = math.floor(val.B * 255 + 0.5),
-                }
-            elseif isEnumType(val) then
-                result[key] = {
-                    __enum = true,
-                    EnumType = tostring(val.EnumType),
-                    Name = val.Name,
-                }
-            elseif type(val) == "table" and isEnumType(val.KeyCode) then
-                result[key] = {
-                    __keybindMods = true,
-                    KeyCode = val.KeyCode.Name,
-                    Ctrl = val.Ctrl or false,
-                    Shift = val.Shift or false,
-                    Alt = val.Alt or false,
-                }
-            else
-                result[key] = val
+
+    for _, mName in ipairs(methodNames) do
+        TabObj[mName] = function(selfTab, ...)
+            if not selfTab._currentSection then
+                selfTab:CreateSection("")
             end
-        end
-    end
-    return result
-end
-
-local function unpackLoadedValue(val)
-    if type(val) == "table" and val.__color3 then
-        return Color3.fromRGB(val.R or 0, val.G or 0, val.B or 0)
-    end
-    if type(val) == "table" and val.__enum then
-        local ok, enumItem = pcall(function() return Enum[val.EnumType][val.Name] end)
-        return (ok and enumItem) or Enum.KeyCode.Unknown
-    end
-    if type(val) == "table" and val.__keybindMods then
-        local ok, keyCode = pcall(function() return Enum.KeyCode[val.KeyCode] end)
-        return {
-            KeyCode = ok and keyCode or Enum.KeyCode.Unknown,
-            Ctrl = val.Ctrl or false,
-            Shift = val.Shift or false,
-            Alt = val.Alt or false,
-        }
-    end
-    return val
-end
-
-local function _checkConflictsOnLoad()
-    if #_registeredKeybinds < 2 then return end
-    local bySignature = {}
-    for _, entry in ipairs(_registeredKeybinds) do
-        local ok, val = pcall(function() return entry:GetValue() end)
-        if ok then
-            local k, c, s, a = _decomposeKey(val)
-            if k and k ~= Enum.KeyCode.Unknown then
-                local sig = k.Name .. "|" .. tostring(c) .. "|" .. tostring(s) .. "|" .. tostring(a)
-                bySignature[sig] = bySignature[sig] or {
-                    k = k, c = c, s = s, a = a, texts = {},
-                }
-                table.insert(bySignature[sig].texts, entry.text or "Keybind")
-            end
+            local sec = selfTab._currentSection
+            return sec[mName](sec, ...)
         end
     end
 
-    for _, group in pairs(bySignature) do
-        if #group.texts >= 2 then
-            pcall(function()
-                LouisHub:Notify({
-                    Title    = "⚠️ Keybind Conflict",
-                    Content  = "'" .. _formatKey(group.k, group.c, group.s, group.a) .. "' is assigned to: " .. table.concat(group.texts, ", "),
-                    Duration = 6,
-                    Icon     = "warning"
-                })
-            end)
-        end
-    end
+    AttachAutoAlias(TabObj)
 end
-
-local function prepareLoadedData(data)
-    if type(data) ~= "table" then return {} end
-
-    if type(data.objects) == "table" then
-        local migrated = {}
-        for _, obj in ipairs(data.objects) do
-            if obj.flag then
-                if obj.state ~= nil then
-                    migrated[obj.flag] = obj.state
-                elseif obj.value ~= nil then
-                    migrated[obj.flag] = tonumber(obj.value) or obj.value
-                elseif obj.text ~= nil then
-                    migrated[obj.flag] = obj.text
-                elseif obj.color ~= nil then
-                    if type(obj.color) == "string" and obj.color:sub(1,1) == "#" then
-                        local r = tonumber(obj.color:sub(2, 3), 16) or 255
-                        local g = tonumber(obj.color:sub(4, 5), 16) or 255
-                        local b = tonumber(obj.color:sub(6, 7), 16) or 255
-                        migrated[obj.flag] = Color3.fromRGB(r, g, b)
-                    end
-                end
-            end
-        end
-        return migrated
-    end
-
-    local sourceVersion = tonumber(data.__version) or 1
-    data.__version = nil
-
-    if data.__navigation and type(data.__navigation) == "table" then
-        _G.LouisHub_NavigationState = data.__navigation
-        data.__navigation = nil
-    end
-
-    if data.__baseTheme and LouisHub.ThemeManager then
-        pcall(function() LouisHub.ThemeManager:ApplyBaseTheme(data.__baseTheme) end)
-        data.__baseTheme = nil
-    end
-
-    if data.__accentPreset and LouisHub.ThemeManager and data.__accentPreset ~= "Default" then
-        pcall(function() LouisHub.ThemeManager:ApplyAccentGradient(data.__accentPreset) end)
-        data.__accentPreset = nil
-    end
-
-    if sourceVersion > SAVE_FORMAT_VERSION then
-        pcall(function()
-            LouisHub:Notify({
-                Title    = "⚠️ Newer Config",
-                Content  = "The config file is from a newer version (v" .. sourceVersion .. ").",
-                Duration = 5,
-                Icon     = "warning"
-            })
-        end)
-    end
-
-    return data
-end
-
-LouisHub.SaveManager = {}
-local SM = LouisHub.SaveManager
-SM.Folder = "LouisHub/Config"
-SM.FolderUI = "LouisHub/Config/_ui"
-
-function SM:Configure(folder)
-    self.Folder = folder or self.Folder
-end
-
-local function ensureFolder()
-    if not (isFilesystemAvailable() and type(isfolder) == "function" and type(makefolder) == "function") then return end
-    local path = ""
-    for part in SM.Folder:gmatch("[^/]+") do
-        path = path == "" and part or (path .. "/" .. part)
-        if not isfolder(path) then pcall(makefolder, path) end
-    end
-end
-
-local function ensureFolderUI()
-    if not (isFilesystemAvailable() and type(isfolder) == "function" and type(makefolder) == "function") then return end
-    local path = ""
-    for part in SM.FolderUI:gmatch("[^/]+") do
-        path = path == "" and part or (path .. "/" .. part)
-        if not isfolder(path) then pcall(makefolder, path) end
-    end
-end
-
-function SM:Save(name)
-    name = name or "default"
-    if not isFilesystemAvailable() then
-        LouisHub:Notify({Title = "SaveManager", Content = "Executor missing filesystem support.", Duration = 4, Icon = "warning"})
-        return false, "No filesystem support"
-    end
-    ensureFolder()
-    local path = SM.Folder .. "/" .. name .. ".json"
-    local hadChanges = true
-    local ok, err = pcall(function()
-        local data = packFlagsForSaving(_realFlags)
-        local json = HttpService:JSONEncode(data)
-        if type(isfile) == "function" and isfile(path) then
-            local okRead, existingJson = pcall(readfile, path)
-            if okRead and existingJson == json then
-                hadChanges = false
-            end
-        end
-        if hadChanges then writefile(path, json) end
-    end)
-    if ok then
-        if hadChanges then
-            LouisHub:Notify({Title = "Config Saved", Content = name .. ".json", Duration = 3, Icon = "check_circle"})
-        else
-            LouisHub:Notify({Title = "✅ Already Up to Date", Content = name .. ".json has no changes", Duration = 3, Icon = "info"})
-        end
-    else
-        LouisHub:_LogError("SaveManager:Save", err)
-        LouisHub:Notify({Title = "❌ Save Error", Content = tostring(err):sub(1, 100), Duration = 5, Icon = "warning"})
-    end
-    return ok, err
-end
-
-function SM:SaveSilent(name)
-    name = name or "default"
-    if not isFilesystemAvailable() then return false end
-    ensureFolder()
-    local ok, err = pcall(function()
-        local data = packFlagsForSaving(_realFlags)
-        local json = HttpService:JSONEncode(data)
-        writefile(SM.Folder .. "/" .. name .. ".json", json)
-    end)
-    if not ok then LouisHub:_LogError("SaveManager:SaveSilent", err) end
-    return ok
-end
-
-function SM:Load(name)
-    name = name or "default"
-    local path = SM.Folder .. "/" .. name .. ".json"
-    if not (isFilesystemAvailable() and type(isfile) == "function" and isfile(path)) then return false end
-
-    local okRead, content = pcall(readfile, path)
-    if not okRead then
-        LouisHub:_LogError("SaveManager:Load (read)", content)
-        return false
-    end
-    local okDecode, data = pcall(function() return HttpService:JSONDecode(content) end)
-    if not okDecode then
-        LouisHub:_LogError("SaveManager:Load (JSONDecode)", data)
-        return false
-    end
-    data = prepareLoadedData(data)
-
-    _isLoadingFromFile = true
-    local okLoop, errLoop = pcall(function()
-        for flag, rawVal in pairs(data) do
-            local val = unpackLoadedValue(rawVal)
-            LouisHub.Flags[flag] = val
-            if LouisHub.Elements[flag] then
-                pcall(function() LouisHub.Elements[flag]:Set(val, true) end)
-            end
-        end
-    end)
-    _isLoadingFromFile = false
-    if not okLoop then LouisHub:_LogError("SaveManager:Load (loop)", errLoop) end
-    _checkConflictsOnLoad()
-    LouisHub:Notify({Title = "Config Loaded", Content = name .. ".json", Duration = 3, Icon = "check_circle"})
-    return true
-end
-
-function SM:LoadSilent(name)
-    name = name or "default"
-    local path = SM.Folder .. "/" .. name .. ".json"
-    if not (isFilesystemAvailable() and type(isfile) == "function" and isfile(path)) then return false end
-
-    local okRead, content = pcall(readfile, path)
-    if not okRead then return false end
-    local okDecode, data = pcall(function() return HttpService:JSONDecode(content) end)
-    if not okDecode then return false end
-    data = prepareLoadedData(data)
-
-    _isLoadingFromFile = true
-    pcall(function()
-        for flag, rawVal in pairs(data) do
-            local val = unpackLoadedValue(rawVal)
-            LouisHub.Flags[flag] = val
-            if LouisHub.Elements[flag] then
-                pcall(function() LouisHub.Elements[flag]:Set(val, false) end)
-            end
-        end
-    end)
-    _isLoadingFromFile = false
-    _checkConflictsOnLoad()
-    return true
-end
-
-function SM:List()
-    if not (isFilesystemAvailable() and type(listfiles) == "function") then return {} end
-    ensureFolder()
-    local result = {}
-    local ok, files = pcall(listfiles, SM.Folder)
-    if ok then
-        for _, path in ipairs(files) do
-            local name = path:match("([^/\\]+)%.json$")
-            if name and not name:match("^_") then table.insert(result, name) end
-        end
-    end
-    return result
-end
-
-function SM:Delete(name)
-    if type(name) ~= "string" or name == "" then return false end
-    if not (isFilesystemAvailable() and type(isfile) == "function" and type(delfile) == "function") then return false end
-    local path = SM.Folder .. "/" .. name .. ".json"
-    if not isfile(path) then return false end
-    return (pcall(delfile, path))
-end
-
-function SM:SwitchProfile(window, name)
-    if type(window) ~= "table" or type(name) ~= "string" or name == "" then return false end
-    if window.ConfigName then self:SaveSilent(window.ConfigName) end
-    window.ConfigName = name
-    local exists = self:Load(name)
-    if not exists then
-        LouisHub:Notify({Title = "New Profile", Content = "'" .. name .. "' has no previous save", Duration = 3, Icon = "info"})
-    end
-    return true
-end
-
-local function validProfileName(name)
-    if type(name) ~= "string" then return false end
-    local clean = name:match("^%s*(.-)%s*$")
-    if clean == "" or #clean > 60 or clean:find('[/\\:*?"<>|%c]') then return false end
-    return true, clean
-end
-
-function SM:Duplicate(source, destination)
-    local okS, nameS = validProfileName(source)
-    local okD, nameD = validProfileName(destination)
-    if not (okS and okD) then return false, "Invalid profile name" end
-    if not (isFilesystemAvailable() and type(isfile) == "function") then return false, "No filesystem support" end
-    ensureFolder()
-    local pathS = SM.Folder .. "/" .. nameS .. ".json"
-    local pathD = SM.Folder .. "/" .. nameD .. ".json"
-    if not isfile(pathS) then return false, "Source profile does not exist" end
-    if isfile(pathD) then return false, "Destination profile already exists" end
-    local ok, err = pcall(function() writefile(pathD, readfile(pathS)) end)
-    return ok, err
-end
-
-function SM:Rename(source, destination)
-    local ok, reason = self:Duplicate(source, destination)
-    if not ok then return false, reason end
-    local _, nameS = validProfileName(source)
-    self:Delete(nameS)
-    return true
-end
-
-function SM:Export(name)
-    local okN, clean = validProfileName(name)
-    if not okN or not isFilesystemAvailable() then return nil, "File error" end
-    local path = SM.Folder .. "/" .. clean .. ".json"
-    if not isfile(path) then return nil, "Profile does not exist" end
-    local okR, text = pcall(readfile, path)
-    if not okR then return nil, "Read error" end
-    local copied = false
-    if type(setclipboard) == "function" then copied = (pcall(setclipboard, text)) end
-    return text, copied
-end
-
-function SM:Import(name, text, overwrite)
-    local okN, clean = validProfileName(name)
-    if not okN or type(text) ~= "string" or not isFilesystemAvailable() then return false, "Invalid data" end
-    local okJ, data = pcall(function() return HttpService:JSONDecode(text) end)
-    if not okJ or type(data) ~= "table" then return false, "Invalid JSON" end
-    ensureFolder()
-    local path = SM.Folder .. "/" .. clean .. ".json"
-    if isfile(path) and not overwrite then return false, "Profile already exists" end
-    local ok, err = pcall(writefile, path, text)
-    return ok, err
-end
-
-function SM:SaveUI(name)
-    name = name or "default"
-    if not isFilesystemAvailable() then return false end
-    ensureFolderUI()
-    local path = SM.FolderUI .. "/" .. name .. ".json"
-    local ok = pcall(function()
-        local data = packFlagsForSaving(_realFlags, true)
-        writefile(path, HttpService:JSONEncode(data))
-    end)
-    return ok
-end
-
-function SM:LoadUI(name)
-    name = name or "default"
-    local path = SM.FolderUI .. "/" .. name .. ".json"
-    if not (isFilesystemAvailable() and type(isfile) == "function" and isfile(path)) then return false end
-    local okRead, content = pcall(readfile, path)
-    if not okRead then return false end
-    local okDecode, data = pcall(function() return HttpService:JSONDecode(content) end)
-    if not okDecode then return false end
-    data = prepareLoadedData(data)
-
-    _isLoadingFromFile = true
-    pcall(function()
-        for flag, rawVal in pairs(data) do
-            if _uiFlags[flag] then
-                local val = unpackLoadedValue(rawVal)
-                LouisHub.Flags[flag] = val
-                if LouisHub.Elements[flag] then
-                    pcall(function() LouisHub.Elements[flag]:Set(val, false) end)
-                end
-            end
-        end
-    end)
-    _isLoadingFromFile = false
-    _checkConflictsOnLoad()
-    return true
-end
-
-function SM:ListUI()
-    if not (isFilesystemAvailable() and type(listfiles) == "function") then return {} end
-    ensureFolderUI()
-    local result = {}
-    local ok, files = pcall(listfiles, SM.FolderUI)
-    if ok then
-        for _, path in ipairs(files) do
-            local n = path:match("([^/\\]+)%.json$")
-            if n then table.insert(result, n) end
-        end
-    end
-    return result
-end
-
-function SM:DeleteUI(name)
-    if not (isFilesystemAvailable() and type(isfile) == "function" and type(delfile) == "function") then return false end
-    local path = SM.FolderUI .. "/" .. (name or "default") .. ".json"
-    if not isfile(path) then return false end
-    return (pcall(delfile, path))
-end
-
-function LouisHub:SaveConfig(path)
-    return self.SaveManager:Save(path)
-end
-
-function LouisHub:LoadConfig(path)
-    return self.SaveManager:Load(path)
-end
-
-function LouisHub:RefreshConfigList()
-    return self.SaveManager:List()
-end
-
-function LouisHub:LoadAutoloadConfig()
-    if not isFilesystemAvailable() then return false end
-    local path = self.Folder .. "/autoload.txt"
-    if type(isfile) == "function" and isfile(path) then
-        local ok, n = pcall(readfile, path)
-        if ok and n and n ~= "" then
-            return self.SaveManager:Load(n)
-        end
-    end
-    return false
-end
-
---[[
-╔══════════════════════════════════════════════════════════════════════╗
-                              LouisHub
-                Master UI Suite: LouisHub Engine V4.0
-         PART 4B: BUILT-IN TABS (HOME, CONFIG, SYSTEM) & CORE EXPORTS
-╚══════════════════════════════════════════════════════════════════════╝
-]]
 
 -- ══════════════════════════════════════════════════════════════
---  SECTION 26: HOME DASHBOARD & STATS TAB
+--  SECTION 24: 1:1 LUNA CONFIG & CUSTOM THEME SECTION BUILDER
+-- ══════════════════════════════════════════════════════════════
+local function registerAdvancedLunaMethods(TabObj)
+    function TabObj:BuildConfigSection()
+        if not isFilesystemAvailable() then
+            local secErr = self:CreateSection("Configurations", { Columns = 1 })
+            secErr:Label({ Text = "Config system unavailable (No filesystem support)." })
+            return "Config system unavailable."
+        end
+
+        local inputPath = nil
+        local selectedConfig = nil
+
+        local secCreator = self:CreateSection("Config Creator", { Columns = 1 })
+
+        secCreator:Input({
+            Text = "Config Name",
+            Placeholder = "Name",
+            Default = "",
+            Callback = function(input)
+                inputPath = input
+            end,
+        })
+
+        local configSelection
+
+        secCreator:Button({
+            Text = "Create Config",
+            Tooltip = "Create a config with all of your current settings.",
+            Callback = function()
+                if not inputPath or string.gsub(inputPath, " ", "") == "" then
+                    LouisHub:Notify({
+                        Title = "Interface",
+                        Icon = "warning",
+                        Content = "Config name cannot be empty."
+                    })
+                    return
+                end
+
+                local success, returned = LouisHub.SaveManager:Save(inputPath)
+                if not success then
+                    LouisHub:Notify({
+                        Title = "Interface",
+                        Icon = "warning",
+                        Content = "Unable to save config, error: " .. tostring(returned)
+                    })
+                else
+                    LouisHub:Notify({
+                        Title = "Interface",
+                        Icon = "info",
+                        Content = string.format("Created config %q", inputPath),
+                    })
+                end
+
+                if configSelection and (configSelection.Refresh or configSelection.SetOptions) then
+                    local refreshFn = configSelection.Refresh or configSelection.SetOptions
+                    refreshFn(LouisHub.SaveManager:List())
+                end
+            end
+        })
+
+        local secSettings = self:CreateSection("Config Load/Settings", { Columns = 1 })
+
+        configSelection = secSettings:Dropdown({
+            Text = "Select Config",
+            Tooltip = "Select a config to load your settings from.",
+            Options = LouisHub.SaveManager:List(),
+            Default = {},
+            MultipleOptions = false,
+            Callback = function(val)
+                selectedConfig = val
+            end,
+        })
+
+        secSettings:Button({
+            Text = "Load Config",
+            Tooltip = "Load your saved config settings.",
+            Callback = function()
+                if not selectedConfig then return end
+                local success, returned = LouisHub.SaveManager:Load(selectedConfig, true)
+                if not success then
+                    LouisHub:Notify({
+                        Title = "Interface",
+                        Icon = "warning",
+                        Content = "Unable to load config, error: " .. tostring(returned)
+                    })
+                    return
+                end
+
+                LouisHub:Notify({
+                    Title = "Interface",
+                    Icon = "info",
+                    Content = string.format("Loaded config %q", selectedConfig),
+                })
+            end
+        })
+
+        secSettings:Button({
+            Text = "Overwrite Config",
+            Tooltip = "Overwrite your current config settings.",
+            Callback = function()
+                if not selectedConfig then return end
+                local success, returned = LouisHub.SaveManager:Save(selectedConfig)
+                if not success then
+                    LouisHub:Notify({
+                        Title = "Interface",
+                        Icon = "warning",
+                        Content = "Unable to overwrite config, error: " .. tostring(returned)
+                    })
+                    return
+                end
+
+                LouisHub:Notify({
+                    Title = "Interface",
+                    Icon = "info",
+                    Content = string.format("Overwrote config %q", selectedConfig),
+                })
+            end
+        })
+
+        secSettings:Button({
+            Text = "Refresh Config List",
+            Tooltip = "Refresh the current config list.",
+            Callback = function()
+                if configSelection and (configSelection.Refresh or configSelection.SetOptions) then
+                    local refreshFn = configSelection.Refresh or configSelection.SetOptions
+                    refreshFn(LouisHub.SaveManager:List())
+                end
+            end,
+        })
+
+        local loadLabel
+        secSettings:Button({
+            Text = "Set as autoload",
+            Tooltip = "Set a config to auto load in your next session.",
+            Callback = function()
+                if not selectedConfig or not isFilesystemAvailable() then return end
+                local name = selectedConfig
+                pcall(function()
+                    writefile(LouisHub.Folder .. "/autoload.txt", name)
+                end)
+                if loadLabel then
+                    loadLabel:Set("Current autoload config: " .. name)
+                end
+
+                LouisHub:Notify({
+                    Title = "Interface",
+                    Icon = "info",
+                    Content = string.format("Set %q to auto load", name),
+                })
+            end,
+        })
+
+        loadLabel = secSettings:Paragraph({
+            Title = "Current Auto Load",
+            Content = "None"
+        })
+
+        secSettings:Button({
+            Text = "Delete Autoload",
+            Tooltip = "Delete the autoload config pointer file.",
+            Callback = function()
+                if isFilesystemAvailable() and type(isfile) == "function" and isfile(LouisHub.Folder .. "/autoload.txt") then
+                    pcall(delfile, LouisHub.Folder .. "/autoload.txt")
+                end
+                if loadLabel then
+                    loadLabel:Set("None")
+                end
+
+                LouisHub:Notify({
+                    Title = "Interface",
+                    Icon = "info",
+                    Content = "Deleted Autoload file.",
+                })
+            end,
+        })
+
+        if isFilesystemAvailable() and type(isfile) == "function" and isfile(LouisHub.Folder .. "/autoload.txt") then
+            local okRead, name = pcall(readfile, LouisHub.Folder .. "/autoload.txt")
+            if okRead and name and loadLabel then
+                loadLabel:Set("Current autoload config: " .. name)
+            end
+        end
+    end
+
+    function TabObj:BuildThemeSection()
+        local secEditor = self:CreateSection("Custom Editor", { Columns = 1 })
+
+        local c1cp = secEditor:ColorPicker({
+            Text = "Color 1",
+            Color = Color3.fromRGB(117, 164, 206),
+        }, "LunaInterfaceSuitePrebuiltCPC1")
+
+        local c2cp = secEditor:ColorPicker({
+            Text = "Color 2",
+            Color = Color3.fromRGB(123, 201, 201),
+        }, "LunaInterfaceSuitePrebuiltCPC2")
+
+        local c3cp = secEditor:ColorPicker({
+            Text = "Color 3",
+            Color = Color3.fromRGB(224, 138, 184),
+        }, "LunaInterfaceSuitePrebuiltCPC3")
+
+        local function updateGradient()
+            local c1 = (c1cp and c1cp:Get()) or Color3.fromRGB(255, 255, 255)
+            local c2 = (c2cp and c2cp:Get()) or Color3.fromRGB(255, 255, 255)
+            local c3 = (c3cp and c3cp:Get()) or Color3.fromRGB(255, 255, 255)
+
+            LouisHub.Theme.Accent      = c1
+            LouisHub.Theme.AccentLight = c2
+            LouisHub.Theme.Highlight   = c3
+
+            LouisHub.ThemeGradient = ColorSequence.new{
+                ColorSequenceKeypoint.new(0.00, c1),
+                ColorSequenceKeypoint.new(0.50, c2),
+                ColorSequenceKeypoint.new(1.00, c3)
+            }
+            LouisHub.ThemeManager:ApplyTheme(LouisHub.Theme)
+        end
+
+        task.spawn(function()
+            task.wait(0.2)
+            if c1cp then c1cp.Callback = updateGradient end
+            if c2cp then c2cp.Callback = updateGradient end
+            if c3cp then c3cp.Callback = updateGradient end
+        end)
+
+        local secPresets = self:CreateSection("Preset Gradients", { Columns = 2 })
+
+        for presetName, colors in pairs(PresetGradients) do
+            secPresets:Button({
+                Text = tostring(presetName),
+                Callback = function()
+                    if c1cp then c1cp:Set(colors[1], false) end
+                    if c2cp then c2cp:Set(colors[2], false) end
+                    if c3cp then c3cp:Set(colors[3], false) end
+                    updateGradient()
+                end,
+            })
+        end
+    end
+end
+
+-- ══════════════════════════════════════════════════════════════
+--  SECTION 25: LUNA HOME TAB PORT (DASHBOARD & STATS)
 -- ══════════════════════════════════════════════════════════════
 local function createLunaHomeTab(Window, HomeTabSettings)
     HomeTabSettings = Kwargify({
@@ -9101,245 +9541,14 @@ local function createLunaHomeTab(Window, HomeTabSettings)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  SECTION 27: CONFIG & CUSTOM THEME SECTION BUILDER
--- ══════════════════════════════════════════════════════════════
-local function buildConfigSection(tab)
-    if not isFilesystemAvailable() then
-        local secErr = tab:CreateSection("Configurations", { Columns = 1 })
-        secErr:Label({ Text = "Config system unavailable (No filesystem support)." })
-        return
-    end
-
-    local inputPath = nil
-    local selectedConfig = nil
-
-    local secCreator = tab:CreateSection("Config Creator", { Columns = 1 })
-
-    secCreator:Input({
-        Text = "Config Name",
-        Placeholder = "Name",
-        Default = "",
-        Callback = function(input)
-            inputPath = input
-        end,
-    })
-
-    local configSelection
-
-    secCreator:Button({
-        Text = "Create Config",
-        Tooltip = "Create a config with all of your current settings.",
-        Callback = function()
-            if not inputPath or string.gsub(inputPath, " ", "") == "" then
-                LouisHub:Notify({
-                    Title = "Interface",
-                    Icon = "warning",
-                    Content = "Config name cannot be empty."
-                })
-                return
-            end
-
-            local success, returned = LouisHub.SaveManager:Save(inputPath)
-            if not success then
-                LouisHub:Notify({
-                    Title = "Interface",
-                    Icon = "warning",
-                    Content = "Unable to save config: " .. tostring(returned)
-                })
-            else
-                LouisHub:Notify({
-                    Title = "Interface",
-                    Icon = "info",
-                    Content = string.format("Created config %q", inputPath),
-                })
-            end
-
-            if configSelection and configSelection.Refresh then
-                configSelection:Refresh(LouisHub.SaveManager:List())
-            end
-        end
-    })
-
-    local secSettings = tab:CreateSection("Config Load/Settings", { Columns = 1 })
-
-    configSelection = secSettings:Dropdown({
-        Text = "Select Config",
-        Tooltip = "Select a config to load your settings from.",
-        Options = LouisHub.SaveManager:List(),
-        Default = {},
-        MultipleOptions = false,
-        Callback = function(val)
-            selectedConfig = val
-        end,
-    })
-
-    secSettings:Button({
-        Text = "Load Config",
-        Tooltip = "Load your saved config settings.",
-        Callback = function()
-            if not selectedConfig then return end
-            local success, returned = LouisHub.SaveManager:Load(selectedConfig)
-            if not success then
-                LouisHub:Notify({
-                    Title = "Interface",
-                    Icon = "warning",
-                    Content = "Unable to load config: " .. tostring(returned)
-                })
-                return
-            end
-
-            LouisHub:Notify({
-                Title = "Interface",
-                Icon = "info",
-                Content = string.format("Loaded config %q", selectedConfig),
-            })
-        end
-    })
-
-    secSettings:Button({
-        Text = "Overwrite Config",
-        Tooltip = "Overwrite your current config settings.",
-        Callback = function()
-            if not selectedConfig then return end
-            local success, returned = LouisHub.SaveManager:Save(selectedConfig)
-            if not success then
-                LouisHub:Notify({
-                    Title = "Interface",
-                    Icon = "warning",
-                    Content = "Unable to overwrite config: " .. tostring(returned)
-                })
-                return
-            end
-
-            LouisHub:Notify({
-                Title = "Interface",
-                Icon = "info",
-                Content = string.format("Overwrote config %q", selectedConfig),
-            })
-        end
-    })
-
-    secSettings:Button({
-        Text = "Refresh Config List",
-        Tooltip = "Refresh the current config list.",
-        Callback = function()
-            if configSelection and configSelection.Refresh then
-                configSelection:Refresh(LouisHub.SaveManager:List())
-            end
-        end,
-    })
-
-    local loadLabel
-    secSettings:Button({
-        Text = "Set as autoload",
-        Tooltip = "Set a config to auto load in your next session.",
-        Callback = function()
-            if not selectedConfig or not isFilesystemAvailable() then return end
-            local name = selectedConfig
-            pcall(function()
-                writefile(LouisHub.Folder .. "/autoload.txt", name)
-            end)
-            if loadLabel then
-                loadLabel:Set("Current autoload config: " .. name)
-            end
-
-            LouisHub:Notify({
-                Title = "Interface",
-                Icon = "info",
-                Content = string.format("Set %q to auto load", name),
-            })
-        end,
-    })
-
-    loadLabel = secSettings:Paragraph({
-        Title = "Current Auto Load",
-        Content = "None"
-    })
-
-    secSettings:Button({
-        Text = "Delete Autoload",
-        Tooltip = "Delete the autoload config pointer file.",
-        Callback = function()
-            if isFilesystemAvailable() and type(isfile) == "function" and isfile(LouisHub.Folder .. "/autoload.txt") then
-                pcall(delfile, LouisHub.Folder .. "/autoload.txt")
-            end
-            if loadLabel then
-                loadLabel:Set("None")
-            end
-
-            LouisHub:Notify({
-                Title = "Interface",
-                Icon = "info",
-                Content = "Deleted Autoload file.",
-            })
-        end,
-    })
-
-    if isFilesystemAvailable() and type(isfile) == "function" and isfile(LouisHub.Folder .. "/autoload.txt") then
-        local okRead, name = pcall(readfile, LouisHub.Folder .. "/autoload.txt")
-        if okRead and name and loadLabel then
-            loadLabel:Set("Current autoload config: " .. name)
-        end
-    end
-end
-
-local function buildThemeSection(tab)
-    local secEditor = tab:CreateSection("Custom Gradient Editor", { Columns = 1 })
-
-    local c1cp = secEditor:ColorPicker({
-        Text = "Color 1 (Accent)",
-        Color = Theme.Accent,
-    })
-
-    local c2cp = secEditor:ColorPicker({
-        Text = "Color 2 (Accent Light)",
-        Color = Theme.AccentLight,
-    })
-
-    local c3cp = secEditor:ColorPicker({
-        Text = "Color 3 (Highlight)",
-        Color = Theme.Highlight,
-    })
-
-    local function updateGradient()
-        local c1 = (c1cp and c1cp:Get()) or Theme.Accent
-        local c2 = (c2cp and c2cp:Get()) or Theme.AccentLight
-        local c3 = (c3cp and c3cp:Get()) or Theme.Highlight
-
-        LouisHub.ThemeManager:ApplyAccentGradient({c1, c2, c3})
-    end
-
-    task.spawn(function()
-        task.wait(0.2)
-        if c1cp then c1cp.Callback = updateGradient end
-        if c2cp then c2cp.Callback = updateGradient end
-        if c3cp then c3cp.Callback = updateGradient end
-    end)
-
-    local secPresets = tab:CreateSection("Preset Gradients", { Columns = 2 })
-
-    for presetName, colors in pairs(PresetGradients) do
-        secPresets:Button({
-            Text = tostring(presetName),
-            Callback = function()
-                if c1cp then c1cp:Set(colors[1], false) end
-                if c2cp then c2cp:Set(colors[2], false) end
-                if c3cp then c3cp:Set(colors[3], false) end
-                LouisHub.ThemeManager:ApplyAccentGradient(presetName)
-            end,
-        })
-    end
-end
-
--- ══════════════════════════════════════════════════════════════
---  SECTION 28: PREINSTALLED SYSTEM & HARDWARE DIAGNOSTICS TAB
+--  SECTION 26: PREINSTALLED SYSTEM & HARDWARE DIAGNOSTICS TAB
 -- ══════════════════════════════════════════════════════════════
 local function addCompletePreinstalledTab(Window, cfg)
     cfg = cfg or {}
 
-    local catSystem = Window.Categories["System"] or Window:CreateCategory({ Name = "System", Icon = "settings" })
+    local catSystem = Window:CreateCategory({ Name = "System", Icon = "settings" })
     local sysTab = catSystem:CreateTab({
-        Name = cfg.Name or "Preinstalled",
+        Name = cfg.Name or cfg.Nombre or "Preinstalled",
         Icon = "settings",
         ShowTitle = true
     })
@@ -9352,7 +9561,7 @@ local function addCompletePreinstalledTab(Window, cfg)
     local lblFps = secInfo:Label({ Text = "FPS", Value = "–", Column = 2 })
     local lblFrameTime = secInfo:Label({ Text = "Frame Time", Value = "–", Column = 2 })
     local lblState = secInfo:Label({ Text = "State", Value = "–", Column = 2 })
-    secInfo:Label({
+    local lblHealth = secInfo:Label({
         Text    = "Interface Health",
         Value   = "🟢 Optimal",
         Tooltip = "Evaluates memory footprint, instance lifecycle, and framerate stability.",
@@ -9416,32 +9625,19 @@ local function addCompletePreinstalledTab(Window, cfg)
     for n in pairs(LouisHub.ThemeManager.Themes) do table.insert(themeNames, n) end
     table.sort(themeNames)
 
+    for n in pairs(PresetGradients) do
+        table.insert(themeNames, "Gradient: " .. n)
+    end
+
     secAp:Dropdown({
-        Text = "Base Theme Palette",
+        Text = "Theme Palette",
         Flag = "sys_theme",
         Options = themeNames,
         Default = Themes.Default,
         Column = 1,
         Callback = function(v)
-            LouisHub.ThemeManager:ApplyBaseTheme(v)
-            LouisHub:Notify({ Title = "Appearance", Content = "Base theme " .. v .. " applied.", Duration = 2 })
-            LouisHub.SaveManager:SaveUI("preinstalled")
-        end
-    })
-
-    local presetList = {}
-    for n in pairs(PresetGradients) do table.insert(presetList, n) end
-    table.sort(presetList)
-
-    secAp:Dropdown({
-        Text = "Accent Gradient Preset",
-        Flag = "sys_accent_preset",
-        Options = presetList,
-        Default = presetList[1] or "Nightlight (Classic)",
-        Column = 1,
-        Callback = function(v)
-            LouisHub.ThemeManager:ApplyAccentGradient(v)
-            LouisHub:Notify({ Title = "Appearance", Content = "Accent gradient " .. v .. " applied.", Duration = 2 })
+            LouisHub.ThemeManager:ApplyTheme(v)
+            LouisHub:Notify({ Title = "Appearance", Content = "Theme " .. v .. " applied.", Duration = 2 })
             LouisHub.SaveManager:SaveUI("preinstalled")
         end
     })
@@ -9450,7 +9646,7 @@ local function addCompletePreinstalledTab(Window, cfg)
         Text = "Interface Scale",
         Flag = "sys_scale",
         Min = 70, Max = 130, Increment = 5, Suffix = "%", Default = 100,
-        Column = 2,
+        Column = 1,
         Callback = function(v)
             if Window._main and Window._main:FindFirstChildOfClass("UIScale") then
                 Window._main:FindFirstChildOfClass("UIScale").Scale = (v / 100)
@@ -9485,7 +9681,7 @@ local function addCompletePreinstalledTab(Window, cfg)
         end
     })
 
-    LouisHub:MarkAsUI({"sys_theme", "sys_accent_preset", "sys_scale", "sys_width", "sys_height"})
+    LouisHub:MarkAsUI({"sys_theme", "sys_scale", "sys_width", "sys_height", "sys_tema", "sys_escala", "sys_ancho", "sys_alto"})
 
     local secProfiles = sysTab:CreateSection("Profiles & Storage", { Columns = 2 })
     local selectedProfile = nil
@@ -9501,7 +9697,7 @@ local function addCompletePreinstalledTab(Window, cfg)
         Text = "Load Selected Profile",
         Column = 1,
         Callback = function()
-            if selectedProfile then LouisHub.SaveManager:Load(selectedProfile) end
+            if selectedProfile then LouisHub.SaveManager:Load(selectedProfile, true) end
         end
     })
 
@@ -9519,8 +9715,9 @@ local function addCompletePreinstalledTab(Window, cfg)
         Callback = function()
             if newProfileName ~= "" then
                 LouisHub.SaveManager:Save(newProfileName)
-                if dropP and dropP.Refresh then
-                    dropP:Refresh(LouisHub.SaveManager:List())
+                if dropP and (dropP.Refresh or dropP.SetOptions) then
+                    local refreshFn = dropP.Refresh or dropP.SetOptions
+                    refreshFn(LouisHub.SaveManager:List())
                 end
             end
         end
@@ -9549,36 +9746,115 @@ local function addCompletePreinstalledTab(Window, cfg)
 end
 
 -- ══════════════════════════════════════════════════════════════
---  SECTION 29: PIPELINE INITIALIZATION & FINAL EXPORTS
+--  SECTION 27: LIFECYCLE HOOKS, EXPORTS & CLEANUP
 -- ══════════════════════════════════════════════════════════════
-local _originalCreateWindow = LouisHub.CreateWindow
+
+-- Hook otomatis untuk melengkapi semua Tab dan Section saat dibuat
+local originalCreateWindow = LouisHub.CreateWindow
 function LouisHub:CreateWindow(config)
     config = config or {}
-    local Window = _originalCreateWindow(self, config)
+    local Window = originalCreateWindow(self, config)
+
+    -- Injeksi method ke category & tab builder
+    local origCreateCat = Window.CreateCategory
+    function Window:CreateCategory(catCfg)
+        local CatObj = origCreateCat(self, catCfg)
+        local origCreateTab = CatObj.CreateTab
+        function CatObj:CreateTab(tabCfg, iconParamOverride)
+            local TabObj = origCreateTab(self, tabCfg, iconParamOverride)
+            injectUniversalTabMethods(TabObj)
+            registerAdvancedLunaMethods(TabObj)
+
+            local origCreateSub = TabObj.CreateSubTab
+            function TabObj:CreateSubTab(subCfg)
+                local SubTabObj = origCreateSub(self, subCfg)
+                local origCreateSec = SubTabObj.CreateSection
+                function SubTabObj:CreateSection(sName, sCfg)
+                    local SecObj = origCreateSec(self, sName, sCfg)
+                    applyControlMethods(SecObj)
+                    return SecObj
+                end
+                return SubTabObj
+            end
+            return TabObj
+        end
+        return CatObj
+    end
 
     function Window:CreateHomeTab(hSettings)
         return createLunaHomeTab(Window, hSettings)
     end
 
+    -- Tab System & Config internal
     local catSystem = Window:CreateCategory({ Name = "System", Icon = "settings" })
-
-    local tabConfig = catSystem:CreateTab({
+    local tabConfigLuna = catSystem:CreateTab({
         Name = "Config",
         Icon = "settings",
         ShowTitle = true
     })
-    buildConfigSection(tabConfig)
-    buildThemeSection(tabConfig)
+    tabConfigLuna:BuildConfigSection()
+    tabConfigLuna:BuildThemeSection()
 
-    if config.PreinstalledTab ~= false then
+    if config.PreinstalledTab ~= false and config.PestanaPreinstalada ~= false then
         addCompletePreinstalledTab(Window, config)
     end
 
     return Window
 end
 
+function LouisHub:CreateWindowSafely(config)
+    config = config or {}
+    local active = _G.LouisHub_Instance
+    local currentWin = active and active.Window
+
+    if not (currentWin and currentWin._main and currentWin._main.Parent) then
+        return LouisHub:CreateWindow(config)
+    end
+
+    local currentTitle = active.Title or "Current Interface"
+    local newTitle     = config.Title or config.Name or "New Script"
+
+    LouisHub:Confirm({
+        Title   = "⚠️ Active Script Detected",
+        Content = string.format("Another window is currently active (\"%s\"). Would you like to terminate and replace it with \"%s\"?", currentTitle, newTitle),
+        Icon    = "warning",
+        Buttons = {
+            { Text = "Cancel", Variant = "neutral" },
+            {
+                Text = "Replace",
+                Variant = "primary",
+                Callback = function()
+                    if currentWin.Destroy then
+                        pcall(function() currentWin:Destroy() end)
+                    else
+                        LouisHub:Destroy()
+                    end
+                    task.defer(function()
+                        LouisHub:CreateWindow(config)
+                    end)
+                end
+            },
+        }
+    })
+
+    return currentWin
+end
+
+-- FIX #10: Destructor total membersihkan semua koneksi background dan ScreenGui
+function LouisHub:Destroy()
+    cleanupAllInstances()
+end
+
+-- Global Compatibility Aliases
+AlanLuna = LouisHub
+AlanUI   = LouisHub
+Luna     = LouisHub
+
 if getgenv then
     getgenv().LouisHub = LouisHub
+    getgenv().AlanLuna = LouisHub
+    getgenv().AlanUI   = LouisHub
+    getgenv().Luna     = LouisHub
 end
 
 return LouisHub
