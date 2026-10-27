@@ -3882,16 +3882,17 @@ end
 local RegisteredFontElements = {}
 
 local FontPresets = {
-    ["Gotham"]          = { Regular = Enum.Font.Gotham, Bold = Enum.Font.GothamBold, Medium = Enum.Font.GothamMedium },
-    ["Montserrat"]     = { Regular = Enum.Font.Montserrat, Bold = Enum.Font.MontserratBold, Medium = Enum.Font.MontserratMedium },
-    ["Ubuntu"]         = { Regular = Enum.Font.Ubuntu, Bold = Enum.Font.UbuntuBold, Medium = Enum.Font.UbuntuMedium },
-    ["Roboto"]         = { Regular = Enum.Font.Roboto, Bold = Enum.Font.RobotoBold, Medium = Enum.Font.RobotoMedium },
-    ["SourceSans"]     = { Regular = Enum.Font.SourceSans, Bold = Enum.Font.SourceSansBold, Medium = Enum.Font.SourceSansSemibold },
-    ["Highway"]        = { Regular = Enum.Font.Highway, Bold = Enum.Font.Highway, Medium = Enum.Font.Highway },
-    ["SciFi"]          = { Regular = Enum.Font.SciFi, Bold = Enum.Font.SciFi, Medium = Enum.Font.SciFi },
-    ["Oswald"]         = { Regular = Enum.Font.Oswald, Bold = Enum.Font.Oswald, Medium = Enum.Font.Oswald },
-    ["Code"]           = { Regular = Enum.Font.Code, Bold = Enum.Font.Code, Medium = Enum.Font.Code },
-    ["FredokaOne"]     = { Regular = Enum.Font.FredokaOne, Bold = Enum.Font.FredokaOne, Medium = Enum.Font.FredokaOne }
+    ["Gotham"]      = { Regular = Enum.Font.Gotham, Bold = Enum.Font.GothamBold, Medium = Enum.Font.GothamMedium },
+    ["Montserrat"]  = { Regular = Enum.Font.Montserrat, Bold = Enum.Font.Montserrat, Medium = Enum.Font.Montserrat },
+    ["Ubuntu"]      = { Regular = Enum.Font.Ubuntu, Bold = Enum.Font.Ubuntu, Medium = Enum.Font.Ubuntu },
+    ["Roboto"]      = { Regular = Enum.Font.Roboto, Bold = Enum.Font.RobotoCondensed, Medium = Enum.Font.Roboto },
+    ["SourceSans"]  = { Regular = Enum.Font.SourceSans, Bold = Enum.Font.SourceSansBold, Medium = Enum.Font.SourceSansSemibold },
+    ["Highway"]     = { Regular = Enum.Font.Highway, Bold = Enum.Font.Highway, Medium = Enum.Font.Highway },
+    ["SciFi"]       = { Regular = Enum.Font.SciFi, Bold = Enum.Font.SciFi, Medium = Enum.Font.SciFi },
+    ["Oswald"]      = { Regular = Enum.Font.Oswald, Bold = Enum.Font.Oswald, Medium = Enum.Font.Oswald },
+    ["Code"]        = { Regular = Enum.Font.Code, Bold = Enum.Font.Code, Medium = Enum.Font.Code },
+    ["FredokaOne"]  = { Regular = Enum.Font.FredokaOne, Bold = Enum.Font.FredokaOne, Medium = Enum.Font.FredokaOne },
+    ["Arial"]       = { Regular = Enum.Font.Arial, Bold = Enum.Font.ArialBold, Medium = Enum.Font.Arial }
 }
 
 LouisHub.FontPresets = FontPresets
