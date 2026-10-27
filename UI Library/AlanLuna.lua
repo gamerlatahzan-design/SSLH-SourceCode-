@@ -9301,10 +9301,10 @@ function LouisHub:CreateWindow(windowConfig)
 
     local useLoadingScreen = windowConfig.LoadingScreen ~= false
 
-    -- 1. Buat objek Window secara instan (agar Window tidak nil dan AddHomeTab bisa langsung dipanggil)
+    -- 1. Buat window langsung detik ini juga
     local Window = FinalCreateWindow(self, windowConfig)
 
-    -- 2. Jika LoadingScreen aktif, sembunyikan window sementara selama splash berjalan
+    -- 2. Sembunyikan window sementara jika loading screen aktif
     if useLoadingScreen and Window and Window.MainFrame then
         Window.MainFrame.Visible = false
         Window.IsOpen = false
@@ -9315,14 +9315,13 @@ function LouisHub:CreateWindow(windowConfig)
             Logo = windowConfig.Logo or self.LogoAssetId,
             Duration = tonumber(windowConfig.LoadingDuration) or 2.5
         }, function()
-            -- Munculkan window secara mulus (fade-in) setelah loading screen selesai
             if Window and Window.MainFrame and not Window.IsMinimized then
                 Window:SetState(true)
             end
         end)
     end
 
-    -- 3. Eksekusi autoload jika ada profile yang tersimpan
+    -- 3. Autoload profile jika ada
     task.defer(function()
         if self.ConfigManager and self.Capabilities.HasFilesystem then
             local autoloadProfile = self.ConfigManager:GetAutoload()
@@ -9342,3 +9341,12 @@ function LouisHub:CreateWindow(windowConfig)
 
     return Window
 end
+
+-- Export ke global environment
+if type(getgenv) == "function" then
+    getgenv().LouisHub = LouisHub
+end
+_G.LouisHub = LouisHub
+
+-- INI BARIS PALING PENTING YANG JANGAN SAMPAI KETINGGALAN:
+return LouisHub
