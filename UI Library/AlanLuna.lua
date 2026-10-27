@@ -969,19 +969,16 @@ end
 function LouisHub:MakeDraggable(triggerObject, frameToMove, onDragStep, onDragEnd)
     if not triggerObject or not frameToMove then return end
 
-    -- Dedicated touch sink overlay to prevent camera movement on mobile
     local dragOverlay = Instance.new("TextButton")
     dragOverlay.Name = "TouchDragShield"
     dragOverlay.BackgroundTransparency = 1
     dragOverlay.Text = ""
     dragOverlay.AutoButtonColor = false
-    dragOverlay.Modal = false -- Dynamically engaged on active touch
     dragOverlay.Size = UDim2.new(1, -64, 1, 0)
     dragOverlay.Position = UDim2.fromOffset(0, 0)
     dragOverlay.ZIndex = triggerObject.ZIndex + 10
     dragOverlay.Parent = triggerObject
 
-    -- Ensure text and icons inside title bar never block drag touch inputs
     for _, child in ipairs(triggerObject:GetChildren()) do
         if child ~= dragOverlay and child:IsA("GuiObject") then
             child.Active = false
@@ -995,7 +992,6 @@ function LouisHub:MakeDraggable(triggerObject, frameToMove, onDragStep, onDragEn
     dragOverlay.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             isDragging = true
-            dragOverlay.Modal = true -- Shields touch from controlling the Roblox camera
             dragStart = Vector2.new(input.Position.X, input.Position.Y)
             frameStart = Vector2.new(frameToMove.AbsolutePosition.X, frameToMove.AbsolutePosition.Y)
 
@@ -1017,7 +1013,6 @@ function LouisHub:MakeDraggable(triggerObject, frameToMove, onDragStep, onDragEn
             endConn = UserInputService.InputEnded:Connect(function(endInput)
                 if endInput.UserInputType == Enum.UserInputType.MouseButton1 or endInput.UserInputType == Enum.UserInputType.Touch then
                     isDragging = false
-                    dragOverlay.Modal = false -- Release camera shield
                     if moveConn then moveConn:Disconnect() end
                     if endConn then endConn:Disconnect() end
                     if onDragEnd then pcall(onDragEnd, frameToMove.Position) end
