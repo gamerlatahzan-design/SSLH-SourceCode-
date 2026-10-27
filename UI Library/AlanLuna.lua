@@ -1384,26 +1384,35 @@ function LouisHub:ShowLoadingScreen(loadConfig, onLoadedCallback)
         if rotateConnection then rotateConnection:Disconnect() end
         breathingTween:Cancel()
 
-        self:Tween(cardScale, { Scale = 0.92 }, 0.30, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-        self:Tween(backdrop, { BackgroundTransparency = 1 }, 0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        self:Tween(cardScale, { Scale = 0.90 }, 0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+        self:Tween(backdrop, { BackgroundTransparency = 1 }, 0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
         for _, desc in ipairs(centerCard:GetDescendants()) do
             if desc:IsA("TextLabel") then
-                self:Tween(desc, { TextTransparency = 1 }, 0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                self:Tween(desc, { TextTransparency = 1 }, 0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
             elseif desc:IsA("ImageLabel") then
-                self:Tween(desc, { ImageTransparency = 1 }, 0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                self:Tween(desc, { ImageTransparency = 1 }, 0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
             elseif desc:IsA("UIStroke") then
-                self:Tween(desc, { Transparency = 1 }, 0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                self:Tween(desc, { Transparency = 1 }, 0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
             elseif desc:IsA("Frame") then
-                self:Tween(desc, { BackgroundTransparency = 1 }, 0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                self:Tween(desc, { BackgroundTransparency = 1 }, 0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
             end
         end
 
-        task.wait(0.38)
+        task.wait(0.30)
+
+        -- KUNCI UTAMA: Matikan total splash screen agar TIDAK MENUTUPI layar sama sekali
+        splashGui.Enabled = false
+        backdrop.Visible = false
+        centerCard.Visible = false
+        backdrop.Size = UDim2.fromOffset(0, 0)
+        backdrop.Parent = nil
+        splashGui.Parent = nil
+
         pcall(function() splashGui:Destroy() end)
 
         if onLoadedCallback then
-            pcall(onLoadedCallback)
+            task.spawn(onLoadedCallback)
         end
     end)
 end
