@@ -9299,53 +9299,46 @@ local FinalCreateWindow = LouisHub.CreateWindow
 function LouisHub:CreateWindow(windowConfig)
     windowConfig = windowConfig or {}
 
-    -- Support optional loading screen before revealing the main window
     local useLoadingScreen = windowConfig.LoadingScreen ~= false
-    local Window = nil
 
-    local function initializeWindow()
-        Window = FinalCreateWindow(self, windowConfig)
+    -- 1. Buat objek Window secara instan (agar Window tidak nil dan AddHomeTab bisa langsung dipanggil)
+    local Window = FinalCreateWindow(self, windowConfig)
 
-        -- Auto-execute autoload profile if available
-        task.defer(function()
-            if self.ConfigManager and self.Capabilities.HasFilesystem then
-                local autoloadProfile = self.ConfigManager:GetAutoload()
-                if autoloadProfile and autoloadProfile ~= "" and autoloadProfile ~= "None" then
-                    local success, loadedName = self.ConfigManager:Load(autoloadProfile, true)
-                    if success then
-                        self:Notify({
-                            Title = "Config Autoload",
-                            Content = "Successfully autoloaded profile: " .. tostring(loadedName),
-                            Type = "Success",
-                            Duration = 3.5
-                        })
-                    end
-                end
-            end
-        end)
-    end
+    -- 2. Jika LoadingScreen aktif, sembunyikan window sementara selama splash berjalan
+    if useLoadingScreen and Window and Window.MainFrame then
+        Window.MainFrame.Visible = false
+        Window.IsOpen = false
 
-    if useLoadingScreen then
         self:ShowLoadingScreen({
             Title = windowConfig.Title or "LOUIS HUB",
             Subtitle = windowConfig.Subtitle or "Master Interface Suite • V5.0",
             Logo = windowConfig.Logo or self.LogoAssetId,
-            Duration = tonumber(windowConfig.LoadingDuration) or 2.6
+            Duration = tonumber(windowConfig.LoadingDuration) or 2.5
         }, function()
-            initializeWindow()
+            -- Munculkan window secara mulus (fade-in) setelah loading screen selesai
+            if Window and Window.MainFrame and not Window.IsMinimized then
+                Window:SetState(true)
+            end
         end)
-    else
-        initializeWindow()
     end
+
+    -- 3. Eksekusi autoload jika ada profile yang tersimpan
+    task.defer(function()
+        if self.ConfigManager and self.Capabilities.HasFilesystem then
+            local autoloadProfile = self.ConfigManager:GetAutoload()
+            if autoloadProfile and autoloadProfile ~= "" and autoloadProfile ~= "None" then
+                local success, loadedName = self.ConfigManager:Load(autoloadProfile, true)
+                if success then
+                    self:Notify({
+                        Title = "Config Autoload",
+                        Content = "Successfully autoloaded profile: " .. tostring(loadedName),
+                        Type = "Success",
+                        Duration = 3.5
+                    })
+                end
+            end
+        end
+    end)
 
     return Window
 end
-
--- Export to global environment
-if type(getgenv) == "function" then
-    getgenv().LouisHub = LouisHub
-end
-_G.LouisHub = LouisHub
-
--- END OF PART 5D
-return LouisHub
