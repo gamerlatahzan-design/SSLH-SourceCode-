@@ -8260,12 +8260,40 @@ function LouisHub:HUD(hudConfig)
     hLayout.Padding = UDim.new(0, 6)
     hLayout.Parent = hudFrame
 
-    if hudConfig.Draggable ~= false then
-        self:MakeDraggable(hudFrame, hudFrame)
+        if hudConfig.Draggable ~= false then
+        local dragging = false
+        local dragStart, frameStart
+        hudFrame.Active = true
+
+        hudFrame.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                dragStart = input.Position
+                frameStart = hudFrame.AbsolutePosition
+                local c
+                c = input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then
+                        dragging = false
+                        c:Disconnect()
+                    end
+                end)
+            end
+        end)
+
+        UserInputService.InputChanged:Connect(function(input)
+            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch) then
+                local d = input.Position - dragStart
+                local p = InputPipeline.ClampPositionToViewport(
+                    frameStart + Vector2.new(d.X, d.Y), hudFrame.AbsoluteSize)
+                hudFrame.Position = UDim2.fromOffset(p.X, p.Y)
+            end
+        end)
     end
 
     local registeredItems = {}
-
+    
     local function addHudItem(itemConfig)
         local flagKey = itemConfig.Flag or itemConfig.Name
         local itemTitle = tostring(itemConfig.Title or itemConfig.Name or "")
