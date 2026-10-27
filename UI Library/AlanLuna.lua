@@ -6,22 +6,37 @@ LouisHub.Version = "5.0.0"
 LouisHub.LogoAssetId = "rbxthumb://type=Asset&id=104436283956004&w=420&h=420"
 
 -- =====================================================================
--- SECTION 1: SINGLE-INSTANCE ENFORCEMENT & LIFECYCLE HOOK
+-- SECTION 1: SINGLE-INSTANCE ENFORCEMENT & AUTO-CLEANUP
 -- =====================================================================
 local GLOBAL_REGISTRY_KEY = "_LOUIS_HUB_V5_REGISTRY"
 local environment = (type(getgenv) == "function" and getgenv()) or _G
 
+-- Bersihkan instance script lama
 if environment[GLOBAL_REGISTRY_KEY] then
     local oldLibrary = environment[GLOBAL_REGISTRY_KEY]
     if type(oldLibrary) == "table" and type(oldLibrary.Destroy) == "function" then
-        pcall(function()
-            oldLibrary:Destroy()
-        end)
+        pcall(function() oldLibrary:Destroy() end)
     end
     environment[GLOBAL_REGISTRY_KEY] = nil
 end
 
+-- Hancurkan SEMUA sisa ScreenGui lama yang masih nyangkut di layar
+pcall(function()
+    local container = (type(gethui) == "function" and gethui()) or game:GetService("CoreGui")
+    if container then
+        for _, child in ipairs(container:GetChildren()) do
+            if child:IsA("ScreenGui") and child.Name:find("LouisHub") then
+                child.Enabled = false
+                pcall(function() child:Destroy() end)
+            end
+        end
+    end
+end)
+
 environment[GLOBAL_REGISTRY_KEY] = LouisHub
+
+-- Set logo resmi pakai rbxthumb (DIJAMIN MUNCUL 100%)
+LouisHub.LogoAssetId = "rbxthumb://type=Asset&id=104436283956004&w=420&h=420"
 
 -- =====================================================================
 -- SECTION 2: SERVICE CACHE & RUNTIME RESOLUTION
@@ -1380,37 +1395,22 @@ function LouisHub:ShowLoadingScreen(loadConfig, onLoadedCallback)
 
         task.wait(0.25)
 
-        -- Smooth Fade-Out & Clean Dismissal
+        -- Matikan animasi putaran
         if rotateConnection then rotateConnection:Disconnect() end
         breathingTween:Cancel()
 
-        self:Tween(cardScale, { Scale = 0.90 }, 0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-        self:Tween(backdrop, { BackgroundTransparency = 1 }, 0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        self:Tween(cardScale, { Scale = 0.90 }, 0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+        self:Tween(backdrop, { BackgroundTransparency = 1 }, 0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
-        for _, desc in ipairs(centerCard:GetDescendants()) do
-            if desc:IsA("TextLabel") then
-                self:Tween(desc, { TextTransparency = 1 }, 0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-            elseif desc:IsA("ImageLabel") then
-                self:Tween(desc, { ImageTransparency = 1 }, 0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-            elseif desc:IsA("UIStroke") then
-                self:Tween(desc, { Transparency = 1 }, 0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-            elseif desc:IsA("Frame") then
-                self:Tween(desc, { BackgroundTransparency = 1 }, 0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-            end
-        end
+        task.wait(0.22)
 
-        task.wait(0.30)
-
-        -- KUNCI UTAMA: Matikan total splash screen agar TIDAK MENUTUPI layar sama sekali
+        -- KUNCI UTAMA: Matikan total splash screen & buang dari memori!
         splashGui.Enabled = false
         backdrop.Visible = false
-        centerCard.Visible = false
         backdrop.Size = UDim2.fromOffset(0, 0)
-        backdrop.Parent = nil
-        splashGui.Parent = nil
-
         pcall(function() splashGui:Destroy() end)
 
+        -- Panggil callback untuk memunculkan Window
         if onLoadedCallback then
             task.spawn(onLoadedCallback)
         end
