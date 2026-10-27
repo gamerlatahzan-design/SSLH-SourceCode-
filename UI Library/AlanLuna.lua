@@ -762,13 +762,14 @@ function LouisHub:AddTheme(name, themeData)
 end
 
 -- =====================================================================
--- SECTION 9: GLOBAL TRAVELING GRADIENT TICKER (SINGLE HEARTBEAT)
+-- SECTION 9: GLOBAL TRAVELING GRADIENT TICKER (SMOOTH PING-PONG LOOP)
 -- =====================================================================
 LouisHub.GradientSettings = {
     Enabled = true,
     Speed = 1.0,
     Direction = 1,
-    CurrentOffset = 0
+    CurrentOffset = 0,
+    Elapsed = 0
 }
 
 local function startGradientTicker()
@@ -778,10 +779,11 @@ local function startGradientTicker()
             return
         end
 
-        local delta = (deltaTime * 0.45 * settings.Speed * settings.Direction)
-        settings.CurrentOffset = (settings.CurrentOffset + delta) % 1
+        -- Akumulasi waktu kontinu
+        settings.Elapsed = settings.Elapsed + (deltaTime * 1.5 * settings.Speed)
 
-        local xOffset = settings.CurrentOffset
+        -- Osilasi halus bolak-balik menggunakan gelombang sinus (bebas patah/snapping)
+        local xOffset = math.sin(settings.Elapsed * settings.Direction) * 0.45
 
         for i = 1, #AnimatedGradients do
             local item = AnimatedGradients[i]
@@ -953,27 +955,25 @@ function LouisHub:ApplyFlashFeedback(targetInstance, isSuccess)
 end
 
 -- =====================================================================
--- SECTION 11: CAMERA-SHIELDED UNIFIED DRAG PIPELINE (ANTI-PAN SCREEN)
+-- SECTION 11: CAMERA-SHIELDED UNIFIED DRAG PIPELINE (FREE DRAG MODE)
 -- =====================================================================
 local InputPipeline = {}
 InputPipeline.__index = InputPipeline
 
 function InputPipeline.GetViewportSize()
     local camera = workspace.CurrentCamera
-    if camera then
-        return camera.ViewportSize
-    end
-    return Vector2.new(1920, 1080)
+    return (camera and camera.ViewportSize) or Vector2.new(1920, 1080)
 end
 
-function InputPipeline.ClampPositionToViewport(targetPosition, frameSize, padding)
-    padding = padding or 8
+-- Toleransi bebas: Menyisakan sedikit area (32px) agar jendela tidak hilang total dari layar
+function InputPipeline.ClampPositionToViewport(targetPosition, frameSize)
     local viewport = InputPipeline.GetViewportSize()
+    local minVisible = 32
 
-    local minX = padding
-    local minY = padding
-    local maxX = math.max(minX, viewport.X - frameSize.X - padding)
-    local maxY = math.max(minY, viewport.Y - frameSize.Y - padding)
+    local minX = -(frameSize.X - minVisible)
+    local maxX = viewport.X - minVisible
+    local minY = 0
+    local maxY = viewport.Y - minVisible
 
     local clampedX = math.clamp(targetPosition.X, minX, maxX)
     local clampedY = math.clamp(targetPosition.Y, minY, maxY)
@@ -984,28 +984,17 @@ end
 function LouisHub:MakeDraggable(triggerObject, frameToMove, onDragStep, onDragEnd)
     if not triggerObject or not frameToMove then return end
 
-    local dragOverlay = Instance.new("TextButton")
-    dragOverlay.Name = "TouchDragShield"
-    dragOverlay.BackgroundTransparency = 1
-    dragOverlay.Text = ""
-    dragOverlay.AutoButtonColor = false
-    dragOverlay.Size = UDim2.new(1, -64, 1, 0)
-    dragOverlay.Position = UDim2.fromOffset(0, 0)
-    dragOverlay.ZIndex = triggerObject.ZIndex + 10
-    dragOverlay.Parent = triggerObject
-
-    for _, child in ipairs(triggerObject:GetChildren()) do
-        if child ~= dragOverlay and child:IsA("GuiObject") then
-            child.Active = false
-        end
-    end
-
     local isDragging = false
     local dragStart = Vector2.zero
     local frameStart = Vector2.zero
 
-    dragOverlay.InputBegan:Connect(function(input)
+    triggerObject.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            -- Jangan seret jika objek atau target terkunci
+            if triggerObject:GetAttribute("DragLocked") or frameToMove:GetAttribute("DragLocked") then
+                return
+            end
+
             isDragging = true
             dragStart = Vector2.new(input.Position.X, input.Position.Y)
             frameStart = Vector2.new(frameToMove.AbsolutePosition.X, frameToMove.AbsolutePosition.Y)
@@ -1018,9 +1007,11 @@ function LouisHub:MakeDraggable(triggerObject, frameToMove, onDragStep, onDragEn
                     local currentPos = Vector2.new(moveInput.Position.X, moveInput.Position.Y)
                     local delta = currentPos - dragStart
                     local targetPos = frameStart + delta
+                    
+                    -- Dragging bebas responsif
                     local clamped = InputPipeline.ClampPositionToViewport(targetPos, frameToMove.AbsoluteSize)
-
                     frameToMove.Position = UDim2.fromOffset(clamped.X, clamped.Y)
+
                     if onDragStep then pcall(onDragStep, clamped) end
                 end
             end)
@@ -3717,13 +3708,13 @@ function LouisHub:CreateWindow(windowConfig)
     -- Attach Camera-Shielded Dragging
     self:MakeDraggable(titleBar, mainFrame)
 
-    -- ── CORNER RESIZE GRIP HANDLE ────────────────────────────────────────
+    -- ── CORNER RESIZE GRIP HANDLE (FIXED UISCALE JUMP BUG) ───────────────
     if isResizable then
         local resizeHandle = Instance.new("ImageButton")
         resizeHandle.Name = "ResizeGrip"
         resizeHandle.BackgroundTransparency = 1
-        resizeHandle.Size = UDim2.fromOffset(14, 14)
-        resizeHandle.Position = UDim2.new(1, -16, 1, -16)
+        resizeHandle.Size = UDim2.fromOffset(16, 16)
+        resizeHandle.Position = UDim2.new(1, -18, 1, -18)
         resizeHandle.Image = "rbxassetid://6031225818"
         resizeHandle.ImageColor3 = self.CurrentTheme.TextMuted
         resizeHandle.Rotation = 45
@@ -3731,23 +3722,30 @@ function LouisHub:CreateWindow(windowConfig)
         resizeHandle.Parent = mainFrame
 
         local isResizing = false
-        local initialSize = Vector2.zero
+        local initialSizeOffset = Vector2.zero
         local startMousePos = Vector2.zero
 
         resizeHandle.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                 isResizing = true
-                initialSize = Vector2.new(mainFrame.AbsoluteSize.X, mainFrame.AbsoluteSize.Y)
+                -- Baca murni dari offset frame sebelum terdistorsi UIScale
+                initialSizeOffset = Vector2.new(mainFrame.Size.X.Offset, mainFrame.Size.Y.Offset)
                 startMousePos = Vector2.new(input.Position.X, input.Position.Y)
 
                 local moveConn, endConn
                 moveConn = UserInputService.InputChanged:Connect(function(moveInput)
                     if not isResizing then return end
                     if moveInput.UserInputType == Enum.UserInputType.MouseMovement or moveInput.UserInputType == Enum.UserInputType.Touch then
-                        local delta = Vector2.new(moveInput.Position.X, moveInput.Position.Y) - startMousePos
-                        local targetW = math.clamp(initialSize.X + delta.X, 480, 1000)
-                        local targetH = math.clamp(initialSize.Y + delta.Y, 320, 750)
-                        mainFrame.Size = UDim2.fromOffset(targetW, targetH)
+                        local activeScale = (uiScale and uiScale.Scale > 0) and uiScale.Scale or 1.0
+                        -- Kompensasikan delta mouse dengan faktor UIScale
+                        local delta = (Vector2.new(moveInput.Position.X, moveInput.Position.Y) - startMousePos) / activeScale
+                        
+                        -- Cek threshold pergerakan minimal agar tidak resize saat sekadar diklik biasa
+                        if delta.Magnitude > 1 then
+                            local targetW = math.clamp(initialSizeOffset.X + delta.X, 420, 1100)
+                            local targetH = math.clamp(initialSizeOffset.Y + delta.Y, 280, 800)
+                            mainFrame.Size = UDim2.fromOffset(targetW, targetH)
+                        end
                     end
                 end)
 
@@ -3761,7 +3759,7 @@ function LouisHub:CreateWindow(windowConfig)
             end
         end)
     end
-
+    
     -- ── WINDOW CONTROLLER OBJECT & SMOOTH FADE-IN ────────────────────────
     local Window = {
         MainFrame = mainFrame,
@@ -8202,7 +8200,7 @@ function LouisHub:PerformSearch(queryText)
 end
 
 -- =====================================================================
--- SECTION 31: DRAGGABLE HUD STATS OVERLAY
+-- SECTION 31: COMPACT ADAPTIVE HUD STATS OVERLAY (WITH LOCK & TOGGLE)
 -- =====================================================================
 local ActiveHudInstances = {}
 
@@ -8224,17 +8222,20 @@ function LouisHub:HUD(hudConfig)
     self.RootJanitor:Add(hudGui)
 
     local initialPos = hudConfig.Position or UDim2.fromOffset(24, 24)
+    local isLocked = hudConfig.Locked == true
 
+    -- Frame utama otomatis menyesuaikan isi (shrink-to-fit)
     local hudFrame = Instance.new("Frame")
     hudFrame.Name = "HUDCard"
     hudFrame.BackgroundColor3 = self.CurrentTheme.Surface
     hudFrame.BackgroundTransparency = 0.25
     hudFrame.BorderSizePixel = 0
-    hudFrame.Size = UDim2.fromOffset(180, 0)
+    hudFrame.Size = UDim2.fromOffset(0, 0)
     hudFrame.Position = initialPos
     hudFrame.AutomaticSize = Enum.AutomaticSize.XY
-    hudFrame.ClipsDescendants = true
+    hudFrame.ClipsDescendants = false
     hudFrame.Parent = hudGui
+    hudFrame:SetAttribute("DragLocked", isLocked)
     self:RegisterThemeProperty(hudFrame, "BackgroundColor3", "Surface")
 
     local hCorner = Instance.new("UICorner")
@@ -8257,40 +8258,11 @@ function LouisHub:HUD(hudConfig)
 
     local hLayout = Instance.new("UIListLayout")
     hLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    hLayout.Padding = UDim.new(0, 6)
+    hLayout.Padding = UDim.new(0, 5)
     hLayout.Parent = hudFrame
 
-        if hudConfig.Draggable ~= false then
-        local dragging = false
-        local dragStart, frameStart
-        hudFrame.Active = true
-
-        hudFrame.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1
-            or input.UserInputType == Enum.UserInputType.Touch then
-                dragging = true
-                dragStart = input.Position
-                frameStart = hudFrame.AbsolutePosition
-                local c
-                c = input.Changed:Connect(function()
-                    if input.UserInputState == Enum.UserInputState.End then
-                        dragging = false
-                        c:Disconnect()
-                    end
-                end)
-            end
-        end)
-
-        UserInputService.InputChanged:Connect(function(input)
-            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
-            or input.UserInputType == Enum.UserInputType.Touch) then
-                local d = input.Position - dragStart
-                local p = InputPipeline.ClampPositionToViewport(
-                    frameStart + Vector2.new(d.X, d.Y), hudFrame.AbsoluteSize)
-                hudFrame.Position = UDim2.fromOffset(p.X, p.Y)
-            end
-        end)
-    end
+    -- Drag handler bawaan yang ramah fungsi Lock
+    self:MakeDraggable(hudFrame, hudFrame)
 
     local registeredItems = {}
     
@@ -8304,21 +8276,21 @@ function LouisHub:HUD(hudConfig)
         local itemRow = Instance.new("Frame")
         itemRow.Name = "Item_" .. tostring(flagKey)
         itemRow.BackgroundTransparency = 1
-        itemRow.Size = UDim2.new(1, 0, 0, isBar and 28 or 18)
+        itemRow.Size = UDim2.fromOffset(0, isBar and 24 or 16)
+        itemRow.AutomaticSize = Enum.AutomaticSize.X
         itemRow.Parent = hudFrame
 
-        local textRow = Instance.new("Frame")
-        textRow.Name = "TextRow"
-        textRow.BackgroundTransparency = 1
-        textRow.Size = UDim2.new(1, 0, 0, 14)
-        textRow.Parent = itemRow
+        local rowLayout = Instance.new("UIListLayout")
+        rowLayout.FillDirection = Enum.FillDirection.Horizontal
+        rowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+        rowLayout.Padding = UDim.new(0, 6)
+        rowLayout.Parent = itemRow
 
         if itemConfig.Icon then
             local iconHolder = Instance.new("Frame")
             iconHolder.BackgroundTransparency = 1
             iconHolder.Size = UDim2.fromOffset(14, 14)
-            iconHolder.Position = UDim2.fromOffset(0, 0)
-            iconHolder.Parent = textRow
+            iconHolder.Parent = itemRow
             LouisHub:MountIcon(iconHolder, itemConfig.Icon, 12, LouisHub.CurrentTheme.Accent)
         end
 
@@ -8329,10 +8301,10 @@ function LouisHub:HUD(hudConfig)
         titleLabel.TextSize = 10.5
         titleLabel.TextColor3 = LouisHub.CurrentTheme.TextMuted
         titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-        titleLabel.Text = itemTitle
-        titleLabel.Position = UDim2.fromOffset(itemConfig.Icon and 18 or 0, 0)
-        titleLabel.Size = UDim2.new(0.60, itemConfig.Icon and -18 or 0, 1, 0)
-        titleLabel.Parent = textRow
+        titleLabel.Text = itemTitle .. ":"
+        titleLabel.Size = UDim2.fromOffset(0, 14)
+        titleLabel.AutomaticSize = Enum.AutomaticSize.X
+        titleLabel.Parent = itemRow
         LouisHub:RegisterThemeProperty(titleLabel, "TextColor3", "TextMuted")
         LouisHub:RegisterFontElement(titleLabel, "Medium")
 
@@ -8342,11 +8314,11 @@ function LouisHub:HUD(hudConfig)
         valueLabel.Font = Enum.Font.GothamBold
         valueLabel.TextSize = 10.5
         valueLabel.TextColor3 = LouisHub.CurrentTheme.Highlight
-        valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+        valueLabel.TextXAlignment = Enum.TextXAlignment.Left
         valueLabel.Text = tostring(defaultValue) .. suffixStr
-        valueLabel.Position = UDim2.new(0.60, 0, 0, 0)
-        valueLabel.Size = UDim2.new(0.40, 0, 1, 0)
-        valueLabel.Parent = textRow
+        valueLabel.Size = UDim2.fromOffset(0, 14)
+        valueLabel.AutomaticSize = Enum.AutomaticSize.X
+        valueLabel.Parent = itemRow
         LouisHub:RegisterThemeProperty(valueLabel, "TextColor3", "Highlight")
         LouisHub:RegisterFontElement(valueLabel, "Bold")
 
@@ -8356,8 +8328,7 @@ function LouisHub:HUD(hudConfig)
             barTrack.Name = "BarTrack"
             barTrack.BackgroundColor3 = LouisHub.CurrentTheme.SurfaceAlt
             barTrack.BorderSizePixel = 0
-            barTrack.Size = UDim2.new(1, 0, 0, 4)
-            barTrack.Position = UDim2.fromOffset(0, 18)
+            barTrack.Size = UDim2.fromOffset(50, 4)
             barTrack.Parent = itemRow
             LouisHub:RegisterThemeProperty(barTrack, "BackgroundColor3", "SurfaceAlt")
 
@@ -8376,10 +8347,6 @@ function LouisHub:HUD(hudConfig)
             local bfCorner = Instance.new("UICorner")
             bfCorner.CornerRadius = UDim.new(0, 2)
             bfCorner.Parent = barFill
-
-            local bfGrad = Instance.new("UIGradient")
-            bfGrad.Parent = barFill
-            LouisHub:RegisterGradient(bfGrad)
         end
 
         registeredItems[flagKey] = {
@@ -8400,6 +8367,7 @@ function LouisHub:HUD(hudConfig)
     local HudController = {
         Instance = hudFrame,
         ScreenGui = hudGui,
+        IsLocked = isLocked,
         Set = function(_, itemFlag, newValue)
             local item = registeredItems[itemFlag]
             if item then
@@ -8426,14 +8394,26 @@ function LouisHub:HUD(hudConfig)
             end)
             LouisHub.RootJanitor:Add(thread)
         end,
-        Show = function()
-            hudFrame.Visible = true
+        -- Kontrol Visibilitas On-Off
+        SetVisible = function(_, visible)
+            hudFrame.Visible = (visible == true)
         end,
-        Hide = function()
-            hudFrame.Visible = false
+        Show = function(selfHud)
+            selfHud:SetVisible(true)
         end,
-        Toggle = function()
-            hudFrame.Visible = not hudFrame.Visible
+        Hide = function(selfHud)
+            selfHud:SetVisible(false)
+        end,
+        Toggle = function(selfHud)
+            selfHud:SetVisible(not hudFrame.Visible)
+        end,
+        -- Kontrol Kunci Posisi Drag
+        SetLocked = function(selfHud, locked)
+            selfHud.IsLocked = (locked == true)
+            hudFrame:SetAttribute("DragLocked", selfHud.IsLocked)
+        end,
+        ToggleLock = function(selfHud)
+            selfHud:SetLocked(not selfHud.IsLocked)
         end,
         Destroy = function()
             ActiveHudInstances[hudName] = nil
@@ -8446,7 +8426,7 @@ function LouisHub:HUD(hudConfig)
 end
 
 -- =====================================================================
--- SECTION 32: FLOATING ACTION BUTTONS (QUICK SHORTCUTS)
+-- SECTION 32: ADAPTIVE FLOATING ACTION BUTTONS (TOGGLE/ONCE/HOLD & LOCK)
 -- =====================================================================
 local ActiveFloatingButtons = {}
 
@@ -8454,9 +8434,11 @@ function LouisHub:FloatingButton(btnConfig)
     btnConfig = btnConfig or {}
     local btnName = tostring(btnConfig.Name or "QuickAction")
     local iconIdentifier = btnConfig.Icon or "star"
-    local mode = btnConfig.Mode or "Toggle"
+    local btnText = btnConfig.Text
+    local mode = btnConfig.Mode or "Toggle" -- Pilihan: "Toggle", "Once", "Hold"
     local callback = btnConfig.Callback
     local initialPosition = btnConfig.Position or UDim2.new(1, -64, 0.5, -23)
+    local isLocked = btnConfig.Locked == true
 
     local safeParent = self:GetSafeContainer()
     local btnGui = Instance.new("ScreenGui")
@@ -8468,21 +8450,24 @@ function LouisHub:FloatingButton(btnConfig)
     self:ProtectContainer(btnGui)
     self.RootJanitor:Add(btnGui)
 
+    -- Tombol adaptif pas mengikuti isi
     local button = Instance.new("TextButton")
     button.Name = "FloatButton"
     button.AutoButtonColor = false
     button.BackgroundColor3 = self.CurrentTheme.Surface
     button.BackgroundTransparency = 0.2
     button.BorderSizePixel = 0
-    button.Size = UDim2.fromOffset(46, 46)
+    button.Size = UDim2.fromOffset(btnText and 0 or 44, 44)
+    button.AutomaticSize = btnText and Enum.AutomaticSize.X or Enum.AutomaticSize.None
     button.Position = initialPosition
     button.Text = ""
     button.ZIndex = 850001
     button.Parent = btnGui
+    button:SetAttribute("DragLocked", isLocked)
     self:RegisterThemeProperty(button, "BackgroundColor3", "Surface")
 
     local bCorner = Instance.new("UICorner")
-    bCorner.CornerRadius = UDim.new(0, 23)
+    bCorner.CornerRadius = UDim.new(0, 22)
     bCorner.Parent = button
 
     local bStroke = Instance.new("UIStroke")
@@ -8492,14 +8477,40 @@ function LouisHub:FloatingButton(btnConfig)
     bStroke.Parent = button
     self:RegisterThemeProperty(bStroke, "Color", "Border")
 
+    local contentLayout = Instance.new("UIListLayout")
+    contentLayout.FillDirection = Enum.FillDirection.Horizontal
+    contentLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    contentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    contentLayout.Padding = UDim.new(0, 6)
+    contentLayout.Parent = button
+
+    local bPad = Instance.new("UIPadding")
+    bPad.PaddingLeft = UDim.new(0, btnText and 12 or 0)
+    bPad.PaddingRight = UDim.new(0, btnText and 14 or 0)
+    bPad.Parent = button
+
     local iconHolder = Instance.new("Frame")
     iconHolder.Name = "IconHolder"
     iconHolder.BackgroundTransparency = 1
-    iconHolder.Size = UDim2.fromOffset(22, 22)
-    iconHolder.Position = UDim2.fromOffset(12, 12)
+    iconHolder.Size = UDim2.fromOffset(20, 20)
     iconHolder.Parent = button
 
-    self:MountIcon(iconHolder, iconIdentifier, 20, self.CurrentTheme.Text)
+    self:MountIcon(iconHolder, iconIdentifier, 18, self.CurrentTheme.Text)
+
+    if btnText then
+        local label = Instance.new("TextLabel")
+        label.Name = "ButtonLabel"
+        label.BackgroundTransparency = 1
+        label.Font = Enum.Font.GothamMedium
+        label.TextSize = 11
+        label.TextColor3 = self.CurrentTheme.Text
+        label.Text = tostring(btnText)
+        label.Size = UDim2.fromOffset(0, 16)
+        label.AutomaticSize = Enum.AutomaticSize.X
+        label.Parent = button
+        self:RegisterThemeProperty(label, "TextColor3", "Text")
+        self:RegisterFontElement(label, "Medium")
+    end
 
     self:MakeDraggable(button, button)
 
@@ -8510,41 +8521,64 @@ function LouisHub:FloatingButton(btnConfig)
         local targetColor = state and self.CurrentTheme.Accent or self.CurrentTheme.Surface
         local strokeColor = state and self.CurrentTheme.Highlight or self.CurrentTheme.Border
 
-        LouisHub:Tween(button, { BackgroundColor3 = targetColor }, 0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-        LouisHub:Tween(bStroke, { Color = strokeColor, Transparency = state and 0.1 or 0.3 }, 0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        LouisHub:Tween(button, { BackgroundColor3 = targetColor }, 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        LouisHub:Tween(bStroke, { Color = strokeColor, Transparency = state and 0.1 or 0.3 }, 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
     end
 
-    local function triggerAction()
-        if mode == "Toggle" then
-            isActive = not isActive
-            applyVisual(isActive)
-            LouisHub:ApplyPressAnimation(button, 0.90)
-
-            if type(callback) == "function" then
-                pcall(callback, isActive)
+    -- ── EKSEKUSI TIPE INTERAKSI LENGKAP (TOGGLE / ONCE / HOLD) ───────────
+    if mode == "Hold" then
+        button.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                isActive = true
+                applyVisual(true)
+                LouisHub:ApplyPressAnimation(button, 0.90)
+                if type(callback) == "function" then
+                    pcall(callback, true)
+                end
             end
-        elseif mode == "Once" and not inCooldown then
-            inCooldown = true
-            applyVisual(true)
-            LouisHub:ApplyPressAnimation(button, 0.90)
+        end)
 
-            if type(callback) == "function" then
-                pcall(callback)
+        button.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                if isActive then
+                    isActive = false
+                    applyVisual(false)
+                    if type(callback) == "function" then
+                        pcall(callback, false)
+                    end
+                end
             end
+        end)
+    else
+        button.MouseButton1Click:Connect(function()
+            if mode == "Toggle" then
+                isActive = not isActive
+                applyVisual(isActive)
+                LouisHub:ApplyPressAnimation(button, 0.90)
+                if type(callback) == "function" then
+                    pcall(callback, isActive)
+                end
+            elseif mode == "Once" and not inCooldown then
+                inCooldown = true
+                applyVisual(true)
+                LouisHub:ApplyPressAnimation(button, 0.90)
+                if type(callback) == "function" then
+                    pcall(callback)
+                end
 
-            local duration = tonumber(btnConfig.Cooldown) or 1.5
-            task.delay(duration, function()
-                inCooldown = false
-                applyVisual(false)
-            end)
-        end
+                local duration = tonumber(btnConfig.Cooldown) or 1.0
+                task.delay(duration, function()
+                    inCooldown = false
+                    applyVisual(false)
+                end)
+            end
+        end)
     end
-
-    button.MouseButton1Click:Connect(triggerAction)
 
     local FloatBtnController = {
         Instance = button,
         ScreenGui = btnGui,
+        IsLocked = isLocked,
         GetState = function()
             return isActive
         end,
@@ -8552,7 +8586,27 @@ function LouisHub:FloatingButton(btnConfig)
             isActive = (state == true)
             applyVisual(isActive)
         end,
-        Toggle = triggerAction,
+        -- Kontrol Visibilitas On-Off
+        SetVisible = function(_, visible)
+            button.Visible = (visible == true)
+        end,
+        Show = function(selfBtn)
+            selfBtn:SetVisible(true)
+        end,
+        Hide = function(selfBtn)
+            selfBtn:SetVisible(false)
+        end,
+        ToggleVisibility = function(selfBtn)
+            selfBtn:SetVisible(not button.Visible)
+        end,
+        -- Kontrol Kunci Posisi Drag
+        SetLocked = function(selfBtn, locked)
+            selfBtn.IsLocked = (locked == true)
+            button:SetAttribute("DragLocked", selfBtn.IsLocked)
+        end,
+        ToggleLock = function(selfBtn)
+            selfBtn:SetLocked(not selfBtn.IsLocked)
+        end,
         Destroy = function()
             pcall(function() btnGui:Destroy() end)
         end
