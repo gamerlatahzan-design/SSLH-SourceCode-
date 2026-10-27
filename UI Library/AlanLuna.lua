@@ -3,7 +3,7 @@
 local LouisHub = {}
 LouisHub.__index = LouisHub
 LouisHub.Version = "5.0.0"
-LouisHub.LogoAssetId = "rbxassetid://104436283956004"
+LouisHub.LogoAssetId = "rbxthumb://type=Asset&id=104436283956004&w=420&h=420"
 
 -- =====================================================================
 -- SECTION 1: SINGLE-INSTANCE ENFORCEMENT & LIFECYCLE HOOK
