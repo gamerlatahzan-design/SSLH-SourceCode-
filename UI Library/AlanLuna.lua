@@ -3914,6 +3914,76 @@ function LouisHub:CreateWindow(windowConfig)
     end)
     self.RootJanitor:Add(toggleConnection)
 
+    -- ── SEARCH BAR NAVIGASI (LIVE FILTER TABS & CATEGORIES) ──────────────
+    if not isHorizontal then
+        local navSearchCard = Instance.new("Frame")
+        navSearchCard.Name = "NavSearchBar"
+        navSearchCard.BackgroundColor3 = self.CurrentTheme.Surface
+        navSearchCard.BackgroundTransparency = 0.35
+        navSearchCard.Size = UDim2.new(1, 0, 0, 26)
+        navSearchCard.LayoutOrder = -9999
+        navSearchCard.Parent = navigationHost
+        self:RegisterThemeProperty(navSearchCard, "BackgroundColor3", "Surface")
+
+        local nscCorner = Instance.new("UICorner")
+        nscCorner.CornerRadius = UDim.new(0, 6)
+        nscCorner.Parent = navSearchCard
+
+        local nscStroke = Instance.new("UIStroke")
+        nscStroke.Thickness = 1
+        nscStroke.Color = self.CurrentTheme.Border
+        nscStroke.Transparency = 0.4
+        nscStroke.Parent = navSearchCard
+        self:RegisterThemeProperty(nscStroke, "Color", "Border")
+
+        local searchIconHolder = Instance.new("Frame")
+        searchIconHolder.BackgroundTransparency = 1
+        searchIconHolder.Size = UDim2.fromOffset(14, 14)
+        searchIconHolder.Position = UDim2.fromOffset(6, 6)
+        searchIconHolder.Parent = navSearchCard
+        self:MountIcon(searchIconHolder, "search", 12, self.CurrentTheme.TextMuted)
+
+        local navSearchInput = Instance.new("TextBox")
+        navSearchInput.Name = "SearchInput"
+        navSearchInput.BackgroundTransparency = 1
+        navSearchInput.Font = Enum.Font.GothamMedium
+        navSearchInput.TextSize = 10
+        navSearchInput.TextColor3 = self.CurrentTheme.Highlight
+        navSearchInput.PlaceholderColor3 = self.CurrentTheme.TextMuted
+        navSearchInput.PlaceholderText = "Search menu..."
+        navSearchInput.Text = ""
+        navSearchInput.ClearTextOnFocus = false
+        navSearchInput.Position = UDim2.fromOffset(24, 0)
+        navSearchInput.Size = UDim2.new(1, -28, 1, 0)
+        navSearchInput.Parent = navSearchCard
+        self:RegisterThemeProperty(navSearchInput, "TextColor3", "Highlight")
+        self:RegisterFontElement(navSearchInput, "Medium")
+
+        -- Live search filter binding
+        navSearchInput:GetPropertyChangedSignal("Text"):Connect(function()
+            local q = navSearchInput.Text:lower():gsub("^%s+", ""):gsub("%s+$", "")
+            
+            -- Filter Tabs & Categories
+            for _, cat in ipairs(Window.Categories) do
+                local anyTabVisible = false
+                if cat.Container then
+                    for _, tabBtn in ipairs(cat.Container:GetChildren()) do
+                        if tabBtn:IsA("TextButton") then
+                            local tabText = (tabBtn:FindFirstChild("TabLabel") and tabBtn.TabLabel.Text:lower()) or tabBtn.Name:lower()
+                            local match = (q == "") or (tabText:find(q, 1, true) ~= nil)
+                            tabBtn.Visible = match
+                            if match then anyTabVisible = true end
+                        end
+                    end
+                    cat.Container.Parent.Visible = (q == "") or anyTabVisible
+                end
+            end
+
+            -- Global element & section filter
+            LouisHub:PerformSearch(q)
+        end)
+    end
+
     ActiveMainWindow = Window
     return Window
 end
