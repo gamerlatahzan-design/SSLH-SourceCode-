@@ -3452,6 +3452,26 @@ function LouisHub:CreateWindow(windowConfig)
     officialLogoImage.ScaleType = Enum.ScaleType.Fit
     officialLogoImage.Parent = logoHolder
 
+    -- ── HEADER INFO CONTAINER (BEBAS TABRAKAN) ──────────────────────────
+    local headerInfoHolder = Instance.new("Frame")
+    headerInfoHolder.Name = "HeaderInfoHolder"
+    headerInfoHolder.BackgroundTransparency = 1
+    headerInfoHolder.Position = UDim2.fromOffset(40, 2)
+    headerInfoHolder.Size = UDim2.new(1, -110, 1, -4)
+    headerInfoHolder.Parent = titleBar
+
+    local topRow = Instance.new("Frame")
+    topRow.Name = "TopRow"
+    topRow.BackgroundTransparency = 1
+    topRow.Size = UDim2.new(1, 0, 0, 18)
+    topRow.Parent = headerInfoHolder
+
+    local topRowLayout = Instance.new("UIListLayout")
+    topRowLayout.FillDirection = Enum.FillDirection.Horizontal
+    topRowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    topRowLayout.Padding = UDim.new(0, 6)
+    topRowLayout.Parent = topRow
+
     local titleLabel = Instance.new("TextLabel")
     titleLabel.Name = "TitleLabel"
     titleLabel.BackgroundTransparency = 1
@@ -3459,11 +3479,41 @@ function LouisHub:CreateWindow(windowConfig)
     titleLabel.TextSize = 13.5
     titleLabel.TextColor3 = self.CurrentTheme.Highlight
     titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.TextTruncate = Enum.TextTruncate.AtEnd
     titleLabel.Text = titleText
-    titleLabel.Position = UDim2.fromOffset(40, 4)
-    titleLabel.Size = UDim2.new(0, 180, 0, 16)
-    titleLabel.Parent = titleBar
+    titleLabel.Size = UDim2.fromOffset(0, 16)
+    titleLabel.AutomaticSize = Enum.AutomaticSize.X
+    titleLabel.Parent = topRow
     self:RegisterThemeProperty(titleLabel, "TextColor3", "Highlight")
+
+    local versionBadge = Instance.new("Frame")
+    versionBadge.Name = "VersionBadge"
+    versionBadge.BackgroundColor3 = self.CurrentTheme.SurfaceAlt
+    versionBadge.BorderSizePixel = 0
+    versionBadge.Size = UDim2.fromOffset(0, 16)
+    versionBadge.AutomaticSize = Enum.AutomaticSize.X
+    versionBadge.Parent = topRow
+    self:RegisterThemeProperty(versionBadge, "BackgroundColor3", "SurfaceAlt")
+
+    local vbCorner = Instance.new("UICorner")
+    vbCorner.CornerRadius = UDim.new(0, 4)
+    vbCorner.Parent = versionBadge
+
+    local vbPad = Instance.new("UIPadding")
+    vbPad.PaddingLeft = UDim.new(0, 6)
+    vbPad.PaddingRight = UDim.new(0, 6)
+    vbPad.Parent = versionBadge
+
+    local versionText = Instance.new("TextLabel")
+    versionText.BackgroundTransparency = 1
+    versionText.Font = Enum.Font.GothamBold
+    versionText.TextSize = 9
+    versionText.TextColor3 = self.CurrentTheme.Accent
+    versionText.Text = versionTag
+    versionText.Size = UDim2.fromOffset(0, 16)
+    versionText.AutomaticSize = Enum.AutomaticSize.X
+    versionText.Parent = versionBadge
+    self:RegisterThemeProperty(versionText, "TextColor3", "Accent")
 
     local subtitleLabel = Instance.new("TextLabel")
     subtitleLabel.Name = "SubtitleLabel"
@@ -3472,35 +3522,13 @@ function LouisHub:CreateWindow(windowConfig)
     subtitleLabel.TextSize = 9.5
     subtitleLabel.TextColor3 = self.CurrentTheme.TextMuted
     subtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    subtitleLabel.TextTruncate = Enum.TextTruncate.AtEnd
     subtitleLabel.Text = subtitleText
-    subtitleLabel.Position = UDim2.fromOffset(40, 20)
-    subtitleLabel.Size = UDim2.new(0, 220, 0, 12)
-    subtitleLabel.Parent = titleBar
+    subtitleLabel.Position = UDim2.fromOffset(0, 18)
+    subtitleLabel.Size = UDim2.new(1, 0, 0, 14)
+    subtitleLabel.Parent = headerInfoHolder
     self:RegisterThemeProperty(subtitleLabel, "TextColor3", "TextMuted")
-
-    local versionBadge = Instance.new("Frame")
-    versionBadge.Name = "VersionBadge"
-    versionBadge.BackgroundColor3 = self.CurrentTheme.SurfaceAlt
-    versionBadge.BorderSizePixel = 0
-    versionBadge.Size = UDim2.fromOffset(48, 16)
-    versionBadge.Position = UDim2.new(0, 268, 0.5, -8)
-    versionBadge.Parent = titleBar
-    self:RegisterThemeProperty(versionBadge, "BackgroundColor3", "SurfaceAlt")
-
-    local vbCorner = Instance.new("UICorner")
-    vbCorner.CornerRadius = UDim.new(0, 4)
-    vbCorner.Parent = versionBadge
-
-    local versionText = Instance.new("TextLabel")
-    versionText.BackgroundTransparency = 1
-    versionText.Font = Enum.Font.GothamBold
-    versionText.TextSize = 9
-    versionText.TextColor3 = self.CurrentTheme.Accent
-    versionText.Text = versionTag
-    versionText.Size = UDim2.new(1, 0, 1, 0)
-    versionText.Parent = versionBadge
-    self:RegisterThemeProperty(versionText, "TextColor3", "Accent")
-
+    
     -- ── WINDOW ACTION BUTTONS (MINIMIZE & CLOSE) ─────────────────────────
     local windowActionsFrame = Instance.new("Frame")
     windowActionsFrame.Name = "WindowActions"
@@ -3552,36 +3580,48 @@ function LouisHub:CreateWindow(windowConfig)
     self:ApplyHoverHighlight(minButton, minButton, self.CurrentTheme.SurfaceAlt, self.CurrentTheme.Surface)
     self:ApplyHoverHighlight(closeButton, closeButton, self.CurrentTheme.SurfaceAlt, Color3.fromRGB(220, 60, 60))
 
-    -- ── RESTORE PILL (MINIMIZED STATE) ───────────────────────────────────
+    -- ── RESTORE PILL (MINIMIZED STATE) [AUTO-FIT & PRETTIFIED] ──────────
     local restorePill = Instance.new("TextButton")
     restorePill.Name = "RestorePill"
     restorePill.AutoButtonColor = false
     restorePill.BackgroundColor3 = self.CurrentTheme.Surface
     restorePill.BackgroundTransparency = 0.15
     restorePill.BorderSizePixel = 0
-    restorePill.Size = UDim2.fromOffset(145, 34)
-    restorePill.Position = UDim2.new(0.5, -72, 0, 20)
+    restorePill.Size = UDim2.fromOffset(0, 36)
+    restorePill.AutomaticSize = Enum.AutomaticSize.X
+    restorePill.Position = UDim2.new(0.5, -60, 0, 24)
     restorePill.Visible = false
     restorePill.ZIndex = 50000
     restorePill.Parent = screenGui
     self:RegisterThemeProperty(restorePill, "BackgroundColor3", "Surface")
 
     local pillCorner = Instance.new("UICorner")
-    pillCorner.CornerRadius = UDim.new(0, 17)
+    pillCorner.CornerRadius = UDim.new(0, 18)
     pillCorner.Parent = restorePill
 
     local pillStroke = Instance.new("UIStroke")
     pillStroke.Thickness = 1.5
     pillStroke.Color = self.CurrentTheme.Accent
-    pillStroke.Transparency = 0.3
+    pillStroke.Transparency = 0.25
     pillStroke.Parent = restorePill
     self:RegisterThemeProperty(pillStroke, "Color", "Accent")
+
+    local pillLayout = Instance.new("UIListLayout")
+    pillLayout.FillDirection = Enum.FillDirection.Horizontal
+    pillLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    pillLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    pillLayout.Padding = UDim.new(0, 8)
+    pillLayout.Parent = restorePill
+
+    local pillPadding = Instance.new("UIPadding")
+    pillPadding.PaddingLeft = UDim.new(0, 10)
+    pillPadding.PaddingRight = UDim.new(0, 14)
+    pillPadding.Parent = restorePill
 
     local pillLogoHolder = Instance.new("Frame")
     pillLogoHolder.Name = "PillLogo"
     pillLogoHolder.BackgroundTransparency = 1
-    pillLogoHolder.Size = UDim2.fromOffset(22, 22)
-    pillLogoHolder.Position = UDim2.fromOffset(8, 6)
+    pillLogoHolder.Size = UDim2.fromOffset(20, 20)
     pillLogoHolder.Parent = restorePill
 
     local pillLogoImg = Instance.new("ImageLabel")
@@ -3592,18 +3632,20 @@ function LouisHub:CreateWindow(windowConfig)
     pillLogoImg.Parent = pillLogoHolder
 
     local pillText = Instance.new("TextLabel")
+    pillText.Name = "PillText"
     pillText.BackgroundTransparency = 1
     pillText.Font = Enum.Font.GothamBold
     pillText.TextSize = 11.5
     pillText.TextColor3 = self.CurrentTheme.Highlight
     pillText.Text = titleText
-    pillText.Position = UDim2.fromOffset(36, 0)
-    pillText.Size = UDim2.new(1, -42, 1, 0)
+    pillText.Size = UDim2.fromOffset(0, 18)
+    pillText.AutomaticSize = Enum.AutomaticSize.X
     pillText.Parent = restorePill
     self:RegisterThemeProperty(pillText, "TextColor3", "Highlight")
+    self:RegisterFontElement(pillText, "Bold")
 
     self:MakeDraggable(restorePill, restorePill)
-
+    
     -- ── NAVIGATION & CONTENT HOSTS ───────────────────────────────────────
     local navigationHost = nil
     local contentContainer = nil
@@ -6492,7 +6534,7 @@ function LouisHub:ApplySectionControls(Section)
         PreviousApplySectionControls_4C(self, Section)
     end
 
-    -- ── 1. SEARCHABLE SINGLE & MULTI DROPDOWN ────────────────────────
+    -- ── 1. SEARCHABLE SINGLE & MULTI DROPDOWN (ANTI-CLIPPING FIX) ───
     function Section:AddDropdown(config)
         config = config or {}
         local dropName = tostring(config.Name or config.Title or "Dropdown")
@@ -6525,9 +6567,7 @@ function LouisHub:ApplySectionControls(Section)
         row.BackgroundColor3 = LouisHub.CurrentTheme.SurfaceAlt
         row.BackgroundTransparency = 0.45
         row.BorderSizePixel = 0
-        row.ClipsDescendants = false
         row.Size = UDim2.new(1, 0, 0, 32)
-        row.ZIndex = 50
         row.Parent = targetContainer
         LouisHub:RegisterThemeProperty(row, "BackgroundColor3", "SurfaceAlt")
 
@@ -6553,7 +6593,6 @@ function LouisHub:ApplySectionControls(Section)
         titleLabel.Text = dropName
         titleLabel.Position = UDim2.fromOffset(8, 0)
         titleLabel.Size = UDim2.new(0.40, -8, 1, 0)
-        titleLabel.ZIndex = 51
         titleLabel.Parent = row
         LouisHub:RegisterThemeProperty(titleLabel, "TextColor3", "Text")
         LouisHub:RegisterFontElement(titleLabel, "Medium")
@@ -6566,7 +6605,6 @@ function LouisHub:ApplySectionControls(Section)
         selectorButton.Size = UDim2.new(0.60, -8, 0, 22)
         selectorButton.Position = UDim2.new(0.40, 0, 0.5, -11)
         selectorButton.Text = ""
-        selectorButton.ZIndex = 51
         selectorButton.Parent = row
         LouisHub:RegisterThemeProperty(selectorButton, "BackgroundColor3", "Surface")
 
@@ -6591,7 +6629,6 @@ function LouisHub:ApplySectionControls(Section)
         displayLabel.TextTruncate = Enum.TextTruncate.AtEnd
         displayLabel.Position = UDim2.fromOffset(6, 0)
         displayLabel.Size = UDim2.new(1, -24, 1, 0)
-        displayLabel.ZIndex = 52
         displayLabel.Parent = selectorButton
         LouisHub:RegisterThemeProperty(displayLabel, "TextColor3", "Highlight")
         LouisHub:RegisterFontElement(displayLabel, "Medium")
@@ -6604,20 +6641,20 @@ function LouisHub:ApplySectionControls(Section)
         arrowIcon.Image = "rbxassetid://6031090990"
         arrowIcon.ImageColor3 = LouisHub.CurrentTheme.TextMuted
         arrowIcon.Rotation = 0
-        arrowIcon.ZIndex = 52
         arrowIcon.Parent = selectorButton
 
+        -- KUNCI PERBAIKAN: Mount langsung ke root ScreenGui agar bebas dari batas potong Frame/Section
+        local rootGui = row:FindFirstAncestorWhichIsA("ScreenGui") or LouisHub:GetSafeContainer()
         local popoutMenu = Instance.new("Frame")
-        popoutMenu.Name = "PopoutMenu"
+        popoutMenu.Name = "PopoutMenu_" .. dropName:gsub("%s+", "")
         popoutMenu.BackgroundColor3 = LouisHub.CurrentTheme.Surface
-        popoutMenu.BackgroundTransparency = 0.05
+        popoutMenu.BackgroundTransparency = 0.02
         popoutMenu.BorderSizePixel = 0
         popoutMenu.ClipsDescendants = true
         popoutMenu.Visible = false
-        popoutMenu.Size = UDim2.new(0.60, -8, 0, 0)
-        popoutMenu.Position = UDim2.new(0.40, 0, 1, 4)
-        popoutMenu.ZIndex = 2500
-        popoutMenu.Parent = row
+        popoutMenu.Size = UDim2.fromOffset(0, 0)
+        popoutMenu.ZIndex = 999999
+        popoutMenu.Parent = rootGui
         LouisHub:RegisterThemeProperty(popoutMenu, "BackgroundColor3", "Surface")
 
         local pmCorner = Instance.new("UICorner")
@@ -6625,9 +6662,9 @@ function LouisHub:ApplySectionControls(Section)
         pmCorner.Parent = popoutMenu
 
         local pmStroke = Instance.new("UIStroke")
-        pmStroke.Thickness = 1
+        pmStroke.Thickness = 1.2
         pmStroke.Color = LouisHub.CurrentTheme.Accent
-        pmStroke.Transparency = 0.4
+        pmStroke.Transparency = 0.3
         pmStroke.Parent = popoutMenu
         LouisHub:RegisterThemeProperty(pmStroke, "Color", "Accent")
 
@@ -6647,9 +6684,9 @@ function LouisHub:ApplySectionControls(Section)
             searchBox.PlaceholderText = "Search..."
             searchBox.Text = ""
             searchBox.ClearTextOnFocus = false
-            searchBox.Size = UDim2.new(1, -12, 0, 20)
+            searchBox.Size = UDim2.new(1, -12, 0, 22)
             searchBox.Position = UDim2.fromOffset(6, 6)
-            searchBox.ZIndex = 2501
+            searchBox.ZIndex = 1000000
             searchBox.Parent = popoutMenu
             LouisHub:RegisterThemeProperty(searchBox, "BackgroundColor3", "SurfaceAlt")
             LouisHub:RegisterThemeProperty(searchBox, "TextColor3", "Text")
@@ -6668,18 +6705,18 @@ function LouisHub:ApplySectionControls(Section)
         optionsScroll.Name = "OptionsScroll"
         optionsScroll.BackgroundTransparency = 1
         optionsScroll.BorderSizePixel = 0
-        optionsScroll.ScrollBarThickness = 2
+        optionsScroll.ScrollBarThickness = 3
         optionsScroll.ScrollBarImageColor3 = LouisHub.CurrentTheme.Accent
-        optionsScroll.Size = UDim2.new(1, -8, 1, needsSearch and -32 or -8)
-        optionsScroll.Position = UDim2.fromOffset(4, needsSearch and 30 or 4)
+        optionsScroll.Size = UDim2.new(1, -8, 1, needsSearch and -34 or -8)
+        optionsScroll.Position = UDim2.fromOffset(4, needsSearch and 32 or 4)
         optionsScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
         optionsScroll.CanvasSize = UDim2.fromOffset(0, 0)
-        optionsScroll.ZIndex = 2501
+        optionsScroll.ZIndex = 1000000
         optionsScroll.Parent = popoutMenu
 
         local osLayout = Instance.new("UIListLayout")
         osLayout.SortOrder = Enum.SortOrder.LayoutOrder
-        osLayout.Padding = UDim.new(0, 2)
+        osLayout.Padding = UDim.new(0, 3)
         osLayout.Parent = optionsScroll
 
         local function updateDisplayLabel()
@@ -6689,11 +6726,7 @@ function LouisHub:ApplySectionControls(Section)
                     table.insert(selectedList, opt)
                 end
                 table.sort(selectedList)
-                if #selectedList == 0 then
-                    displayLabel.Text = "None selected"
-                else
-                    displayLabel.Text = table.concat(selectedList, ", ")
-                end
+                displayLabel.Text = (#selectedList == 0) and "None selected" or table.concat(selectedList, ", ")
             else
                 local picked = nil
                 for opt in pairs(currentSelection) do
@@ -6710,9 +6743,8 @@ function LouisHub:ApplySectionControls(Section)
         local function closeMenu()
             if not isOpen then return end
             isOpen = false
-            row.ZIndex = 50
             LouisHub:Tween(arrowIcon, { Rotation = 0 }, 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-            LouisHub:Tween(popoutMenu, { Size = UDim2.new(0.60, -8, 0, 0) }, 0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, function()
+            LouisHub:Tween(popoutMenu, { Size = UDim2.fromOffset(popoutMenu.AbsoluteSize.X, 0) }, 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, function()
                 if not isOpen then popoutMenu.Visible = false end
             end)
         end
@@ -6720,23 +6752,23 @@ function LouisHub:ApplySectionControls(Section)
         local function openMenu()
             if isOpen or isDisabled then return end
             isOpen = true
-            row.ZIndex = 2500
+
+            local absPos = selectorButton.AbsolutePosition
+            local absSize = selectorButton.AbsoluteSize
+            local totalItemsHeight = math.min(#rawOptions * 24, 140)
+            local targetHeight = totalItemsHeight + (needsSearch and 38 or 10)
+
+            popoutMenu.Position = UDim2.fromOffset(absPos.X, absPos.Y + absSize.Y + 4)
+            popoutMenu.Size = UDim2.fromOffset(math.max(absSize.X, 150), 0)
             popoutMenu.Visible = true
 
-            local totalItemsHeight = math.min(#rawOptions * 22, 120)
-            local targetHeight = totalItemsHeight + (needsSearch and 36 or 10)
-
             LouisHub:Tween(arrowIcon, { Rotation = 180 }, 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-            LouisHub:Tween(popoutMenu, { Size = UDim2.new(0.60, -8, 0, targetHeight) }, 0.24, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+            LouisHub:Tween(popoutMenu, { Size = UDim2.fromOffset(math.max(absSize.X, 150), targetHeight) }, 0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
         end
 
         local function pickOption(optName, silent)
             if isMulti then
-                if currentSelection[optName] then
-                    currentSelection[optName] = nil
-                else
-                    currentSelection[optName] = true
-                end
+                currentSelection[optName] = not currentSelection[optName] and true or nil
             else
                 currentSelection = { [optName] = true }
                 closeMenu()
@@ -6745,7 +6777,6 @@ function LouisHub:ApplySectionControls(Section)
             for nameStr, btn in pairs(optionButtonsMap) do
                 local isPicked = currentSelection[nameStr] == true
                 btn.BackgroundColor3 = isPicked and LouisHub.CurrentTheme.Accent or LouisHub.CurrentTheme.SurfaceAlt
-                btn.BackgroundTransparency = isPicked and 0.2 or 0.6
                 local lbl = btn:FindFirstChildOfClass("TextLabel")
                 if lbl then
                     lbl.TextColor3 = isPicked and Color3.fromRGB(255, 255, 255) or LouisHub.CurrentTheme.Text
@@ -6753,13 +6784,11 @@ function LouisHub:ApplySectionControls(Section)
             end
 
             updateDisplayLabel()
-
             local resultValue = isMulti and currentSelection or optName
             LouisHub.Flags[flagKey] = resultValue
 
             if not silent and type(callback) == "function" then
-                local success, err = pcall(callback, resultValue)
-                if not success then LouisHub:Log("DropdownCallback", err) end
+                pcall(callback, resultValue)
             end
         end
 
@@ -6769,7 +6798,7 @@ function LouisHub:ApplySectionControls(Section)
             end
             optionButtonsMap = {}
 
-            for idx, opt in ipairs(rawOptions) do
+            for _, opt in ipairs(rawOptions) do
                 local optStr = tostring(opt)
                 local isPicked = currentSelection[optStr] == true
 
@@ -6777,10 +6806,9 @@ function LouisHub:ApplySectionControls(Section)
                 btn.Name = "Opt_" .. optStr:gsub("%s+", "")
                 btn.AutoButtonColor = false
                 btn.BackgroundColor3 = isPicked and LouisHub.CurrentTheme.Accent or LouisHub.CurrentTheme.SurfaceAlt
-                btn.BackgroundTransparency = isPicked and 0.2 or 0.6
-                btn.Size = UDim2.new(1, 0, 0, 20)
+                btn.Size = UDim2.new(1, 0, 0, 22)
                 btn.Text = ""
-                btn.ZIndex = 2502
+                btn.ZIndex = 1000001
                 btn.Parent = optionsScroll
 
                 local bCorner = Instance.new("UICorner")
@@ -6790,14 +6818,14 @@ function LouisHub:ApplySectionControls(Section)
                 local lbl = Instance.new("TextLabel")
                 lbl.BackgroundTransparency = 1
                 lbl.Font = Enum.Font.GothamMedium
-                lbl.TextSize = 10
+                lbl.TextSize = 10.5
                 lbl.TextColor3 = isPicked and Color3.fromRGB(255, 255, 255) or LouisHub.CurrentTheme.Text
                 lbl.TextXAlignment = Enum.TextXAlignment.Left
                 lbl.TextTruncate = Enum.TextTruncate.AtEnd
-                lbl.Position = UDim2.fromOffset(6, 0)
-                lbl.Size = UDim2.new(1, -12, 1, 0)
+                lbl.Position = UDim2.fromOffset(8, 0)
+                lbl.Size = UDim2.new(1, -16, 1, 0)
                 lbl.Text = optStr
-                lbl.ZIndex = 2503
+                lbl.ZIndex = 1000002
                 lbl.Parent = btn
                 LouisHub:RegisterFontElement(lbl, "Medium")
 
@@ -6827,34 +6855,20 @@ function LouisHub:ApplySectionControls(Section)
 
         LouisHub:ListenForOutsideClick(popoutMenu, closeMenu)
 
-        if config.Tooltip then
-            LouisHub:BindTooltip(row, config.Tooltip)
-        end
-
-        LouisHub.Flags[flagKey] = isMulti and currentSelection or (next(currentSelection))
-
         local DropdownControl = {
             Instance = row,
-            Get = function()
-                return isMulti and currentSelection or (next(currentSelection))
-            end,
+            Get = function() return isMulti and currentSelection or next(currentSelection) end,
             Set = function(_, value, silent)
                 if isMulti and type(value) == "table" then
                     currentSelection = {}
                     for k, v in pairs(value) do
-                        if type(k) == "string" and v == true then
-                            currentSelection[k] = true
-                        elseif type(v) == "string" then
-                            currentSelection[v] = true
-                        end
+                        if type(k) == "string" and v == true then currentSelection[k] = true
+                        elseif type(v) == "string" then currentSelection[v] = true end
                     end
                 elseif not isMulti and value ~= nil then
                     currentSelection = { [tostring(value)] = true }
                 end
                 rebuildOptions()
-                if not silent and type(callback) == "function" then
-                    pcall(callback, isMulti and currentSelection or (next(currentSelection)))
-                end
             end,
             SetOptions = function(_, newOptions)
                 if type(newOptions) == "table" then
@@ -6863,37 +6877,14 @@ function LouisHub:ApplySectionControls(Section)
                     rebuildOptions()
                 end
             end,
-            Refresh = function(selfDrop, newOptions)
-                selfDrop:SetOptions(newOptions)
-            end,
-            SetDisabled = function(_, disabled)
-                isDisabled = (disabled == true)
-                row.BackgroundTransparency = isDisabled and 0.8 or 0.45
-                selectorButton.Active = not isDisabled
-                if isDisabled then closeMenu() end
-            end,
-            SetVisible = function(_, visible)
-                row.Visible = (visible == true)
-                if not visible then closeMenu() end
-            end,
             Destroy = function()
-                LouisHub.Elements[flagKey] = nil
+                pcall(function() popoutMenu:Destroy() end)
                 pcall(function() row:Destroy() end)
             end
         }
 
-        LouisHub.Elements[flagKey] = DropdownControl
-
-        if config.VisibleIf then
-            LouisHub:RegisterConditional(DropdownControl, config.VisibleIf, "Visible")
-        end
-        if config.EnabledIf then
-            LouisHub:RegisterConditional(DropdownControl, config.EnabledIf, "Enabled")
-        end
-
         return DropdownControl
     end
-    Section.CreateDropdown = Section.AddDropdown
 
     -- ── 2. TOUCH-SAFE COLORPICKER (HSV + ALPHA + HEX) ────────────────
     function Section:AddColorPicker(config)
@@ -8015,7 +8006,7 @@ function LouisHub:ApplySectionControls(Section)
     end
     Section.CreateImage = Section.AddImage
 
-    -- ── 6. COMPACT ELEMENT GROUP ─────────────────────────────────────
+    -- ── 6. COMPACT ELEMENT GROUP (TEXT VISIBILITY FIX) ───────────────
     function Section:AddGroup(config)
         config = config or {}
         local groupHeight = tonumber(config.Height) or 30
@@ -8049,6 +8040,7 @@ function LouisHub:ApplySectionControls(Section)
                 btn.BackgroundColor3 = LouisHub.CurrentTheme.SurfaceAlt
                 btn.Size = UDim2.new(0, 0, 1, 0)
                 btn.Text = ""
+                btn.ClipsDescendants = true
                 btn.Parent = row
                 LouisHub:RegisterThemeProperty(btn, "BackgroundColor3", "SurfaceAlt")
 
@@ -8063,20 +8055,19 @@ function LouisHub:ApplySectionControls(Section)
                 bStroke.Parent = btn
                 LouisHub:RegisterThemeProperty(bStroke, "Color", "Border")
 
-                local bPad = Instance.new("UIPadding")
-                bPad.PaddingLeft = UDim.new(0, 8)
-                bPad.PaddingRight = UDim.new(0, 8)
-                bPad.Parent = btn
-
                 local bLabel = Instance.new("TextLabel")
+                bLabel.Name = "BtnLabel"
                 bLabel.BackgroundTransparency = 1
                 bLabel.Font = Enum.Font.GothamMedium
                 bLabel.TextSize = 10.5
-                bLabel.TextColor3 = LouisHub.CurrentTheme.Text
+                bLabel.TextColor3 = LouisHub.CurrentTheme.Highlight
+                bLabel.TextTruncate = Enum.TextTruncate.AtEnd
                 bLabel.Text = title
-                bLabel.Size = UDim2.new(1, 0, 1, 0)
+                bLabel.Size = UDim2.new(1, -8, 1, 0)
+                bLabel.Position = UDim2.fromOffset(4, 0)
+                bLabel.ZIndex = btn.ZIndex + 2
                 bLabel.Parent = btn
-                LouisHub:RegisterThemeProperty(bLabel, "TextColor3", "Text")
+                LouisHub:RegisterThemeProperty(bLabel, "TextColor3", "Highlight")
                 LouisHub:RegisterFontElement(bLabel, "Medium")
 
                 btn.MouseButton1Click:Connect(function()
@@ -8106,7 +8097,7 @@ function LouisHub:ApplySectionControls(Section)
         return GroupController
     end
     Section.CreateGroup = Section.AddGroup
-
+    
     -- ── 7. BULK BUILDER DISPATCHER ───────────────────────────────────
     function Section:Build(elementDefinitions)
         if type(elementDefinitions) ~= "table" then return {} end
